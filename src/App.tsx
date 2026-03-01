@@ -7,7 +7,6 @@ import { ToastContainer } from './components/ToastContainer';
 import { useVideoPlayer } from './hooks/useVideoPlayer';
 import { useAnnotations } from './hooks/useAnnotations';
 import { useToast } from './hooks/useToast';
-import { formatTime } from './utils/formatTime';
 import { exportAnnotationsToCSV, importAnnotationsFromCSV } from './utils/csv';
 import type { CueFields } from './types';
 import { Film } from 'lucide-react';

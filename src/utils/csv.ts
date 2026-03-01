@@ -1,7 +1,6 @@
 import Papa from 'papaparse';
 import { formatTime } from './formatTime';
-import type { Annotation, CueFields, EMPTY_CUE_FIELDS } from '../types';
-import { EMPTY_CUE_FIELDS as defaultCue } from '../types';
+import type { Annotation, CueFields } from '../types';
 
 export function exportAnnotationsToCSV(annotations: Annotation[], videoName: string): void {
   const sorted = [...annotations].sort((a, b) => a.timestamp - b.timestamp);
