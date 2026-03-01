@@ -5,7 +5,7 @@ import { loadAnnotations, saveAnnotations } from '../utils/storage';
 export function useAnnotations(fileName: string, fileSize: number) {
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // Load annotations when file changes
   useEffect(() => {

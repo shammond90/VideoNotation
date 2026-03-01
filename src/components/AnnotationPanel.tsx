@@ -40,7 +40,7 @@ export function AnnotationPanel({
   const [isUserScrolling, setIsUserScrolling] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const activeRef = useRef<HTMLDivElement>(null);
-  const userScrollTimeout = useRef<ReturnType<typeof setTimeout>>();
+  const userScrollTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // Filter annotations
   const filteredAnnotations = useMemo(() => {
@@ -77,17 +77,6 @@ export function AnnotationPanel({
       setIsUserScrolling(false);
     }, 3000);
   }, []);
-
-  /** Build a compact summary line from cue fields */
-  const cueSummary = (cue: CueFields) => {
-    const parts: string[] = [];
-    if (cue.type) parts.push(cue.type);
-    if (cue.cueNumber) parts.push(`#${cue.cueNumber}`);
-    if (cue.when) parts.push(cue.when);
-    if (cue.what) parts.push(cue.what);
-    if (cue.cueingNotes) parts.push(cue.cueingNotes);
-    return parts.join(' · ') || '(empty cue)';
-  };
 
   return (
     <div className="flex flex-col h-full bg-slate-850 rounded-lg border border-slate-700">
