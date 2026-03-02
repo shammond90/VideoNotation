@@ -3,9 +3,10 @@ import { Upload } from 'lucide-react';
 
 interface VideoDropZoneProps {
   onFileSelected: (file: File) => void;
+  onContinueWithoutVideo?: () => void;
 }
 
-export function VideoDropZone({ onFileSelected }: VideoDropZoneProps) {
+export function VideoDropZone({ onFileSelected, onContinueWithoutVideo }: VideoDropZoneProps) {
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -67,6 +68,21 @@ export function VideoDropZone({ onFileSelected }: VideoDropZoneProps) {
           onChange={handleFileChange}
           className="hidden"
         />
+        {onContinueWithoutVideo && (
+          <div className="mt-8 pt-6 border-t border-slate-600">
+            <p className="text-xs text-slate-400 mb-3">Or start annotating without a video first</p>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onContinueWithoutVideo();
+              }}
+              className="px-4 py-2 text-xs bg-slate-700 text-slate-200 rounded-lg hover:bg-slate-600 transition-colors"
+            >
+              Continue with No Video
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

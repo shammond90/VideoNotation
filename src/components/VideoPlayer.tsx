@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useRef } from 'react';
+import { forwardRef, useCallback, useRef, useState, useEffect } from 'react';
 import {
   Play,
   Pause,
@@ -20,21 +20,48 @@ interface VideoPlayerProps {
   onVideoError: () => void;
 }
 
-const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2];
+const SPEEDS = [1, 1.5, 2, 4, 8];
 
 export const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
   ({ src, state, actions, onVideoError }, ref) => {
     const progressRef = useRef<HTMLDivElement>(null);
+    const [isDragging, setIsDragging] = useState(false);
 
-    const handleProgressClick = useCallback(
-      (e: React.MouseEvent<HTMLDivElement>) => {
-        const rect = e.currentTarget.getBoundingClientRect();
-        const x = e.clientX - rect.left;
+    const seekToPosition = useCallback(
+      (clientX: number) => {
+        const rect = progressRef.current?.getBoundingClientRect();
+        if (!rect || !state.duration) return;
+        const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
         const ratio = x / rect.width;
         actions.seek(ratio * state.duration);
       },
       [actions, state.duration],
     );
+
+    const handleProgressMouseDown = useCallback(
+      (e: React.MouseEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        setIsDragging(true);
+        seekToPosition(e.clientX);
+      },
+      [seekToPosition],
+    );
+
+    // Drag handling via document events
+    useEffect(() => {
+      if (!isDragging) return;
+      const handleMouseMove = (e: MouseEvent) => {
+        e.preventDefault();
+        seekToPosition(e.clientX);
+      };
+      const handleMouseUp = () => setIsDragging(false);
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+    }, [isDragging, seekToPosition]);
 
     const handleVolumeChange = useCallback(
       (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -60,7 +87,7 @@ export const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
           <video
             ref={ref}
             src={src}
-            className="w-full aspect-video bg-black"
+            className="w-full aspect-video bg-black max-h-[60vh] lg:max-h-[calc(100vh-9rem)] object-contain"
             onError={onVideoError}
             playsInline
             preload="auto"
@@ -94,8 +121,8 @@ export const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
           {/* Progress bar */}
           <div
             ref={progressRef}
-            className="relative h-2 bg-slate-700 rounded-full cursor-pointer group"
-            onClick={handleProgressClick}
+            className={`relative h-2 bg-slate-700 rounded-full cursor-pointer group ${isDragging ? 'h-3' : ''}`}
+            onMouseDown={handleProgressMouseDown}
           >
             {/* Buffered */}
             <div
@@ -109,7 +136,7 @@ export const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
             />
             {/* Scrubber */}
             <div
-              className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-indigo-400 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+              className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-indigo-400 rounded-full transition-opacity shadow-lg ${isDragging ? 'opacity-100 scale-110' : 'opacity-0 group-hover:opacity-100'}`}
               style={{ left: `calc(${state.duration ? (state.currentTime / state.duration) * 100 : 0}% - 8px)` }}
             />
           </div>

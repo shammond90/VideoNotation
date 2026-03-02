@@ -1,17 +1,23 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import { Search, Pencil, Trash2, X, Download, Upload, Clock } from 'lucide-react';
+import { Search, Pencil, Trash2, X, Download, Upload, Clock, Filter } from 'lucide-react';
 import { formatTime, parseTime } from '../utils/formatTime';
 import { CueForm } from './CueForm';
-import type { Annotation, CueFields } from '../types';
+import type { Annotation, CueFields, ColumnConfig } from '../types';
 
 interface AnnotationPanelProps {
   annotations: Annotation[];
   activeId: string | null;
+  currentTime: number;
+  cueTypeColors: Record<string, string>;
   onSeek: (time: number) => void;
-  onEdit: (id: string, cue: CueFields) => void;
+  onEdit: (id: string, cue: CueFields, newTimestamp?: number) => void;
   onDelete: (id: string) => void;
   onExport: () => void;
   onImport: () => void;
+  isNoVideoMode?: boolean;
+  visibleColumns: ColumnConfig[];
+  cueTypeColumns: Record<string, ColumnConfig[]>;
+  cueTypes: string[];
 }
 
 /** Show a non-empty cue field as a tiny label:value chip */
@@ -25,49 +31,125 @@ function CueChip({ label, value }: { label: string; value: string }) {
   );
 }
 
+/**
+ * Determine if a cue is "active" — the video time is less than
+ * the cue's timestamp + its duration.
+ */
+function isCueActive(annotation: Annotation, currentTime: number): boolean {
+  const dur = parseFloat(annotation.cue.duration) || 0;
+  return currentTime >= annotation.timestamp && currentTime < annotation.timestamp + dur;
+}
+
 export function AnnotationPanel({
   annotations,
   activeId,
+  currentTime,
+  cueTypeColors,
   onSeek,
   onEdit,
   onDelete,
   onExport,
   onImport,
+  isNoVideoMode,
+  visibleColumns,
+  cueTypeColumns,
+  cueTypes,
 }: AnnotationPanelProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isUserScrolling, setIsUserScrolling] = useState(false);
+  const [typeFilter, setTypeFilter] = useState<Set<string>>(new Set());
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [distanceView, setDistanceView] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
   const activeRef = useRef<HTMLDivElement>(null);
   const userScrollTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  // Filter annotations
-  const filteredAnnotations = useMemo(() => {
-    if (!searchQuery.trim()) return annotations;
-    const query = searchQuery.trim().toLowerCase();
+  // Helper: get visible columns for a specific cue type
+  const getColumnsForType = useCallback(
+    (cueType: string): ColumnConfig[] => {
+      if (cueTypeColumns[cueType]) return cueTypeColumns[cueType];
+      return visibleColumns;
+    },
+    [visibleColumns, cueTypeColumns],
+  );
 
-    // Check if query looks like a timestamp
-    const queryTime = parseTime(query);
-
-    return annotations.filter((a) => {
-      // Search across all cue fields
-      const cueValues = Object.values(a.cue).join(' ').toLowerCase();
-      if (cueValues.includes(query)) return true;
-      if (queryTime !== null) {
-        return Math.abs(a.timestamp - queryTime) < 5;
+  // Toggle a type in the filter
+  const toggleTypeFilter = useCallback((type: string) => {
+    setTypeFilter((prev) => {
+      const next = new Set(prev);
+      if (next.has(type)) {
+        next.delete(type);
+      } else {
+        next.add(type);
       }
-      const formatted = formatTime(a.timestamp);
-      return formatted.includes(query);
+      return next;
     });
-  }, [annotations, searchQuery]);
+  }, []);
 
-  // Auto-scroll to active note
-  useEffect(() => {
-    if (activeId && activeRef.current && !isUserScrolling && !editingId) {
-      activeRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  // Filter annotations: search + cue type filter
+  const filteredAnnotations = useMemo(() => {
+    let anns = annotations;
+
+    // Apply cue type filter
+    if (typeFilter.size > 0) {
+      anns = anns.filter((a) => typeFilter.has(a.cue.type));
     }
-  }, [activeId, isUserScrolling, editingId]);
+
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.trim().toLowerCase();
+      const queryTime = parseTime(query);
+
+      anns = anns.filter((a) => {
+        const cueValues = Object.values(a.cue).join(' ').toLowerCase();
+        if (cueValues.includes(query)) return true;
+        if (queryTime !== null) {
+          return Math.abs(a.timestamp - queryTime) < 5;
+        }
+        const formatted = formatTime(a.timestamp);
+        return formatted.includes(query);
+      });
+    }
+
+    return anns;
+  }, [annotations, searchQuery, typeFilter]);
+
+  // Split into active+upcoming vs past (for display ordering)
+  const { activeCues, upcomingCues } = useMemo(() => {
+    const active: Annotation[] = [];
+    const upcoming: Annotation[] = [];
+
+    for (const a of filteredAnnotations) {
+      const dur = parseFloat(a.cue.duration) || 0;
+      if (isCueActive(a, currentTime)) {
+        active.push(a);
+      } else if (a.timestamp > currentTime || a.timestamp + dur > currentTime) {
+        upcoming.push(a);
+      }
+      // Past cues (timestamp + duration < currentTime) are hidden from the auto-scroll view
+      // but included when searching
+    }
+
+    return { activeCues: active, upcomingCues: upcoming };
+  }, [filteredAnnotations, currentTime]);
+
+  // When not searching, show active cues first, then upcoming
+  // When searching, show all matches in timestamp order
+  const displayedAnnotations = useMemo(() => {
+    if (searchQuery.trim()) {
+      return filteredAnnotations; // show all matches in order
+    }
+    return [...activeCues, ...upcomingCues];
+  }, [searchQuery, filteredAnnotations, activeCues, upcomingCues]);
+
+  // Auto-scroll to keep active cues at top
+  useEffect(() => {
+    if (activeRef.current && !isUserScrolling && !editingId && !searchQuery.trim()) {
+      activeRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [activeId, isUserScrolling, editingId, searchQuery]);
 
   // Track user scrolling
   const handleScroll = useCallback(() => {
@@ -111,6 +193,68 @@ export function AnnotationPanel({
             </button>
           )}
         </div>
+
+        {/* Cue Type Filter + Distance View toggle */}
+        <div className="mt-2">
+          <div className="flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => setIsFilterOpen((prev) => !prev)}
+              className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded-md transition-colors ${
+                typeFilter.size > 0
+                  ? 'bg-indigo-500/20 text-indigo-300'
+                  : 'text-slate-500 hover:text-slate-300 hover:bg-slate-700'
+              }`}
+            >
+              <Filter className="w-3.5 h-3.5" />
+              Filter by Type
+              {typeFilter.size > 0 && (
+                <span className="bg-indigo-500 text-white text-[10px] font-bold px-1.5 py-0 rounded-full">
+                  {typeFilter.size}
+                </span>
+              )}
+            </button>
+            <label className="flex items-center gap-1.5 text-xs text-slate-400 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={distanceView}
+                onChange={(e) => setDistanceView(e.target.checked)}
+                className="w-3.5 h-3.5 rounded border-slate-500 bg-slate-600 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-0 cursor-pointer"
+              />
+              Distance view
+            </label>
+          </div>
+          {isFilterOpen && (
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {cueTypes.map((type) => {
+                const isActive = typeFilter.has(type);
+                return (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => toggleTypeFilter(type)}
+                    className={`text-[10px] font-bold px-2 py-1 rounded-md border transition-colors ${
+                      isActive
+                        ? 'bg-indigo-500/30 border-indigo-500/60 text-indigo-300'
+                        : 'bg-slate-700/50 border-slate-600/50 text-slate-400 hover:text-slate-200 hover:border-slate-500'
+                    }`}
+                  >
+                    {type}
+                  </button>
+                );
+              })}
+              {typeFilter.size > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setTypeFilter(new Set())}
+                  className="text-[10px] text-slate-500 hover:text-slate-300 px-2 py-1 rounded-md hover:bg-slate-700 transition-colors"
+                >
+                  Clear all
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Cue list */}
@@ -119,13 +263,15 @@ export function AnnotationPanel({
         onScroll={handleScroll}
         className="flex-1 overflow-y-auto annotation-scroll p-3 space-y-2"
       >
-        {filteredAnnotations.length === 0 ? (
+        {displayedAnnotations.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-slate-500">
             {annotations.length === 0 ? (
               <>
                 <Clock className="w-10 h-10 mb-3 opacity-50" />
                 <p className="text-sm font-medium">No cues yet</p>
-                <p className="text-xs mt-1">Press Space to add your first cue</p>
+                <p className="text-xs mt-1">
+                  Press {isNoVideoMode ? 'Enter' : 'Enter'} to add your first cue
+                </p>
               </>
             ) : (
               <>
@@ -135,128 +281,205 @@ export function AnnotationPanel({
             )}
           </div>
         ) : (
-          filteredAnnotations.map((annotation) => {
-            const isActive = annotation.id === activeId;
+          displayedAnnotations.map((annotation) => {
+            const isActive = isCueActive(annotation, currentTime);
             const isEditing = annotation.id === editingId;
             const isDeleting = annotation.id === deletingId;
             const cue = annotation.cue;
+            const isFirstActive = activeCues[0]?.id === annotation.id;
 
             return (
               <div
                 key={annotation.id}
-                ref={isActive ? activeRef : undefined}
+                ref={isFirstActive ? activeRef : undefined}
+                onClick={() => {
+                  if (!isEditing) onSeek(annotation.timestamp);
+                }}
                 className={`
-                  group rounded-lg p-3 border transition-all duration-200
+                  group rounded-lg border transition-all duration-200 cursor-pointer relative
                   ${isActive
-                    ? 'bg-indigo-500/10 border-indigo-500/40 shadow-sm shadow-indigo-500/10'
-                    : 'bg-slate-800/50 border-slate-700/50 hover:bg-slate-800 hover:border-slate-600'}
+                    ? 'bg-emerald-900/30 border-emerald-500/60 shadow-sm shadow-emerald-500/10'
+                    : annotation.id === activeId
+                      ? 'bg-indigo-500/10 border-indigo-500/40 shadow-sm shadow-indigo-500/10'
+                      : 'bg-slate-800/50 border-slate-700/50 hover:bg-slate-800 hover:border-slate-600'}
                 `}
               >
                 {isEditing ? (
+                  /* Full-field edit: show all fields in CueForm edit mode */
+                  <div className="p-3">
                   <CueForm
+                    mode="edit"
                     timestamp={annotation.timestamp}
                     initialValues={cue}
-                    onSave={(updated) => {
-                      onEdit(annotation.id, updated);
+                    timeInTitle={annotation.timeInTitle}
+                    allAnnotations={annotations}
+                    cueTypes={cueTypes}
+                    onSave={(updated, newTimestamp) => {
+                      onEdit(annotation.id, updated, newTimestamp);
                       setEditingId(null);
                     }}
                     onCancel={() => setEditingId(null)}
                   />
+                  </div>
                 ) : (
                   <>
-                    {/* Top row: timestamp + type badge + actions */}
-                    <div className="flex items-center justify-between mb-1.5">
-                      <div className="flex items-center gap-1.5">
+                    {/* Overlapping active flag — top right */}
+                    {isActive && (
+                      <span className="absolute -top-2 right-2 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase z-10 bg-emerald-600 text-emerald-100 tracking-wider">
+                        Active
+                      </span>
+                    )}
+
+                    {distanceView ? (
+                      /* ── Distance view: large type+cue# block on left ── */
+                      <div className="flex items-center gap-1.5 pr-2 pt-0.5 pb-0.5">
+                        {/* Type + Cue # badge — always uses configured colour */}
+                        {cue.type && (
+                          <div
+                            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-l-lg text-white font-bold text-sm uppercase tracking-wide shrink-0 self-stretch"
+                            style={{ backgroundColor: cueTypeColors[cue.type] || '#6b7280' }}
+                          >
+                            <span>{cue.type}</span>
+                            {cue.cueNumber && (
+                              <span className="opacity-80">#{cue.cueNumber}</span>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Timestamp clickable pill */}
                         <button
                           type="button"
-                          onClick={() => onSeek(annotation.timestamp)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSeek(annotation.timestamp);
+                          }}
                           className={`
-                            text-[10px] font-mono px-1.5 py-0.5 rounded transition-colors cursor-pointer
+                            text-[10px] font-mono px-1.5 py-0.5 rounded transition-colors cursor-pointer shrink-0
                             ${isActive
-                              ? 'bg-indigo-500/30 text-indigo-300 hover:bg-indigo-500/40'
+                              ? 'bg-emerald-500/30 text-emerald-300 hover:bg-emerald-500/40'
                               : 'bg-slate-700 text-slate-400 hover:bg-slate-600 hover:text-slate-300'}
                           `}
                         >
                           {formatTime(annotation.timestamp)}
                         </button>
+
+                        {/* Inline chips */}
+                        {(() => {
+                          const cols = getColumnsForType(cue.type).filter((c) => c.visible);
+                          return (
+                            <div className="flex flex-wrap items-center gap-1 flex-1 min-w-0">
+                              {cols.map((col) => {
+                                if (col.key === 'type' || col.key === 'cueNumber') return null;
+                                const val = cue[col.key];
+                                if (!val) return null;
+                                return <CueChip key={col.key} label={col.label} value={val} />;
+                              })}
+                            </div>
+                          );
+                        })()}
+
+                        {/* Edit / Delete actions */}
+                        {!isDeleting && (
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingId(annotation.id);
+                              }}
+                              className="p-1 text-slate-500 hover:text-slate-300 hover:bg-slate-700 rounded"
+                              title="Edit"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeletingId(annotation.id);
+                              }}
+                              className="p-1 text-slate-500 hover:text-red-400 hover:bg-slate-700 rounded"
+                              title="Delete"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      /* ── Compact view: small overlapping type+cue# badge top-left ── */
+                      <>
                         {cue.type && (
-                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 uppercase">
-                            {cue.type}
+                          <span
+                            className="absolute -top-2 left-2 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase z-10 text-white"
+                            style={{ backgroundColor: cueTypeColors[cue.type] || '#6b7280' }}
+                          >
+                            {cue.type}{cue.cueNumber ? ` #${cue.cueNumber}` : ''}
                           </span>
                         )}
-                        {cue.cueNumber && (
-                          <span className="text-[10px] font-mono text-slate-400">
-                            #{cue.cueNumber}
-                          </span>
-                        )}
-                      </div>
 
-                      {!isDeleting && (
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex items-center gap-1.5 pt-2.5 px-3 pb-2">
+                          {/* Timestamp clickable pill */}
                           <button
                             type="button"
-                            onClick={() => setEditingId(annotation.id)}
-                            className="p-1 text-slate-500 hover:text-slate-300 hover:bg-slate-700 rounded"
-                            title="Edit"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSeek(annotation.timestamp);
+                            }}
+                            className={`
+                              text-[10px] font-mono px-1.5 py-0.5 rounded transition-colors cursor-pointer shrink-0
+                              ${isActive
+                                ? 'bg-emerald-500/30 text-emerald-300 hover:bg-emerald-500/40'
+                                : 'bg-slate-700 text-slate-400 hover:bg-slate-600 hover:text-slate-300'}
+                            `}
                           >
-                            <Pencil className="w-3.5 h-3.5" />
+                            {formatTime(annotation.timestamp)}
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => setDeletingId(annotation.id)}
-                            className="p-1 text-slate-500 hover:text-red-400 hover:bg-slate-700 rounded"
-                            title="Delete"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+
+                          {/* Inline chips */}
+                          {(() => {
+                            const cols = getColumnsForType(cue.type).filter((c) => c.visible);
+                            return (
+                              <div className="flex flex-wrap items-center gap-1 flex-1 min-w-0">
+                                {cols.map((col) => {
+                                  if (col.key === 'type' || col.key === 'cueNumber') return null;
+                                  const val = cue[col.key];
+                                  if (!val) return null;
+                                  return <CueChip key={col.key} label={col.label} value={val} />;
+                                })}
+                              </div>
+                            );
+                          })()}
+
+                          {/* Edit / Delete actions */}
+                          {!isDeleting && (
+                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingId(annotation.id);
+                                }}
+                                className="p-1 text-slate-500 hover:text-slate-300 hover:bg-slate-700 rounded"
+                                title="Edit"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeletingId(annotation.id);
+                                }}
+                                className="p-1 text-slate-500 hover:text-red-400 hover:bg-slate-700 rounded"
+                                title="Delete"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-
-                    {/* Cue detail chips */}
-                    <div className="flex flex-wrap gap-1 mb-1">
-                      <CueChip label="Time" value={cue.cueTime} />
-                      <CueChip label="D" value={cue.duration} />
-                      <CueChip label="F" value={cue.fadeDown} />
-                      <CueChip label="H" value={cue.h} />
-                      <CueChip label="B" value={cue.b} />
-                      <CueChip label="A" value={cue.a} />
-                      <CueChip label="Preset" value={cue.presets} />
-                      <CueChip label="Color" value={cue.colorPalette} />
-                      <CueChip label="Sp.Frame" value={cue.spotFrame} />
-                      <CueChip label="Sp.Int" value={cue.spotIntensity} />
-                      <CueChip label="Sp.Time" value={cue.spotTime} />
-                    </div>
-
-                    {/* When / What */}
-                    {(cue.when || cue.what) && (
-                      <div className="text-xs text-slate-300 mb-1 space-y-0.5">
-                        {cue.when && (
-                          <p>
-                            <span className="text-slate-500 uppercase text-[10px] mr-1">When:</span>
-                            {cue.when}
-                          </p>
-                        )}
-                        {cue.what && (
-                          <p>
-                            <span className="text-slate-500 uppercase text-[10px] mr-1">What:</span>
-                            {cue.what}
-                          </p>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Notes rows */}
-                    {(cue.cueSheetNotes || cue.cueingNotes || cue.final || cue.dress || cue.tech) && (
-                      <div className="text-[11px] text-slate-400 space-y-0.5 mt-1 pt-1 border-t border-slate-700/50">
-                        {cue.cueSheetNotes && <p className="italic">{cue.cueSheetNotes}</p>}
-                        {cue.cueingNotes && <p>{cue.cueingNotes}</p>}
-                        <div className="flex gap-2">
-                          {cue.final && <CueChip label="Final" value={cue.final} />}
-                          {cue.dress && <CueChip label="Dress" value={cue.dress} />}
-                          {cue.tech && <CueChip label="Tech" value={cue.tech} />}
-                        </div>
-                      </div>
+                      </>
                     )}
 
                     {/* Delete confirmation */}
@@ -265,7 +488,8 @@ export function AnnotationPanel({
                         <span className="text-red-400 text-xs">Delete this cue?</span>
                         <button
                           type="button"
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                             onDelete(annotation.id);
                             setDeletingId(null);
                           }}
@@ -275,7 +499,10 @@ export function AnnotationPanel({
                         </button>
                         <button
                           type="button"
-                          onClick={() => setDeletingId(null)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeletingId(null);
+                          }}
                           className="text-xs px-2 py-0.5 bg-slate-700 text-slate-300 rounded hover:bg-slate-600 transition-colors"
                         >
                           No

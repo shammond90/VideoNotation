@@ -14,3 +14,8 @@
 .annotation-scroll::-webkit-scrollbar-thumb:hover {
   background: #64748b;
 }
+
+/* Active cue glow */
+.cue-active {
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.2);
+}
