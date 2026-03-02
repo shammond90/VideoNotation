@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState, useEffect, useMemo } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import { VideoDropZone } from './components/VideoDropZone';
 import { VideoPlayer } from './components/VideoPlayer';
 import { CueForm } from './components/CueForm';
@@ -471,6 +472,9 @@ export default function App() {
 
       {/* Toast notifications */}
       <ToastContainer toasts={toasts} onRemove={removeToast} />
+
+      {/* Vercel Analytics */}
+      <Analytics />
     </div>
   );
 }
