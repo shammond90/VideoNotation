@@ -41,6 +41,8 @@ function migrateAnnotation(raw: any): Annotation {
       dress: cue.dress ?? '',
       tech: cue.tech ?? '',
       cueingNotes: cue.cueingNotes ?? '',
+      standbyTime: cue.standbyTime ?? '',
+      warningTime: cue.warningTime ?? '',
     },
     createdAt: raw.createdAt,
     updatedAt: raw.updatedAt,
@@ -92,6 +94,43 @@ export function loadConfig(): AppConfig {
     if (!parsed.cueTypeColors || typeof parsed.cueTypeColors !== 'object') {
       parsed.cueTypeColors = { ...DEFAULT_CUE_TYPE_COLORS };
     }
+    // Ensure distanceView exists (migration)
+    if (typeof parsed.distanceView !== 'boolean') {
+      parsed.distanceView = true;
+    }
+    // Ensure standby/warning allow maps exist (migration from old time-based maps)
+    if (!parsed.cueTypeAllowStandby || typeof parsed.cueTypeAllowStandby !== 'object') {
+      // Migrate: if old cueTypeStandbyTime existed with non-zero values, set allow=true
+      const oldStandby = (parsed as any).cueTypeStandbyTime;
+      parsed.cueTypeAllowStandby = {};
+      if (oldStandby && typeof oldStandby === 'object') {
+        for (const [k, v] of Object.entries(oldStandby)) {
+          if (typeof v === 'number' && v > 0) parsed.cueTypeAllowStandby[k] = true;
+        }
+      }
+      delete (parsed as any).cueTypeStandbyTime;
+    }
+    if (!parsed.cueTypeAllowWarning || typeof parsed.cueTypeAllowWarning !== 'object') {
+      const oldWarning = (parsed as any).cueTypeWarningTime;
+      parsed.cueTypeAllowWarning = {};
+      if (oldWarning && typeof oldWarning === 'object') {
+        for (const [k, v] of Object.entries(oldWarning)) {
+          if (typeof v === 'number' && v > 0) parsed.cueTypeAllowWarning[k] = true;
+        }
+      }
+      delete (parsed as any).cueTypeWarningTime;
+    }
+    // Clean up legacy keys if still present
+    delete (parsed as any).cueTypeStandbyTime;
+    delete (parsed as any).cueTypeWarningTime;
+    // Ensure virtual columns (timestamp, timeInTitle) are present in visibleColumns
+    const virtualKeys = ['timestamp', 'timeInTitle'] as const;
+    const virtualLabels: Record<string, string> = { timestamp: 'Timestamp', timeInTitle: 'Time in Title' };
+    for (const vk of virtualKeys) {
+      if (!parsed.visibleColumns.some((c) => c.key === vk)) {
+        parsed.visibleColumns.push({ key: vk, label: virtualLabels[vk], visible: false });
+      }
+    }
     return parsed;
   } catch {
     return { ...DEFAULT_CONFIG, visibleColumns: DEFAULT_CONFIG.visibleColumns.map((c) => ({ ...c })), cueTypeColumns: {}, cueTypeColors: { ...DEFAULT_CUE_TYPE_COLORS } };
@@ -140,6 +179,27 @@ export function importConfigFromJSON(file: File): Promise<AppConfig> {
         if (!parsed.cueTypeColors || typeof parsed.cueTypeColors !== 'object') {
           parsed.cueTypeColors = { ...DEFAULT_CUE_TYPE_COLORS };
         }
+        // Ensure standby/warning allow maps exist
+        if (!parsed.cueTypeAllowStandby || typeof parsed.cueTypeAllowStandby !== 'object') {
+          const oldStandby = (parsed as any).cueTypeStandbyTime;
+          parsed.cueTypeAllowStandby = {};
+          if (oldStandby && typeof oldStandby === 'object') {
+            for (const [k, v] of Object.entries(oldStandby)) {
+              if (typeof v === 'number' && v > 0) parsed.cueTypeAllowStandby[k] = true;
+            }
+          }
+        }
+        if (!parsed.cueTypeAllowWarning || typeof parsed.cueTypeAllowWarning !== 'object') {
+          const oldWarning = (parsed as any).cueTypeWarningTime;
+          parsed.cueTypeAllowWarning = {};
+          if (oldWarning && typeof oldWarning === 'object') {
+            for (const [k, v] of Object.entries(oldWarning)) {
+              if (typeof v === 'number' && v > 0) parsed.cueTypeAllowWarning[k] = true;
+            }
+          }
+        }
+        delete (parsed as any).cueTypeStandbyTime;
+        delete (parsed as any).cueTypeWarningTime;
         resolve(parsed);
       } catch (err) {
         reject(err instanceof Error ? err : new Error('Failed to parse config file'));

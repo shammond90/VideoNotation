@@ -11,7 +11,8 @@ import { useConfiguration } from './hooks/useConfiguration';
 import { useToast } from './hooks/useToast';
 import { exportAnnotationsToCSV, importAnnotationsFromCSV } from './utils/csv';
 import type { CueFields } from './types';
-import { Film, Settings } from 'lucide-react';
+import { RESERVED_CUE_TYPES } from './types';
+import { Film, Settings, X as XIcon } from 'lucide-react';
 
 export default function App() {
   const [videoFile, setVideoFile] = useState<File | null>(null);
@@ -20,24 +21,34 @@ export default function App() {
   const [annotateTimestamp, setAnnotateTimestamp] = useState(0);
   const [isNoVideoMode, setIsNoVideoMode] = useState(false);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
+  // "Change video" modal state
+  const [isChangeVideoOpen, setIsChangeVideoOpen] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
+  const cueFormSaveRef = useRef<(() => void) | null>(null);
 
   const { state: playerState, actions: playerActions } = useVideoPlayer(videoRef, containerRef, videoSrc);
   const {
     config,
+    setCueTypes,
     addCueType,
     removeCueType,
     renameCueType,
     setCueTypeColor,
+    setDistanceView,
+    setCueTypeAllowStandby,
+    setCueTypeAllowWarning,
     toggleColumnVisibility,
     reorderColumns,
     addCueTypeColumns,
     removeCueTypeColumns,
     exportConfig,
     importConfig,
+    clearAllData,
+    clearCurrentVideoCues,
+    clearAllCues,
   } = useConfiguration();
 
   const {
@@ -67,6 +78,28 @@ export default function App() {
     },
     [renameCueType, renameAnnotationCueType],
   );
+
+  // Clear data handlers
+  const handleClearAllData = useCallback(() => {
+    clearAllData();
+    replaceAll([]);
+    addToast('All data cleared. App reset to defaults.', 'info');
+  }, [clearAllData, replaceAll, addToast]);
+
+  const handleClearCurrentVideoCues = useCallback(
+    (fileName: string, fileSize: number) => {
+      clearCurrentVideoCues(fileName, fileSize);
+      replaceAll([]);
+      addToast(`Cleared all cues for "${fileName}"`, 'info');
+    },
+    [clearCurrentVideoCues, replaceAll, addToast],
+  );
+
+  const handleClearAllCues = useCallback(() => {
+    clearAllCues();
+    replaceAll([]);
+    addToast('Cleared all cues from all videos', 'info');
+  }, [clearAllCues, replaceAll, addToast]);
 
   // Update active annotation on time change
   useEffect(() => {
@@ -219,6 +252,20 @@ export default function App() {
       try {
         const imported = await importAnnotationsFromCSV(file);
         replaceAll(imported);
+
+        // Extract unique cue types from imported data and replace non-reserved types
+        const importedTypes = new Set<string>();
+        imported.forEach((a) => { if (a.cue.type) importedTypes.add(a.cue.type); });
+        const reserved = RESERVED_CUE_TYPES as readonly string[];
+        const newTypes = [...reserved, ...[...importedTypes].filter((t) => !reserved.includes(t))];
+        setCueTypes(newTypes);
+        // Ensure colours exist for any new types (setCueTypes handles reserved; new ones get default grey)
+        for (const t of importedTypes) {
+          if (!config.cueTypeColors[t]) {
+            setCueTypeColor(t, '#6b7280');
+          }
+        }
+
         addToast(`Imported ${imported.length} annotations`, 'success');
       } catch (err) {
         addToast(`Import failed: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error');
@@ -227,7 +274,7 @@ export default function App() {
       // Reset input
       if (importInputRef.current) importInputRef.current.value = '';
     },
-    [replaceAll, addToast],
+    [replaceAll, addToast, setCueTypes, setCueTypeColor, config.cueTypeColors],
   );
 
   // Global keyboard shortcuts
@@ -329,13 +376,7 @@ export default function App() {
               <span className="text-xs text-slate-400 truncate max-w-[200px]">{videoFile.name}</span>
               <button
                 type="button"
-                onClick={() => {
-                  if (videoSrc) URL.revokeObjectURL(videoSrc);
-                  setVideoFile(null);
-                  setVideoSrc('');
-                  setIsAnnotating(false);
-                  setIsNoVideoMode(false);
-                }}
+                onClick={() => setIsChangeVideoOpen(true)}
                 className="text-xs text-slate-500 hover:text-slate-300 px-2 py-1 rounded hover:bg-slate-700 transition-colors"
               >
                 Change video
@@ -369,7 +410,10 @@ export default function App() {
       {/* Main content */}
       {!videoSrc && !isNoVideoMode ? (
         <main className="flex-1 flex items-center justify-center p-8">
-          <VideoDropZone onFileSelected={handleFileSelected} onContinueWithoutVideo={handleContinueWithoutVideo} />
+          <VideoDropZone
+            onFileSelected={handleFileSelected}
+            onContinueWithoutVideo={handleContinueWithoutVideo}
+          />
         </main>
       ) : (
         <main className="flex-1 flex flex-col lg:flex-row gap-4 p-4 overflow-auto">
@@ -392,28 +436,141 @@ export default function App() {
               </div>
             )}
             {isAnnotating && (
-              <CueForm
-                mode="create"
-                timestamp={annotateTimestamp}
-                allAnnotations={annotations}
-                cueTypes={config.cueTypes}
-                onSave={handleSaveCue}
-                onCancel={handleCancelNote}
-              />
+              <>
+                {/* Touch bar: Cancel / Save above the form */}
+                <div className="mt-2 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleCancelNote}
+                    className="flex items-center justify-center gap-1.5 flex-1 px-3 py-2 bg-slate-800 text-slate-300 rounded-lg border border-slate-700 hover:bg-slate-700 transition-colors text-sm"
+                  >
+                    <kbd className="inline-flex items-center justify-center w-7 h-7 text-[11px] font-mono font-bold bg-slate-700 text-slate-400 rounded border border-slate-600">Esc</kbd>
+                    <span className="text-xs text-slate-400">Cancel</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => cueFormSaveRef.current?.()}
+                    className="flex items-center justify-center gap-1.5 flex-1 px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 transition-colors text-sm"
+                  >
+                    <kbd className="inline-flex items-center justify-center w-7 h-7 text-[11px] font-mono font-bold bg-indigo-700 text-indigo-200 rounded border border-indigo-500">C-↵</kbd>
+                    <span className="text-xs">Save Cue</span>
+                  </button>
+                </div>
+                <CueForm
+                  mode="create"
+                  timestamp={annotateTimestamp}
+                  allAnnotations={annotations}
+                  cueTypes={config.cueTypes}
+                  cueTypeAllowStandby={config.cueTypeAllowStandby}
+                  cueTypeAllowWarning={config.cueTypeAllowWarning}
+                  onSave={handleSaveCue}
+                  onCancel={handleCancelNote}
+                  saveRef={cueFormSaveRef}
+                />
+              </>
             )}
-            {/* Keyboard shortcuts hint */}
+            {/* Clickable keyboard hints */}
             {!isAnnotating && videoSrc && (
-              <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
-                <span><kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-slate-500 font-mono text-[10px]">Space</kbd> Play/Pause</span>
-                <span><kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-slate-500 font-mono text-[10px]">Enter</kbd> New Cue</span>
-                <span><kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-slate-500 font-mono text-[10px]">← →</kbd> Seek ±5s</span>
-                <span><kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-slate-500 font-mono text-[10px]">, .</kbd> Frame step</span>
-                <span><kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-slate-500 font-mono text-[10px]">+ −</kbd> Speed</span>
+              <div className="mt-2 flex flex-wrap items-center gap-2 px-1">
+                <button
+                  type="button"
+                  onClick={handleTogglePlay}
+                  className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-md hover:bg-slate-700 active:bg-slate-600 transition-colors"
+                  title="Play / Pause"
+                >
+                  <kbd className="inline-flex items-center justify-center w-7 h-7 text-[11px] font-mono font-bold bg-slate-700 text-slate-400 rounded border border-slate-600">␣</kbd>
+                  <span className="text-xs text-slate-500">{playerState.isPlaying ? 'Pause' : 'Play'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleEnterAnnotate}
+                  className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-md bg-indigo-600/20 hover:bg-indigo-600/40 active:bg-indigo-600/60 transition-colors"
+                  title="New Cue"
+                >
+                  <kbd className="inline-flex items-center justify-center w-7 h-7 text-[11px] font-mono font-bold bg-indigo-700 text-indigo-200 rounded border border-indigo-500">↵</kbd>
+                  <span className="text-xs text-indigo-300">Cue</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => playerActions.seek(playerState.currentTime - 5)}
+                  className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-md hover:bg-slate-700 active:bg-slate-600 transition-colors"
+                  title="Back 5s"
+                >
+                  <kbd className="inline-flex items-center justify-center w-7 h-7 text-[11px] font-mono font-bold bg-slate-700 text-slate-400 rounded border border-slate-600">←</kbd>
+                  <span className="text-xs text-slate-500">−5s</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => playerActions.seek(playerState.currentTime + 5)}
+                  className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-md hover:bg-slate-700 active:bg-slate-600 transition-colors"
+                  title="Forward 5s"
+                >
+                  <kbd className="inline-flex items-center justify-center w-7 h-7 text-[11px] font-mono font-bold bg-slate-700 text-slate-400 rounded border border-slate-600">→</kbd>
+                  <span className="text-xs text-slate-500">+5s</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => playerActions.stepFrame(-1)}
+                  className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-md hover:bg-slate-700 active:bg-slate-600 transition-colors"
+                  title="Previous frame"
+                >
+                  <kbd className="inline-flex items-center justify-center w-7 h-7 text-[11px] font-mono font-bold bg-slate-700 text-slate-400 rounded border border-slate-600">,</kbd>
+                  <span className="text-xs text-slate-500">−1f</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => playerActions.stepFrame(1)}
+                  className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-md hover:bg-slate-700 active:bg-slate-600 transition-colors"
+                  title="Next frame"
+                >
+                  <kbd className="inline-flex items-center justify-center w-7 h-7 text-[11px] font-mono font-bold bg-slate-700 text-slate-400 rounded border border-slate-600">.</kbd>
+                  <span className="text-xs text-slate-500">+1f</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const speeds = [1, 1.5, 2, 4, 8];
+                    const idx = speeds.indexOf(playerState.playbackRate);
+                    if (idx < speeds.length - 1) {
+                      playerActions.setSpeed(speeds[idx + 1]);
+                      addToast(`Speed: ${speeds[idx + 1]}x`, 'info', 1500);
+                    }
+                  }}
+                  className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-md hover:bg-slate-700 active:bg-slate-600 transition-colors"
+                  title="Speed up"
+                >
+                  <kbd className="inline-flex items-center justify-center w-7 h-7 text-[11px] font-mono font-bold bg-slate-700 text-slate-400 rounded border border-slate-600">+</kbd>
+                  <span className="text-xs text-slate-500">Fast</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const speeds = [1, 1.5, 2, 4, 8];
+                    const idx = speeds.indexOf(playerState.playbackRate);
+                    if (idx > 0) {
+                      playerActions.setSpeed(speeds[idx - 1]);
+                      addToast(`Speed: ${speeds[idx - 1]}x`, 'info', 1500);
+                    }
+                  }}
+                  className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-md hover:bg-slate-700 active:bg-slate-600 transition-colors"
+                  title="Slow down"
+                >
+                  <kbd className="inline-flex items-center justify-center w-7 h-7 text-[11px] font-mono font-bold bg-slate-700 text-slate-400 rounded border border-slate-600">−</kbd>
+                  <span className="text-xs text-slate-500">Slow</span>
+                </button>
               </div>
             )}
             {!isAnnotating && isNoVideoMode && (
-              <div className="mt-3 text-xs text-slate-600">
-                <span><kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-slate-500 font-mono text-[10px]">Enter</kbd> Add cue</span>
+              <div className="mt-2 flex items-center gap-2 px-1">
+                <button
+                  type="button"
+                  onClick={handleEnterAnnotate}
+                  className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-md bg-indigo-600/20 hover:bg-indigo-600/40 active:bg-indigo-600/60 transition-colors"
+                  title="Add Cue"
+                >
+                  <kbd className="inline-flex items-center justify-center w-7 h-7 text-[11px] font-mono font-bold bg-indigo-700 text-indigo-200 rounded border border-indigo-500">↵</kbd>
+                  <span className="text-xs text-indigo-300">Add Cue</span>
+                </button>
               </div>
             )}
           </div>
@@ -425,6 +582,9 @@ export default function App() {
               activeId={activeId}
               currentTime={playerState.currentTime}
               cueTypeColors={config.cueTypeColors}
+              distanceView={config.distanceView}
+              cueTypeAllowStandby={config.cueTypeAllowStandby}
+              cueTypeAllowWarning={config.cueTypeAllowWarning}
               onSeek={handleSeek}
               onEdit={updateAnnotation}
               onDelete={deleteAnnotation}
@@ -439,25 +599,99 @@ export default function App() {
         </main>
       )}
 
+      {/* Change Video Modal */}
+      {isChangeVideoOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-slate-800 border border-slate-700 rounded-xl shadow-2xl w-full max-w-sm p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-slate-100">Change Video</h2>
+              <button
+                type="button"
+                onClick={() => setIsChangeVideoOpen(false)}
+                className="p-1 text-slate-400 hover:text-slate-200 hover:bg-slate-700 rounded-md transition-colors"
+              >
+                <XIcon className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-sm text-slate-400 mb-5">
+              Select a new video file. You can keep your existing cues or start fresh.
+            </p>
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const input = document.createElement('input');
+                  input.type = 'file';
+                  input.accept = 'video/*';
+                  input.onchange = () => {
+                    const file = input.files?.[0];
+                    if (file) {
+                      handleFileSelected(file);
+                      setIsChangeVideoOpen(false);
+                    }
+                  };
+                  input.click();
+                }}
+                className="w-full px-4 py-2.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 transition-colors"
+              >
+                Select New Video (Keep Cues)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const input = document.createElement('input');
+                  input.type = 'file';
+                  input.accept = 'video/*';
+                  input.onchange = () => {
+                    const file = input.files?.[0];
+                    if (file) {
+                      // Clear annotations for the current video before switching
+                      replaceAll([]);
+                      handleFileSelected(file);
+                      setIsChangeVideoOpen(false);
+                    }
+                  };
+                  input.click();
+                }}
+                className="w-full px-4 py-2.5 text-sm bg-slate-700 text-slate-300 rounded-lg hover:bg-slate-600 transition-colors"
+              >
+                Select New Video (Clear Cues)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Configuration Modal */}
       <ConfigurationModal
         isOpen={isConfigOpen}
         onClose={() => setIsConfigOpen(false)}
         cueTypes={config.cueTypes}
         cueTypeColors={config.cueTypeColors}
+        cueTypeAllowStandby={config.cueTypeAllowStandby}
+        cueTypeAllowWarning={config.cueTypeAllowWarning}
         visibleColumns={config.visibleColumns}
         cueTypeColumns={config.cueTypeColumns}
         usedCueTypes={usedCueTypes}
+        distanceView={config.distanceView}
+        currentVideoName={videoFile?.name}
+        currentVideoSize={videoFile?.size}
+        onSetDistanceView={setDistanceView}
         onAddCueType={addCueType}
         onRemoveCueType={removeCueType}
         onRenameCueType={handleRenameCueType}
         onSetCueTypeColor={setCueTypeColor}
+        onSetCueTypeAllowStandby={setCueTypeAllowStandby}
+        onSetCueTypeAllowWarning={setCueTypeAllowWarning}
         onToggleColumn={toggleColumnVisibility}
         onReorderColumns={reorderColumns}
         onAddCueTypeColumns={addCueTypeColumns}
         onRemoveCueTypeColumns={removeCueTypeColumns}
         onExportConfig={exportConfig}
         onImportConfig={importConfig}
+        onClearAllData={handleClearAllData}
+        onClearCurrentVideoCues={handleClearCurrentVideoCues}
+        onClearAllCues={handleClearAllCues}
       />
 
       {/* Hidden import input */}

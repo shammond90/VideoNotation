@@ -3,6 +3,9 @@ import type { AppConfig, ColumnConfig } from '../types';
 import { DEFAULT_VISIBLE_COLUMNS, RESERVED_CUE_TYPES } from '../types';
 import { loadConfig, saveConfig, exportConfigToJSON, importConfigFromJSON } from '../utils/storage';
 
+/** Virtual column keys that can appear in visibleColumns but aren't CueFields */
+const VIRTUAL_COLUMN_KEYS = ['timestamp', 'timeInTitle'] as const;
+
 export function useConfiguration() {
   const [config, setConfig] = useState<AppConfig>(() => loadConfig());
 
@@ -40,11 +43,15 @@ export function useConfiguration() {
     setConfig((prev) => {
       const { [name]: _, ...restTypeColumns } = prev.cueTypeColumns;
       const { [name]: __, ...restColors } = prev.cueTypeColors;
+      const { [name]: ___, ...restAllowStandby } = prev.cueTypeAllowStandby;
+      const { [name]: ____, ...restAllowWarning } = prev.cueTypeAllowWarning;
       return {
         ...prev,
         cueTypes: prev.cueTypes.filter((t) => t !== name),
         cueTypeColumns: restTypeColumns,
         cueTypeColors: restColors,
+        cueTypeAllowStandby: restAllowStandby,
+        cueTypeAllowWarning: restAllowWarning,
       };
     });
   }, []);
@@ -66,7 +73,18 @@ export function useConfiguration() {
         newColors[trimmed] = newColors[oldName];
         delete newColors[oldName];
       }
-      return { ...prev, cueTypes: newTypes, cueTypeColumns: newTypeColumns, cueTypeColors: newColors };
+      // Rename key in standby/warning allow maps
+      const newAllowStandby = { ...prev.cueTypeAllowStandby };
+      if (newAllowStandby[oldName] !== undefined) {
+        newAllowStandby[trimmed] = newAllowStandby[oldName];
+        delete newAllowStandby[oldName];
+      }
+      const newAllowWarning = { ...prev.cueTypeAllowWarning };
+      if (newAllowWarning[oldName] !== undefined) {
+        newAllowWarning[trimmed] = newAllowWarning[oldName];
+        delete newAllowWarning[oldName];
+      }
+      return { ...prev, cueTypes: newTypes, cueTypeColumns: newTypeColumns, cueTypeColors: newColors, cueTypeAllowStandby: newAllowStandby, cueTypeAllowWarning: newAllowWarning };
     });
   }, []);
 
@@ -74,6 +92,24 @@ export function useConfiguration() {
     setConfig((prev) => ({
       ...prev,
       cueTypeColors: { ...prev.cueTypeColors, [cueType]: color },
+    }));
+  }, []);
+
+  const setDistanceView = useCallback((value: boolean) => {
+    setConfig((prev) => ({ ...prev, distanceView: value }));
+  }, []);
+
+  const setCueTypeAllowStandby = useCallback((cueType: string, allow: boolean) => {
+    setConfig((prev) => ({
+      ...prev,
+      cueTypeAllowStandby: { ...prev.cueTypeAllowStandby, [cueType]: allow },
+    }));
+  }, []);
+
+  const setCueTypeAllowWarning = useCallback((cueType: string, allow: boolean) => {
+    setConfig((prev) => ({
+      ...prev,
+      cueTypeAllowWarning: { ...prev.cueTypeAllowWarning, [cueType]: allow },
     }));
   }, []);
 
@@ -149,6 +185,35 @@ export function useConfiguration() {
     setConfig(imported);
   }, []);
 
+  const clearAllData = useCallback(() => {
+    // Clear all annotations for all videos
+    const keys = Object.keys(localStorage);
+    keys.forEach((key) => {
+      if (key.startsWith('annotations:')) {
+        localStorage.removeItem(key);
+      }
+    });
+    // Clear config
+    localStorage.removeItem('app-config');
+    // Reset to default config
+    setConfig(DEFAULT_CONFIG);
+  }, []);
+
+  const clearCurrentVideoCues = useCallback((fileName: string, fileSize: number) => {
+    const key = `annotations:${fileName}:${fileSize}`;
+    localStorage.removeItem(key);
+  }, []);
+
+  const clearAllCues = useCallback(() => {
+    // Clear all annotations but keep config
+    const keys = Object.keys(localStorage);
+    keys.forEach((key) => {
+      if (key.startsWith('annotations:')) {
+        localStorage.removeItem(key);
+      }
+    });
+  }, []);
+
   return {
     config,
     setCueTypes,
@@ -156,6 +221,9 @@ export function useConfiguration() {
     removeCueType,
     renameCueType,
     setCueTypeColor,
+    setDistanceView,
+    setCueTypeAllowStandby,
+    setCueTypeAllowWarning,
     setVisibleColumns,
     toggleColumnVisibility,
     reorderColumns,
@@ -163,5 +231,8 @@ export function useConfiguration() {
     removeCueTypeColumns,
     exportConfig,
     importConfig: handleImportConfig,
+    clearAllData,
+    clearCurrentVideoCues,
+    clearAllCues,
   };
 }

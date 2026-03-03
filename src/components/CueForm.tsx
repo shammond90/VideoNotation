@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback, type MutableRefObject } from 'react';
 import type { CueFields, Annotation } from '../types';
 import { EMPTY_CUE_FIELDS, CUE_FIELD_LABELS } from '../types';
 import { formatTime, parseTime, FPS } from '../utils/formatTime';
@@ -13,8 +13,12 @@ interface CueFormProps {
   timeInTitle?: number | null;
   allAnnotations?: Annotation[]; // needed for Time in Title calc in edit mode
   cueTypes: string[];           // from config
+  cueTypeAllowStandby?: Record<string, boolean>;
+  cueTypeAllowWarning?: Record<string, boolean>;
   onSave: (cue: CueFields, newTimestamp?: number) => void;
   onCancel: () => void;
+  /** Optional ref that will be populated with a function to trigger save from outside */
+  saveRef?: MutableRefObject<(() => void) | null>;
 }
 
 const inputClass =
@@ -203,8 +207,11 @@ export function CueForm({
   timeInTitle: initialTimeInTitle,
   allAnnotations,
   cueTypes,
+  cueTypeAllowStandby,
+  cueTypeAllowWarning,
   onSave,
   onCancel,
+  saveRef,
 }: CueFormProps) {
   const [fields, setFields] = useState<CueFields>(initialValues ?? { ...EMPTY_CUE_FIELDS });
   const [timestampStr, setTimestampStr] = useState(() => secondsToTimecodeStr(timestamp));
@@ -215,6 +222,10 @@ export function CueForm({
 
   // Types that only get What + Cueing Notes
   const isSimplifiedType = /^(title|scene)$/i.test(fields.type);
+
+  // Whether the current cue type allows standby / warning
+  const showStandby = !isSimplifiedType && !!cueTypeAllowStandby?.[fields.type];
+  const showWarning = !isSimplifiedType && !!cueTypeAllowWarning?.[fields.type];
 
   // Compute time in title
   const computedTimeInTitle = useMemo(() => {
@@ -320,6 +331,14 @@ export function CueForm({
     }
   };
 
+  // Expose save function to parent via ref
+  useEffect(() => {
+    if (saveRef) {
+      saveRef.current = handleSubmitDirect;
+      return () => { saveRef.current = null; };
+    }
+  });
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     handleSubmitDirect();
@@ -410,6 +429,18 @@ export function CueForm({
             <Field label={CUE_FIELD_LABELS.delay} name="delay" value={fields.delay} onChange={handleChange} />
             <Field label={CUE_FIELD_LABELS.follow} name="follow" value={fields.follow} onChange={handleChange} />
           </div>
+
+          {/* Standby / Warning Time (only if cue type allows) */}
+          {(showStandby || showWarning) && (
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              {showStandby && (
+                <Field label={CUE_FIELD_LABELS.standbyTime + ' (secs)'} name="standbyTime" value={fields.standbyTime} onChange={handleChange} placeholder="e.g. 30" />
+              )}
+              {showWarning && (
+                <Field label={CUE_FIELD_LABELS.warningTime + ' (secs)'} name="warningTime" value={fields.warningTime} onChange={handleChange} placeholder="e.g. 10" />
+              )}
+            </div>
+          )}
 
           {/* Row 4: Hang + Block + Assert */}
           <div className="grid grid-cols-3 gap-2 mb-2">

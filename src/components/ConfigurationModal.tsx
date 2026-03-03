@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
-import { X, Plus, Trash2, GripVertical, Download, Upload, Lock, Pencil, Check } from 'lucide-react';
+import { X, Plus, Trash2, GripVertical, Download, Upload, Lock, Pencil, Check, AlertTriangle } from 'lucide-react';
 import type { ColumnConfig } from '../types';
-import { RESERVED_CUE_TYPES } from '../types';
+import { RESERVED_CUE_TYPES, VIRTUAL_COLUMN_LABELS } from '../types';
 import {
   DndContext,
   closestCenter,
@@ -24,19 +24,30 @@ interface ConfigurationModalProps {
   onClose: () => void;
   cueTypes: string[];
   cueTypeColors: Record<string, string>;
+  cueTypeAllowStandby: Record<string, boolean>;
+  cueTypeAllowWarning: Record<string, boolean>;
   visibleColumns: ColumnConfig[];
   cueTypeColumns: Record<string, ColumnConfig[]>;
   usedCueTypes: Set<string>;
+  distanceView: boolean;
+  currentVideoName?: string;
+  currentVideoSize?: number;
+  onSetDistanceView: (v: boolean) => void;
   onAddCueType: (name: string) => void;
   onRemoveCueType: (name: string) => void;
   onRenameCueType: (oldName: string, newName: string) => void;
   onSetCueTypeColor: (cueType: string, color: string) => void;
+  onSetCueTypeAllowStandby: (cueType: string, allow: boolean) => void;
+  onSetCueTypeAllowWarning: (cueType: string, allow: boolean) => void;
   onToggleColumn: (key: string, cueType?: string) => void;
   onReorderColumns: (fromIndex: number, toIndex: number, cueType?: string) => void;
   onAddCueTypeColumns: (cueType: string) => void;
   onRemoveCueTypeColumns: (cueType: string) => void;
   onExportConfig: () => void;
   onImportConfig: (file: File) => Promise<void>;
+  onClearAllData: () => void;
+  onClearCurrentVideoCues: (fileName: string, fileSize: number) => void;
+  onClearAllCues: () => void;
 }
 
 // ── Sortable column item ──
@@ -93,22 +104,33 @@ export function ConfigurationModal({
   onClose,
   cueTypes,
   cueTypeColors,
+  cueTypeAllowStandby,
+  cueTypeAllowWarning,
   visibleColumns,
   cueTypeColumns,
   usedCueTypes,
+  distanceView,
+  currentVideoName,
+  currentVideoSize,
+  onSetDistanceView,
   onAddCueType,
   onRemoveCueType,
   onRenameCueType,
   onSetCueTypeColor,
+  onSetCueTypeAllowStandby,
+  onSetCueTypeAllowWarning,
   onToggleColumn,
   onReorderColumns,
   onAddCueTypeColumns,
   onRemoveCueTypeColumns,
   onExportConfig,
   onImportConfig,
+  onClearAllData,
+  onClearCurrentVideoCues,
+  onClearAllCues,
 }: ConfigurationModalProps) {
   const [newTypeName, setNewTypeName] = useState('');
-  const [activeTab, setActiveTab] = useState<'types' | 'columns'>('types');
+  const [activeTab, setActiveTab] = useState<'types' | 'columns' | 'view' | 'data'>('types');
   const [editingType, setEditingType] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const [columnView, setColumnView] = useState<string>('default');
@@ -218,6 +240,28 @@ export function ConfigurationModal({
           >
             Abridged Columns
           </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('view')}
+            className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors ${
+              activeTab === 'view'
+                ? 'text-indigo-400 border-b-2 border-indigo-400 bg-slate-700/30'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            View
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('data')}
+            className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors ${
+              activeTab === 'data'
+                ? 'text-indigo-400 border-b-2 border-indigo-400 bg-slate-700/30'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            Data
+          </button>
         </div>
 
         {/* Content */}
@@ -325,6 +369,35 @@ export function ConfigurationModal({
                       </div>
                       {!isEditing && (
                         <div className="flex items-center gap-1.5 ml-2">
+                          {/* Standby / Warning allow checkboxes (non-reserved types only) */}
+                          {!isReserved && (
+                            <>
+                              <label
+                                className="flex items-center gap-1 cursor-pointer"
+                                title="Allow Standby cues for this type"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={!!cueTypeAllowStandby[type]}
+                                  onChange={(e) => onSetCueTypeAllowStandby(type, e.target.checked)}
+                                  className="w-3.5 h-3.5 rounded border-slate-500 bg-slate-600 text-amber-500 focus:ring-amber-500 focus:ring-offset-0 cursor-pointer"
+                                />
+                                <span className="text-[9px] font-bold text-amber-400">SB</span>
+                              </label>
+                              <label
+                                className="flex items-center gap-1 cursor-pointer"
+                                title="Allow Warning cues for this type"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={!!cueTypeAllowWarning[type]}
+                                  onChange={(e) => onSetCueTypeAllowWarning(type, e.target.checked)}
+                                  className="w-3.5 h-3.5 rounded border-slate-500 bg-slate-600 text-blue-500 focus:ring-blue-500 focus:ring-offset-0 cursor-pointer"
+                                />
+                                <span className="text-[9px] font-bold text-blue-400">WN</span>
+                              </label>
+                            </>
+                          )}
                           {/* Colour picker */}
                           <label
                             className="relative w-6 h-6 rounded cursor-pointer border border-slate-500 shrink-0 overflow-hidden"
@@ -448,6 +521,109 @@ export function ConfigurationModal({
                   </div>
                 </SortableContext>
               </DndContext>
+            </div>
+          )}
+
+          {activeTab === 'view' && (
+            <div className="space-y-4">
+              <p className="text-xs text-slate-400">
+                Configure how the cue sheet is displayed.
+              </p>
+
+              <label className="flex items-center gap-3 px-3 py-3 bg-slate-700/50 rounded-md border border-slate-600/50 cursor-pointer select-none hover:bg-slate-700">
+                <input
+                  type="checkbox"
+                  checked={distanceView}
+                  onChange={(e) => onSetDistanceView(e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-500 bg-slate-600 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-0 cursor-pointer"
+                />
+                <div>
+                  <span className="text-sm text-slate-200 font-medium">Distance View</span>
+                  <p className="text-[10px] text-slate-500 mt-0.5">
+                    Shows a large type + cue # badge on the left of each cue card in the cue sheet.
+                    When disabled, uses a compact overlapping badge.
+                  </p>
+                </div>
+              </label>
+            </div>
+          )}
+
+          {activeTab === 'data' && (
+            <div className="space-y-4">
+              <p className="text-xs text-slate-400 mb-6">
+                Manage stored data. These actions are permanent and cannot be undone.
+              </p>
+
+              <div className="space-y-3">
+                {currentVideoName && currentVideoSize !== undefined && (
+                  <div className="p-4 bg-red-900/20 border border-red-800/40 rounded-lg">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (
+                          confirm(
+                            `Clear all cues for "${currentVideoName}"?\n\nThis will remove all annotations for this video only. Your configuration will be preserved.`,
+                          )
+                        ) {
+                          onClearCurrentVideoCues(currentVideoName, currentVideoSize);
+                        }
+                      }}
+                      className="w-full flex items-center gap-2 px-4 py-3 text-sm text-red-400 hover:text-red-300 hover:bg-red-900/30 rounded-md border border-red-800/50 transition-colors"
+                    >
+                      <AlertTriangle className="w-4 h-4" />
+                      Clear Cues for Current Video
+                    </button>
+                    <p className="text-[10px] text-red-400/70 mt-2">
+                      Removes all cues from &quot;{currentVideoName}&quot; only.
+                    </p>
+                  </div>
+                )}
+
+                <div className="p-4 bg-red-900/20 border border-red-800/40 rounded-lg">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (
+                        confirm(
+                          'Clear all cues from all videos?\n\nThis will remove all annotations but keep your configuration intact.',
+                        )
+                      ) {
+                        onClearAllCues();
+                      }
+                    }}
+                    className="w-full flex items-center gap-2 px-4 py-3 text-sm text-red-400 hover:text-red-300 hover:bg-red-900/30 rounded-md border border-red-800/50 transition-colors"
+                  >
+                    <AlertTriangle className="w-4 h-4" />
+                    Clear All Cues
+                  </button>
+                  <p className="text-[10px] text-red-400/70 mt-2">
+                    Removes all annotations from all videos. Configuration is preserved.
+                  </p>
+                </div>
+
+                <div className="p-4 bg-red-950/40 border border-red-800/60 rounded-lg">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (
+                        confirm(
+                          'Factory reset all data?\n\nThis will delete all cues AND reset your configuration to defaults. This action is permanent.',
+                        )
+                      ) {
+                        onClearAllData();
+                        onClose();
+                      }
+                    }}
+                    className="w-full flex items-center gap-2 px-4 py-3 text-sm text-red-500 hover:text-red-400 hover:bg-red-900/50 rounded-md border border-red-700/60 transition-colors font-medium"
+                  >
+                    <AlertTriangle className="w-4 h-4" />
+                    Factory Reset (All Data)
+                  </button>
+                  <p className="text-[10px] text-red-500/70 mt-2">
+                    ⚠️ Deletes all cues and resets your configuration to defaults. Cannot be undone.
+                  </p>
+                </div>
+              </div>
             </div>
           )}
         </div>

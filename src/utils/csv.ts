@@ -8,7 +8,7 @@ export function exportAnnotationsToCSV(annotations: Annotation[], videoName: str
   const data = sorted.map((a) => ({
     timestamp_seconds: a.timestamp.toFixed(3),
     timestamp_formatted: formatTime(a.timestamp),
-    time_in_title: a.timeInTitle !== null ? a.timeInTitle.toFixed(3) : '',
+    time_in_title: a.timeInTitle !== null ? formatTime(a.timeInTitle) : '',
     type: a.cue.type,
     cue_number: a.cue.cueNumber,
     old_cue_number: a.cue.oldCueNumber,
@@ -31,6 +31,8 @@ export function exportAnnotationsToCSV(annotations: Annotation[], videoName: str
     dress: a.cue.dress,
     tech: a.cue.tech,
     cueing_notes: a.cue.cueingNotes,
+    standby_time: a.cue.standbyTime,
+    warning_time: a.cue.warningTime,
     created_at: a.createdAt,
     updated_at: a.updatedAt,
   }));
@@ -84,6 +86,8 @@ export function importAnnotationsFromCSV(file: File): Promise<Annotation[]> {
               dress: row.dress || '',
               tech: row.tech || '',
               cueingNotes: row.cueing_notes || '',
+              standbyTime: row.standby_time || '',
+              warningTime: row.warning_time || '',
             };
             const timeInTitle = row.time_in_title ? parseFloat(row.time_in_title) : null;
             return {

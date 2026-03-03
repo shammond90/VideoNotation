@@ -5,14 +5,14 @@ export const RESERVED_CUE_TYPES = ['TITLE', 'SCENE'] as const;
 export const DEFAULT_CUE_TYPES = [
   'TITLE',
   'SCENE',
-  'LX',    // Lighting
-  'SND',   // Sound
-  'VID',   // Video/Projections
-  'FLY',   // Fly/Rigging
-  'SPOT',  // Followspot
-  'RAIL',  // Deck/Rail
-  'PYRO',  // Pyro/SFX
-  'OTHER',
+  'AUDIO',   // Audio / Sound
+  'DECK',    // Deck
+  'ENVIRO',  // Environment
+  'LIGHTS',  // Lighting
+  'PARTS',   // Practicals / Parts
+  'RAIL',    // Rail
+  'SPOT 1',  // Followspot 1
+  'SPOT 2',  // Followspot 2
 ];
 
 export interface CueFields {
@@ -38,6 +38,8 @@ export interface CueFields {
   dress: string;             // Dress
   tech: string;              // Tech
   cueingNotes: string;       // Cueing Notes
+  standbyTime: string;       // Standby time (seconds before cue)
+  warningTime: string;       // Warning time (seconds before cue)
 }
 
 export const CUE_FIELD_KEYS: (keyof CueFields)[] = [
@@ -46,6 +48,7 @@ export const CUE_FIELD_KEYS: (keyof CueFields)[] = [
   'when', 'what', 'presets', 'colourPalette',
   'spotFrame', 'spotIntensity', 'spotTime',
   'cueSheetNotes', 'final', 'dress', 'tech', 'cueingNotes',
+  'standbyTime', 'warningTime',
 ];
 
 export const CUE_FIELD_LABELS: Record<keyof CueFields, string> = {
@@ -71,6 +74,8 @@ export const CUE_FIELD_LABELS: Record<keyof CueFields, string> = {
   dress: 'Dress',
   tech: 'Tech',
   cueingNotes: 'Cueing Notes',
+  standbyTime: 'Standby Time',
+  warningTime: 'Warning Time',
 };
 
 export const EMPTY_CUE_FIELDS: CueFields = {
@@ -96,6 +101,8 @@ export const EMPTY_CUE_FIELDS: CueFields = {
   dress: '',
   tech: '',
   cueingNotes: '',
+  standbyTime: '',
+  warningTime: '',
 };
 
 export interface Annotation {
@@ -121,42 +128,65 @@ export interface Toast {
 
 // ── Configuration types ──
 
+/** Column key can be a CueFields key OR a virtual display column */
+export type ColumnKey = keyof CueFields | 'timestamp' | 'timeInTitle';
+
 export interface ColumnConfig {
-  key: keyof CueFields;
+  key: ColumnKey;
   label: string;
   visible: boolean;
 }
+
+/** Labels for the virtual (non-CueFields) display columns */
+export const VIRTUAL_COLUMN_LABELS: Record<string, string> = {
+  timestamp: 'Timestamp',
+  timeInTitle: 'Time in Title',
+};
 
 export interface AppConfig {
   cueTypes: string[];
   cueTypeColors: Record<string, string>; // hex colour per cue type
   visibleColumns: ColumnConfig[];
   cueTypeColumns: Record<string, ColumnConfig[]>; // per-cue-type column overrides
+  distanceView: boolean;
+  cueTypeAllowStandby: Record<string, boolean>; // whether this cue type supports standby
+  cueTypeAllowWarning: Record<string, boolean>; // whether this cue type supports warning
 }
 
 /** Default colours for the built-in cue types */
 export const DEFAULT_CUE_TYPE_COLORS: Record<string, string> = {
-  TITLE:  '#6366f1', // indigo
-  SCENE:  '#0ea5e9', // sky
-  LX:     '#f59e0b', // amber
-  SND:    '#3b82f6', // blue
-  VID:    '#8b5cf6', // violet
-  FLY:    '#06b6d4', // cyan
-  SPOT:   '#ef4444', // red
-  RAIL:   '#10b981', // emerald
-  PYRO:   '#f97316', // orange
-  OTHER:  '#6b7280', // gray
+  TITLE:    '#6366f1', // indigo
+  SCENE:    '#0ea5e9', // sky
+  AUDIO:    '#3b82f6', // blue
+  DECK:     '#10b981', // emerald
+  ENVIRO:   '#06b6d4', // cyan
+  LIGHTS:   '#f59e0b', // amber
+  PARTS:    '#8b5cf6', // violet
+  RAIL:     '#f97316', // orange
+  'SPOT 1': '#ef4444', // red
+  'SPOT 2': '#ec4899', // pink
 };
 
-export const DEFAULT_VISIBLE_COLUMNS: ColumnConfig[] = CUE_FIELD_KEYS.map((key) => ({
-  key,
-  label: CUE_FIELD_LABELS[key],
-  visible: ['type', 'cueNumber', 'cueTime', 'duration', 'when', 'what'].includes(key),
-}));
+export const DEFAULT_VISIBLE_COLUMNS: ColumnConfig[] = [
+  // type is always first (index 0)
+  { key: 'type', label: CUE_FIELD_LABELS.type, visible: true },
+  // timestamp is second (index 1) — controls the timestamp pill on cards
+  { key: 'timestamp', label: 'Timestamp', visible: true },
+  // Then the rest
+  ...CUE_FIELD_KEYS.filter((k) => k !== 'type' && k !== 'standbyTime' && k !== 'warningTime').map((key) => ({
+    key: key as ColumnKey,
+    label: CUE_FIELD_LABELS[key],
+    visible: ['cueNumber', 'cueTime', 'duration', 'when', 'what'].includes(key),
+  })),
+  { key: 'timeInTitle', label: 'Time in Title', visible: false },
+];
 
 export const DEFAULT_CONFIG: AppConfig = {
   cueTypes: [...DEFAULT_CUE_TYPES],
   cueTypeColors: { ...DEFAULT_CUE_TYPE_COLORS },
   visibleColumns: DEFAULT_VISIBLE_COLUMNS,
   cueTypeColumns: {},
+  distanceView: true,
+  cueTypeAllowStandby: {},
+  cueTypeAllowWarning: {},
 };
