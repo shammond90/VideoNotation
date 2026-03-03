@@ -1,10 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import type { AppConfig, ColumnConfig } from '../types';
-import { DEFAULT_VISIBLE_COLUMNS, RESERVED_CUE_TYPES } from '../types';
+import { DEFAULT_CONFIG, DEFAULT_VISIBLE_COLUMNS, RESERVED_CUE_TYPES } from '../types';
 import { loadConfig, saveConfig, exportConfigToJSON, importConfigFromJSON } from '../utils/storage';
-
-/** Virtual column keys that can appear in visibleColumns but aren't CueFields */
-const VIRTUAL_COLUMN_KEYS = ['timestamp', 'timeInTitle'] as const;
 
 export function useConfiguration() {
   const [config, setConfig] = useState<AppConfig>(() => loadConfig());

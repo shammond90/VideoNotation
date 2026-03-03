@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { X, Plus, Trash2, GripVertical, Download, Upload, Lock, Pencil, Check, AlertTriangle } from 'lucide-react';
 import type { ColumnConfig } from '../types';
-import { RESERVED_CUE_TYPES, VIRTUAL_COLUMN_LABELS } from '../types';
+import { RESERVED_CUE_TYPES } from '../types';
 import {
   DndContext,
   closestCenter,
