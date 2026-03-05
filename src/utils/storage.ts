@@ -539,8 +539,6 @@ export function listVideoFilesWithBackups(): VideoFileInfo[] {
     const fileName = withoutPrefix.slice(0, lastColon);
     const fileSize = Number(withoutPrefix.slice(lastColon + 1));
     if (!fileName || isNaN(fileSize)) continue;
-    // Skip the pseudo no-video key
-    if (fileName === 'no-video' && fileSize === 0) continue;
 
     // Only include if there is at least one valid backup slot
     const hasBackup = listBackups(stripped).length > 0;

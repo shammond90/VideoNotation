@@ -685,19 +685,23 @@ export function ConfigurationModal({
                         onChange={(e) => { setSelectedVideoKey(e.target.value); setRecoveryTick((prev) => prev + 1); }}
                         className="min-w-0 flex-1 bg-slate-700 text-slate-200 text-sm rounded px-2 py-1.5 border border-slate-600 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none cursor-pointer"
                       >
-                        {videoFiles.map((vf) => (
-                          <option key={vf.storageKey} value={vf.storageKey}>
-                            {vf.fileName}
-                            {currentVideoName === vf.fileName && currentVideoSize === vf.fileSize
-                              ? ' (current)'
-                              : ''}
-                          </option>
-                        ))}
+                        {videoFiles.map((vf) => {
+                          const displayName = vf.fileName === 'no-video' ? 'No Video' : vf.fileName;
+                          const isCurrent = currentVideoName === vf.fileName && currentVideoSize === vf.fileSize;
+                          return (
+                            <option key={vf.storageKey} value={vf.storageKey}>
+                              {displayName}
+                              {isCurrent ? ' (current)' : ''}
+                            </option>
+                          );
+                        })}
                       </select>
                     </div>
 
                     {/* Backup list for the selected video */}
-                    {selectedVideoInfo && (
+                    {selectedVideoInfo && (() => {
+                      const selectedDisplayName = selectedVideoInfo.fileName === 'no-video' ? 'No Video' : selectedVideoInfo.fileName;
+                      return (
                       <div className="space-y-2">
                         {selectedVideoBackups.length === 0 ? (
                           <p className="text-[11px] text-slate-500">No backups for this video.</p>
@@ -732,7 +736,7 @@ export function ConfigurationModal({
                                         if (Array.isArray(parsed)) {
                                           exportAnnotationsToCSV(
                                             parsed,
-                                            `${selectedVideoInfo.fileName}-backup-${snapshot.slot}`,
+                                            `${selectedDisplayName}-backup-${snapshot.slot}`,
                                           );
                                         }
                                       } catch {
@@ -749,7 +753,7 @@ export function ConfigurationModal({
                                     onClick={() => {
                                       if (
                                         confirm(
-                                          `Restore cues from backup at ${new Date(snapshot.savedAt).toLocaleString()}?\n\nThis will replace the saved cues for "${selectedVideoInfo.fileName}".`,
+                                          `Restore cues from backup at ${new Date(snapshot.savedAt).toLocaleString()}?\n\nThis will replace the saved cues for "${selectedDisplayName}".`,
                                         )
                                       ) {
                                         if (restoreBackup(effectiveSelectedKey, snapshot.slot)) {
@@ -780,7 +784,7 @@ export function ConfigurationModal({
                           onClick={() => {
                             if (
                               confirm(
-                                `⚠️ Delete all backups for "${selectedVideoInfo.fileName}"?\n\nThis will permanently remove all backup snapshots for this video file. The video will no longer appear in this dropdown until new cues are created for it.\n\nThis cannot be undone.`,
+                                `⚠️ Delete all backups for "${selectedDisplayName}"?\n\nThis will permanently remove all backup snapshots for this video file. The video will no longer appear in this dropdown until new cues are created for it.\n\nThis cannot be undone.`,
                               )
                             ) {
                               deleteVideoBackups(selectedVideoInfo.fileName, selectedVideoInfo.fileSize);
@@ -794,7 +798,8 @@ export function ConfigurationModal({
                           Delete All Backups for This Video
                         </button>
                       </div>
-                    )}
+                      );
+                    })()}
                   </>
                 )}
               </div>

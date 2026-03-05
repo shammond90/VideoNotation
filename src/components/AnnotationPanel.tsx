@@ -212,7 +212,9 @@ export function AnnotationPanel({
       const dur = parseFloat(a.cue.duration) || 0;
       if (isCueActive(a, currentTime)) {
         active.push(a);
-      } else if (a.timestamp > currentTime || a.timestamp + dur > currentTime) {
+      } else if (a.timestamp >= currentTime) {
+        upcoming.push(a);
+      } else if (a.timestamp + dur > currentTime) {
         upcoming.push(a);
       }
       // Past cues (timestamp + duration < currentTime) are hidden from the auto-scroll view
