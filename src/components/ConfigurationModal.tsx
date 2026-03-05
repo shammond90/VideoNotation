@@ -1,7 +1,16 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import { X, Plus, Trash2, GripVertical, Download, Upload, Lock, Pencil, Check, AlertTriangle } from 'lucide-react';
 import type { ColumnConfig } from '../types';
 import { RESERVED_CUE_TYPES } from '../types';
+import {
+  listBackups,
+  restoreBackup,
+  getBackupPayload,
+  getAnnotationStorageKey,
+  getConfigStorageKey,
+  type BackupSnapshot,
+} from '../utils/storage';
+import { exportAnnotationsToCSV } from '../utils/csv';
 import {
   DndContext,
   closestCenter,
@@ -19,6 +28,23 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
+function relativeTimeAgo(dateStr: string): string {
+  const now = Date.now();
+  const then = new Date(dateStr).getTime();
+  const diffMs = now - then;
+  if (diffMs < 0) return 'just now';
+  const seconds = Math.floor(diffMs / 1000);
+  if (seconds < 60) return 'just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hr${hours !== 1 ? 's' : ''} ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days} day${days !== 1 ? 's' : ''} ago`;
+  const months = Math.floor(days / 30);
+  return `${months} mo${months !== 1 ? 's' : ''} ago`;
+}
+
 interface ConfigurationModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -32,6 +58,8 @@ interface ConfigurationModalProps {
   distanceView: boolean;
   currentVideoName?: string;
   currentVideoSize?: number;
+  cueBackupIntervalMinutes: number;
+  onSetCueBackupInterval: (minutes: number) => void;
   onSetDistanceView: (v: boolean) => void;
   onAddCueType: (name: string) => void;
   onRemoveCueType: (name: string) => void;
@@ -45,6 +73,8 @@ interface ConfigurationModalProps {
   onRemoveCueTypeColumns: (cueType: string) => void;
   onExportConfig: () => void;
   onImportConfig: (file: File) => Promise<void>;
+  onRecoverCurrentVideoCues: () => void;
+  onRecoverConfig: () => void;
   onClearAllData: () => void;
   onClearCurrentVideoCues: (fileName: string, fileSize: number) => void;
   onClearAllCues: () => void;
@@ -112,6 +142,8 @@ export function ConfigurationModal({
   distanceView,
   currentVideoName,
   currentVideoSize,
+  cueBackupIntervalMinutes,
+  onSetCueBackupInterval,
   onSetDistanceView,
   onAddCueType,
   onRemoveCueType,
@@ -125,21 +157,35 @@ export function ConfigurationModal({
   onRemoveCueTypeColumns,
   onExportConfig,
   onImportConfig,
+  onRecoverCurrentVideoCues,
+  onRecoverConfig,
   onClearAllData,
   onClearCurrentVideoCues,
   onClearAllCues,
 }: ConfigurationModalProps) {
   const [newTypeName, setNewTypeName] = useState('');
-  const [activeTab, setActiveTab] = useState<'types' | 'columns' | 'view' | 'data'>('types');
+  const [activeTab, setActiveTab] = useState<'types' | 'columns' | 'view' | 'savefiles' | 'data'>('types');
   const [editingType, setEditingType] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const [columnView, setColumnView] = useState<string>('default');
+  const [recoveryTick, setRecoveryTick] = useState(0);
   const importRef = useRef<HTMLInputElement>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
+
+  // These useMemo hooks MUST be before the early return to satisfy Rules of Hooks
+  const currentVideoBackups = useMemo<BackupSnapshot[]>(() => {
+    if (!currentVideoName || currentVideoSize === undefined) return [];
+    const key = getAnnotationStorageKey(currentVideoName, currentVideoSize);
+    return listBackups(key);
+  }, [currentVideoName, currentVideoSize, recoveryTick]);
+
+  const configBackups = useMemo<BackupSnapshot[]>(() => {
+    return listBackups(getConfigStorageKey());
+  }, [recoveryTick]);
 
   if (!isOpen) return null;
 
@@ -238,7 +284,7 @@ export function ConfigurationModal({
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            Abridged Columns
+            Columns
           </button>
           <button
             type="button"
@@ -250,6 +296,17 @@ export function ConfigurationModal({
             }`}
           >
             View
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('savefiles')}
+            className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors ${
+              activeTab === 'savefiles'
+                ? 'text-indigo-400 border-b-2 border-indigo-400 bg-slate-700/30'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            Save Files
           </button>
           <button
             type="button"
@@ -373,28 +430,28 @@ export function ConfigurationModal({
                           {!isReserved && (
                             <>
                               <label
-                                className="flex items-center gap-1 cursor-pointer"
+                                className="flex items-center gap-2 cursor-pointer"
                                 title="Allow Standby cues for this type"
                               >
+                                <span className="text-[11px] font-medium text-amber-400">Standby</span>
                                 <input
                                   type="checkbox"
                                   checked={!!cueTypeAllowStandby[type]}
                                   onChange={(e) => onSetCueTypeAllowStandby(type, e.target.checked)}
-                                  className="w-3.5 h-3.5 rounded border-slate-500 bg-slate-600 text-amber-500 focus:ring-amber-500 focus:ring-offset-0 cursor-pointer"
+                                  className="w-4 h-4 rounded border-slate-500 bg-slate-600 text-amber-500 focus:ring-amber-500 focus:ring-offset-0 cursor-pointer"
                                 />
-                                <span className="text-[9px] font-bold text-amber-400">SB</span>
                               </label>
                               <label
-                                className="flex items-center gap-1 cursor-pointer"
+                                className="flex items-center gap-2 cursor-pointer"
                                 title="Allow Warning cues for this type"
                               >
+                                <span className="text-[11px] font-medium text-blue-400">Warning</span>
                                 <input
                                   type="checkbox"
                                   checked={!!cueTypeAllowWarning[type]}
                                   onChange={(e) => onSetCueTypeAllowWarning(type, e.target.checked)}
-                                  className="w-3.5 h-3.5 rounded border-slate-500 bg-slate-600 text-blue-500 focus:ring-blue-500 focus:ring-offset-0 cursor-pointer"
+                                  className="w-4 h-4 rounded border-slate-500 bg-slate-600 text-blue-500 focus:ring-blue-500 focus:ring-offset-0 cursor-pointer"
                                 />
-                                <span className="text-[9px] font-bold text-blue-400">WN</span>
                               </label>
                             </>
                           )}
@@ -548,9 +605,173 @@ export function ConfigurationModal({
             </div>
           )}
 
+          {activeTab === 'savefiles' && (
+            <div className="space-y-5">
+              <p className="text-xs text-slate-400">
+                Manage backup snapshots. Cue backups are created automatically at the configured interval
+                while you are active, and when the tab is backgrounded or the page is closed. Configuration is
+                backed up when you close this modal.
+              </p>
+
+              {/* Backup interval setting */}
+              <div className="p-4 bg-slate-700/30 border border-slate-600/50 rounded-lg space-y-2">
+                <h3 className="text-sm font-medium text-slate-200">Cue Backup Interval</h3>
+                <p className="text-[10px] text-slate-500">
+                  How often (in minutes) to create a rolling backup of your cues while you are actively working.
+                </p>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="number"
+                    min={1}
+                    max={120}
+                    value={cueBackupIntervalMinutes}
+                    onChange={(e) => {
+                      const v = parseInt(e.target.value, 10);
+                      if (!isNaN(v) && v >= 1) onSetCueBackupInterval(v);
+                    }}
+                    className="w-20 bg-slate-700 text-slate-200 rounded px-3 py-1.5 text-sm border border-slate-600 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
+                  />
+                  <span className="text-xs text-slate-400">minutes</span>
+                </div>
+              </div>
+
+              {/* Recovery / Restore section */}
+              <div className="p-4 bg-slate-700/30 border border-slate-600/50 rounded-lg space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-medium text-slate-200">Recovery</h3>
+                  <button
+                    type="button"
+                    onClick={() => setRecoveryTick((prev) => prev + 1)}
+                    className="text-xs px-2 py-1 rounded bg-slate-700 text-slate-300 hover:bg-slate-600 transition-colors"
+                  >
+                    Refresh
+                  </button>
+                </div>
+
+                {currentVideoName && currentVideoSize !== undefined && (
+                  <div className="space-y-2">
+                    <p className="text-xs text-slate-400">Current video backups ({currentVideoName})</p>
+                    {currentVideoBackups.length === 0 ? (
+                      <p className="text-[11px] text-slate-500">No backups yet.</p>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {currentVideoBackups.map((snapshot) => (
+                          <div
+                            key={`video-backup-${snapshot.slot}`}
+                            className="flex items-center justify-between gap-3 px-3 py-2 rounded border border-slate-600/50 bg-slate-800/40"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <p className="text-xs text-slate-200 truncate">
+                                  {new Date(snapshot.savedAt).toLocaleString()}
+                                </p>
+                                <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full bg-slate-700 text-slate-400">
+                                  {relativeTimeAgo(snapshot.savedAt)}
+                                </span>
+                              </div>
+                              <p className="text-[10px] text-slate-500">
+                                {snapshot.itemCount ?? 0} cues · {snapshot.bytes} bytes
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const key = getAnnotationStorageKey(currentVideoName, currentVideoSize);
+                                  const payload = getBackupPayload(key, snapshot.slot);
+                                  if (!payload) return;
+                                  try {
+                                    const parsed = JSON.parse(payload);
+                                    if (Array.isArray(parsed)) {
+                                      exportAnnotationsToCSV(parsed, `${currentVideoName}-backup-${snapshot.slot}`);
+                                    }
+                                  } catch { /* ignore */ }
+                                }}
+                                className="text-xs px-2 py-1 rounded bg-slate-700 text-slate-300 hover:bg-slate-600 transition-colors"
+                                title="Export this backup as CSV"
+                              >
+                                <Download className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (
+                                    confirm(
+                                      `Restore current video cues from backup at ${new Date(snapshot.savedAt).toLocaleString()}?`,
+                                    )
+                                  ) {
+                                    const key = getAnnotationStorageKey(currentVideoName, currentVideoSize);
+                                    if (restoreBackup(key, snapshot.slot)) {
+                                      onRecoverCurrentVideoCues();
+                                      setRecoveryTick((prev) => prev + 1);
+                                    }
+                                  }
+                                }}
+                                className="text-xs px-2 py-1 rounded bg-indigo-600 text-white hover:bg-indigo-500 transition-colors"
+                              >
+                                Restore
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <p className="text-xs text-slate-400">Configuration backups</p>
+                  {configBackups.length === 0 ? (
+                    <p className="text-[11px] text-slate-500">No backups yet.</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {configBackups.map((snapshot) => (
+                        <div
+                          key={`config-backup-${snapshot.slot}`}
+                          className="flex items-center justify-between gap-3 px-3 py-2 rounded border border-slate-600/50 bg-slate-800/40"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <p className="text-xs text-slate-200 truncate">
+                                {new Date(snapshot.savedAt).toLocaleString()}
+                              </p>
+                              <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full bg-slate-700 text-slate-400">
+                                {relativeTimeAgo(snapshot.savedAt)}
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-slate-500">{snapshot.bytes} bytes</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (
+                                confirm(
+                                  `Restore configuration from backup at ${new Date(snapshot.savedAt).toLocaleString()}?`,
+                                )
+                              ) {
+                                const key = getConfigStorageKey();
+                                if (restoreBackup(key, snapshot.slot)) {
+                                  onRecoverConfig();
+                                  setRecoveryTick((prev) => prev + 1);
+                                }
+                              }
+                            }}
+                            className="shrink-0 text-xs px-2 py-1 rounded bg-indigo-600 text-white hover:bg-indigo-500 transition-colors"
+                          >
+                            Restore
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {activeTab === 'data' && (
             <div className="space-y-4">
-              <p className="text-xs text-slate-400 mb-6">
+              <p className="text-xs text-slate-400">
                 Manage stored data. These actions are permanent and cannot be undone.
               </p>
 

@@ -151,6 +151,7 @@ export interface AppConfig {
   distanceView: boolean;
   cueTypeAllowStandby: Record<string, boolean>; // whether this cue type supports standby
   cueTypeAllowWarning: Record<string, boolean>; // whether this cue type supports warning
+  cueBackupIntervalMinutes: number; // how often (minutes) to create cue backups while active
 }
 
 /** Default colours for the built-in cue types */
@@ -189,4 +190,5 @@ export const DEFAULT_CONFIG: AppConfig = {
   distanceView: true,
   cueTypeAllowStandby: {},
   cueTypeAllowWarning: {},
+  cueBackupIntervalMinutes: 5,
 };

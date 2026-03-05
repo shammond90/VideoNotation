@@ -10,6 +10,7 @@ import { useAnnotations } from './hooks/useAnnotations';
 import { useConfiguration } from './hooks/useConfiguration';
 import { useToast } from './hooks/useToast';
 import { exportAnnotationsToCSV, importAnnotationsFromCSV } from './utils/csv';
+import { saveAnnotations, loadAnnotations, backupAnnotations, popRecoveryEvents } from './utils/storage';
 import type { CueFields } from './types';
 import { RESERVED_CUE_TYPES } from './types';
 import { Film, Settings, X as XIcon } from 'lucide-react';
@@ -17,6 +18,7 @@ import { Film, Settings, X as XIcon } from 'lucide-react';
 export default function App() {
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoSrc, setVideoSrc] = useState<string>('');
+  const [annotationScope, setAnnotationScope] = useState<{ fileName: string; fileSize: number }>({ fileName: '', fileSize: 0 });
   const [isAnnotating, setIsAnnotating] = useState(false);
   const [annotateTimestamp, setAnnotateTimestamp] = useState(0);
   const [isNoVideoMode, setIsNoVideoMode] = useState(false);
@@ -28,6 +30,8 @@ export default function App() {
   const containerRef = useRef<HTMLDivElement>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
   const cueFormSaveRef = useRef<(() => void) | null>(null);
+  const previousUrlRef = useRef<string>('');
+  const cuesDirtyRef = useRef(false);
 
   const { state: playerState, actions: playerActions } = useVideoPlayer(videoRef, containerRef, videoSrc);
   const {
@@ -46,6 +50,9 @@ export default function App() {
     removeCueTypeColumns,
     exportConfig,
     importConfig,
+    reloadConfig,
+    saveConfigBackup,
+    setCueBackupInterval,
     clearAllData,
     clearCurrentVideoCues,
     clearAllCues,
@@ -60,8 +67,80 @@ export default function App() {
     replaceAll,
     updateActiveAnnotation,
     renameCueType: renameAnnotationCueType,
-  } = useAnnotations(videoFile?.name ?? '', videoFile?.size ?? 0, playerState.duration);
+  } = useAnnotations(annotationScope.fileName, annotationScope.fileSize, playerState.duration);
+  const annotationsRef = useRef(annotations);
   const { toasts, addToast, removeToast } = useToast();
+
+  useEffect(() => {
+    const events = popRecoveryEvents();
+    events.forEach((message) => addToast(message, 'info', 5000));
+  }, [annotationScope.fileName, annotationScope.fileSize, addToast]);
+
+  // Keep annotationsRef in sync; mark dirty when annotations change after initial load
+  const initialLoadRef = useRef(true);
+  useEffect(() => {
+    annotationsRef.current = annotations;
+    if (initialLoadRef.current) {
+      initialLoadRef.current = false;
+    } else {
+      cuesDirtyRef.current = true;
+    }
+  }, [annotations]);
+
+  // Reset initialLoadRef when scope changes so initial load of a new video isn't "dirty"
+  useEffect(() => {
+    initialLoadRef.current = true;
+    cuesDirtyRef.current = false;
+  }, [annotationScope.fileName, annotationScope.fileSize]);
+
+  // Perform a cue backup: saves to backup ring + shows green toast
+  const performCueBackup = useCallback(() => {
+    if (!cuesDirtyRef.current) return;
+    const currentFileName = annotationScope.fileName || 'no-video';
+    const currentFileSize = annotationScope.fileName ? annotationScope.fileSize : 0;
+    backupAnnotations(currentFileName, currentFileSize, annotationsRef.current);
+    cuesDirtyRef.current = false;
+    addToast('The cues have been saved.', 'success', 3000);
+  }, [annotationScope, addToast]);
+
+  // Interval-based cue backup (configurable minutes)
+  useEffect(() => {
+    const ms = config.cueBackupIntervalMinutes * 60 * 1000;
+    const id = setInterval(() => {
+      performCueBackup();
+    }, ms);
+    return () => clearInterval(id);
+  }, [config.cueBackupIntervalMinutes, performCueBackup]);
+
+  // Lifecycle cue + config backup (visibility change + beforeunload)
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        if (cuesDirtyRef.current) {
+          const currentFileName = annotationScope.fileName || 'no-video';
+          const currentFileSize = annotationScope.fileName ? annotationScope.fileSize : 0;
+          backupAnnotations(currentFileName, currentFileSize, annotationsRef.current);
+          cuesDirtyRef.current = false;
+        }
+        saveConfigBackup();
+      }
+    };
+    const handleBeforeUnload = () => {
+      if (cuesDirtyRef.current) {
+        const currentFileName = annotationScope.fileName || 'no-video';
+        const currentFileSize = annotationScope.fileName ? annotationScope.fileSize : 0;
+        backupAnnotations(currentFileName, currentFileSize, annotationsRef.current);
+        cuesDirtyRef.current = false;
+      }
+      saveConfigBackup();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [annotationScope, saveConfigBackup]);
 
   // Compute which cue types are in use
   const usedCueTypes = useMemo(() => {
@@ -101,6 +180,19 @@ export default function App() {
     addToast('Cleared all cues from all videos', 'info');
   }, [clearAllCues, replaceAll, addToast]);
 
+  const handleRecoverCurrentVideoCues = useCallback(() => {
+    const currentFileName = annotationScope.fileName || 'no-video';
+    const currentFileSize = annotationScope.fileName ? annotationScope.fileSize : 0;
+    const restored = loadAnnotations(currentFileName, currentFileSize);
+    replaceAll(restored);
+    addToast(`Restored ${restored.length} cue${restored.length !== 1 ? 's' : ''} for current video`, 'success');
+  }, [annotationScope, replaceAll, addToast]);
+
+  const handleRecoverConfig = useCallback(() => {
+    reloadConfig();
+    addToast('Configuration restored from backup', 'success');
+  }, [reloadConfig, addToast]);
+
   // Update active annotation on time change
   useEffect(() => {
     updateActiveAnnotation(playerState.currentTime);
@@ -109,12 +201,17 @@ export default function App() {
   // Handle file selection
   const handleFileSelected = useCallback(
     (file: File) => {
-      // Revoke previous URL
-      if (videoSrc) URL.revokeObjectURL(videoSrc);
+      // Revoke previous video URL
+      if (previousUrlRef.current) {
+        URL.revokeObjectURL(previousUrlRef.current);
+      }
 
       const url = URL.createObjectURL(file);
+      previousUrlRef.current = url;
+
       setVideoFile(file);
       setVideoSrc(url);
+      setAnnotationScope({ fileName: file.name, fileSize: file.size });
       setIsAnnotating(false);
       setIsNoVideoMode(false);
 
@@ -155,13 +252,18 @@ export default function App() {
         }
       }
     },
-    [videoSrc, addToast],
+    [addToast],
   );
 
   // Handle continue without video
   const handleContinueWithoutVideo = useCallback(() => {
+    if (previousUrlRef.current) {
+      URL.revokeObjectURL(previousUrlRef.current);
+      previousUrlRef.current = '';
+    }
     setVideoFile(null);
     setVideoSrc('');
+    setAnnotationScope({ fileName: '', fileSize: 0 });
     setIsAnnotating(false);
     setIsNoVideoMode(true);
     addToast('Ready to add annotations. Upload a video anytime.', 'info');
@@ -171,6 +273,24 @@ export default function App() {
   const handleVideoError = useCallback(() => {
     addToast('Unable to play this video format. Try MP4 (H.264) or WebM.', 'error', 5000);
   }, [addToast]);
+
+  const saveCurrentVideoAnnotations = useCallback(() => {
+    const currentFileName = annotationScope.fileName || 'no-video';
+    const currentFileSize = annotationScope.fileSize || 0;
+    saveAnnotations(currentFileName, currentFileSize, annotations);
+  }, [annotationScope, annotations]);
+
+  // Open a file picker for video selection
+  const openVideoPicker = useCallback((onPicked: (file: File) => void) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'video/*';
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (file) onPicked(file);
+    };
+    input.click();
+  }, []);
 
   // Toggle play/pause (Space)
   const handleTogglePlay = useCallback(() => {
@@ -188,14 +308,14 @@ export default function App() {
       const video = videoRef.current;
       if (!video) return;
       video.pause();
-      setAnnotateTimestamp(video.currentTime);
+      setAnnotateTimestamp(playerState.currentTime);
     } else if (isNoVideoMode) {
       // In no-video mode, use 0:00
       setAnnotateTimestamp(0);
     }
     
     setIsAnnotating(true);
-  }, [videoSrc, isNoVideoMode, isAnnotating]);
+  }, [videoSrc, isNoVideoMode, isAnnotating, playerState.currentTime]);
 
   // Save cue — close form and resume playback
   const handleSaveCue = useCallback(
@@ -311,11 +431,11 @@ export default function App() {
       switch (e.key) {
         case 'ArrowLeft':
           e.preventDefault();
-          playerActions.seek(playerState.currentTime - 5);
+          handleSeek(playerState.currentTime - 5);
           break;
         case 'ArrowRight':
           e.preventDefault();
-          playerActions.seek(playerState.currentTime + 5);
+          handleSeek(playerState.currentTime + 5);
           break;
         case ',':
           e.preventDefault();
@@ -353,14 +473,14 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleTogglePlay, handleEnterAnnotate, playerActions, playerState.currentTime, playerState.playbackRate, addToast, isNoVideoMode, isConfigOpen]);
+  }, [handleTogglePlay, handleEnterAnnotate, playerActions, playerState.playbackRate, playerState.currentTime, addToast, isNoVideoMode, isConfigOpen, handleSeek]);
 
   // Cleanup video URL on unmount
   useEffect(() => {
     return () => {
-      if (videoSrc) URL.revokeObjectURL(videoSrc);
+      if (previousUrlRef.current) URL.revokeObjectURL(previousUrlRef.current);
     };
-  }, [videoSrc]);
+  }, []);
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-200 flex flex-col">
@@ -492,7 +612,7 @@ export default function App() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => playerActions.seek(playerState.currentTime - 5)}
+                  onClick={() => handleSeek(playerState.currentTime - 5)}
                   className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-md hover:bg-slate-700 active:bg-slate-600 transition-colors"
                   title="Back 5s"
                 >
@@ -501,7 +621,7 @@ export default function App() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => playerActions.seek(playerState.currentTime + 5)}
+                  onClick={() => handleSeek(playerState.currentTime + 5)}
                   className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-md hover:bg-slate-700 active:bg-slate-600 transition-colors"
                   title="Forward 5s"
                 >
@@ -614,44 +734,33 @@ export default function App() {
               </button>
             </div>
             <p className="text-sm text-slate-400 mb-5">
-              Select a new video file. You can keep your existing cues or start fresh.
+              Select a new video file. Copy cues to the new video, or switch and keep that video's own cues.
             </p>
             <div className="flex flex-col gap-2">
               <button
                 type="button"
                 onClick={() => {
-                  const input = document.createElement('input');
-                  input.type = 'file';
-                  input.accept = 'video/*';
-                  input.onchange = () => {
-                    const file = input.files?.[0];
-                    if (file) {
-                      handleFileSelected(file);
-                      setIsChangeVideoOpen(false);
-                    }
-                  };
-                  input.click();
+                  openVideoPicker((file) => {
+                    saveCurrentVideoAnnotations();
+                    saveAnnotations(file.name, file.size, annotations);
+                    handleFileSelected(file);
+                    setIsChangeVideoOpen(false);
+                    addToast('Switched video and copied current cues', 'success');
+                  });
                 }}
                 className="w-full px-4 py-2.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 transition-colors"
               >
-                Select New Video (Keep Cues)
+                Select New Video (Copy Cues)
               </button>
               <button
                 type="button"
                 onClick={() => {
-                  const input = document.createElement('input');
-                  input.type = 'file';
-                  input.accept = 'video/*';
-                  input.onchange = () => {
-                    const file = input.files?.[0];
-                    if (file) {
-                      // Clear annotations for the current video before switching
-                      replaceAll([]);
-                      handleFileSelected(file);
-                      setIsChangeVideoOpen(false);
-                    }
-                  };
-                  input.click();
+                  openVideoPicker((file) => {
+                    saveCurrentVideoAnnotations();
+                    handleFileSelected(file);
+                    setIsChangeVideoOpen(false);
+                    addToast('Switched video \u2014 loaded its own cues', 'info');
+                  });
                 }}
                 className="w-full px-4 py-2.5 text-sm bg-slate-700 text-slate-300 rounded-lg hover:bg-slate-600 transition-colors"
               >
@@ -665,7 +774,10 @@ export default function App() {
       {/* Configuration Modal */}
       <ConfigurationModal
         isOpen={isConfigOpen}
-        onClose={() => setIsConfigOpen(false)}
+        onClose={() => {
+          saveConfigBackup();
+          setIsConfigOpen(false);
+        }}
         cueTypes={config.cueTypes}
         cueTypeColors={config.cueTypeColors}
         cueTypeAllowStandby={config.cueTypeAllowStandby}
@@ -676,6 +788,8 @@ export default function App() {
         distanceView={config.distanceView}
         currentVideoName={videoFile?.name}
         currentVideoSize={videoFile?.size}
+        cueBackupIntervalMinutes={config.cueBackupIntervalMinutes}
+        onSetCueBackupInterval={setCueBackupInterval}
         onSetDistanceView={setDistanceView}
         onAddCueType={addCueType}
         onRemoveCueType={removeCueType}
@@ -689,6 +803,8 @@ export default function App() {
         onRemoveCueTypeColumns={removeCueTypeColumns}
         onExportConfig={exportConfig}
         onImportConfig={importConfig}
+        onRecoverCurrentVideoCues={handleRecoverCurrentVideoCues}
+        onRecoverConfig={handleRecoverConfig}
         onClearAllData={handleClearAllData}
         onClearCurrentVideoCues={handleClearCurrentVideoCues}
         onClearAllCues={handleClearAllCues}

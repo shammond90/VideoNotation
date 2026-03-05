@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import type { AppConfig, ColumnConfig } from '../types';
 import { DEFAULT_CONFIG, DEFAULT_VISIBLE_COLUMNS, RESERVED_CUE_TYPES } from '../types';
-import { loadConfig, saveConfig, exportConfigToJSON, importConfigFromJSON } from '../utils/storage';
+import { loadConfig, saveConfig, backupConfig, exportConfigToJSON, importConfigFromJSON, clearStorageFamily } from '../utils/storage';
 
 export function useConfiguration() {
   const [config, setConfig] = useState<AppConfig>(() => loadConfig());
@@ -94,6 +94,10 @@ export function useConfiguration() {
 
   const setDistanceView = useCallback((value: boolean) => {
     setConfig((prev) => ({ ...prev, distanceView: value }));
+  }, []);
+
+  const setCueBackupInterval = useCallback((minutes: number) => {
+    setConfig((prev) => ({ ...prev, cueBackupIntervalMinutes: Math.max(1, Math.round(minutes)) }));
   }, []);
 
   const setCueTypeAllowStandby = useCallback((cueType: string, allow: boolean) => {
@@ -190,15 +194,15 @@ export function useConfiguration() {
         localStorage.removeItem(key);
       }
     });
-    // Clear config
-    localStorage.removeItem('app-config');
+    // Clear config and all backup/recovery metadata
+    clearStorageFamily('app-config');
     // Reset to default config
     setConfig(DEFAULT_CONFIG);
   }, []);
 
   const clearCurrentVideoCues = useCallback((fileName: string, fileSize: number) => {
     const key = `annotations:${fileName}:${fileSize}`;
-    localStorage.removeItem(key);
+    clearStorageFamily(key);
   }, []);
 
   const clearAllCues = useCallback(() => {
@@ -211,6 +215,15 @@ export function useConfiguration() {
     });
   }, []);
 
+  const reloadConfig = useCallback(() => {
+    setConfig(loadConfig());
+  }, []);
+
+  /** Create a backup snapshot of the current config (call on modal close / lifecycle). */
+  const saveConfigBackup = useCallback(() => {
+    backupConfig(config);
+  }, [config]);
+
   return {
     config,
     setCueTypes,
@@ -219,6 +232,7 @@ export function useConfiguration() {
     renameCueType,
     setCueTypeColor,
     setDistanceView,
+    setCueBackupInterval,
     setCueTypeAllowStandby,
     setCueTypeAllowWarning,
     setVisibleColumns,
@@ -228,6 +242,8 @@ export function useConfiguration() {
     removeCueTypeColumns,
     exportConfig,
     importConfig: handleImportConfig,
+    reloadConfig,
+    saveConfigBackup,
     clearAllData,
     clearCurrentVideoCues,
     clearAllCues,

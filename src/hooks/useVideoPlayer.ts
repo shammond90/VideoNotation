@@ -62,7 +62,15 @@ export function useVideoPlayer(
       loadProgress: 0,
     }));
     cancelAnimationFrame(animationRef.current);
-  }, [src]);
+
+    // Force the browser to load the new source — React updates the <video>
+    // src attribute, but browsers don't reliably start loading without an
+    // explicit .load() call.
+    const video = videoRef.current;
+    if (video && src) {
+      video.load();
+    }
+  }, [src, videoRef]);
 
   // Smooth time update via requestAnimationFrame
   const updateTime = useCallback(() => {

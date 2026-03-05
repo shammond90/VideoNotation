@@ -33,7 +33,8 @@ export const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
         if (!rect || !state.duration) return;
         const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
         const ratio = x / rect.width;
-        actions.seek(ratio * state.duration);
+        const target = ratio * state.duration;
+        actions.seek(target);
       },
       [actions, state.duration],
     );
