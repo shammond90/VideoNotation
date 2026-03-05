@@ -1,8 +1,14 @@
 import type { Annotation, AppConfig } from '../types';
 import { DEFAULT_CONFIG, DEFAULT_CUE_TYPE_COLORS, RESERVED_CUE_TYPES } from '../types';
 
-const BACKUP_RING_SIZE = 5;
+const ANNOTATION_RING_SIZE = 10;
+const CONFIG_RING_SIZE = 2;
 const STORAGE_SCHEMA_VERSION = 1;
+
+/** Return the appropriate ring size for a given storage key. */
+function ringSizeForKey(baseKey: string): number {
+  return baseKey.startsWith('annotations:') ? ANNOTATION_RING_SIZE : CONFIG_RING_SIZE;
+}
 
 interface StorageMeta {
   schemaVersion: number;
@@ -110,10 +116,11 @@ function writePrimary(baseKey: string, payload: string): void {
 }
 
 function addBackup(baseKey: string, payload: string): void {
+  const ringSize = ringSizeForKey(baseKey);
   const pointerKey = getBackupPointerKey(baseKey);
   const currentRaw = localStorage.getItem(pointerKey);
   const currentPointer = Number.isInteger(Number(currentRaw)) ? Number(currentRaw) : -1;
-  const nextPointer = (currentPointer + 1) % BACKUP_RING_SIZE;
+  const nextPointer = (currentPointer + 1) % ringSize;
 
   const entry: BackupEntry = {
     payload,
@@ -126,12 +133,13 @@ function addBackup(baseKey: string, payload: string): void {
 }
 
 function tryRecoverFromBackups(baseKey: string): string | null {
+  const ringSize = ringSizeForKey(baseKey);
   const pointerRaw = localStorage.getItem(getBackupPointerKey(baseKey));
   const pointer = Number(pointerRaw);
   if (!Number.isInteger(pointer) || pointer < 0) return null;
 
-  for (let offset = 0; offset < BACKUP_RING_SIZE; offset += 1) {
-    const slot = (pointer - offset + BACKUP_RING_SIZE) % BACKUP_RING_SIZE;
+  for (let offset = 0; offset < ringSize; offset += 1) {
+    const slot = (pointer - offset + ringSize) % ringSize;
     const entryRaw = localStorage.getItem(getBackupKey(baseKey, slot));
     if (!entryRaw) continue;
 
@@ -183,9 +191,18 @@ export function clearStorageFamily(baseKey: string): void {
   localStorage.removeItem(getNextKey(baseKey));
   localStorage.removeItem(getNextMetaKey(baseKey));
   localStorage.removeItem(getBackupPointerKey(baseKey));
-  for (let slot = 0; slot < BACKUP_RING_SIZE; slot += 1) {
+  const ringSize = ringSizeForKey(baseKey);
+  for (let slot = 0; slot < ringSize; slot += 1) {
     localStorage.removeItem(getBackupKey(baseKey, slot));
   }
+}
+
+/** Remove only the primary data + meta + staged writes, but keep the backup ring intact. */
+export function clearPrimaryData(baseKey: string): void {
+  localStorage.removeItem(baseKey);
+  localStorage.removeItem(getMetaKey(baseKey));
+  localStorage.removeItem(getNextKey(baseKey));
+  localStorage.removeItem(getNextMetaKey(baseKey));
 }
 
 /**
@@ -271,8 +288,9 @@ export function getConfigStorageKey(): string {
 }
 
 export function listBackups(baseKey: string): BackupSnapshot[] {
+  const ringSize = ringSizeForKey(baseKey);
   const snapshots: BackupSnapshot[] = [];
-  for (let slot = 0; slot < BACKUP_RING_SIZE; slot += 1) {
+  for (let slot = 0; slot < ringSize; slot += 1) {
     const raw = localStorage.getItem(getBackupKey(baseKey, slot));
     if (!raw) continue;
 
@@ -481,4 +499,83 @@ export function importConfigFromJSON(file: File): Promise<AppConfig> {
     reader.onerror = () => reject(new Error('Failed to read config file'));
     reader.readAsText(file);
   });
+}
+
+// ── Per-video backup discovery ──
+
+export interface VideoFileInfo {
+  fileName: string;
+  fileSize: number;
+  storageKey: string;
+}
+
+/**
+ * Scan localStorage and return every video file that has at least one valid
+ * backup snapshot. Videos with only primary data (no backups) are excluded.
+ */
+export function listVideoFilesWithBackups(): VideoFileInfo[] {
+  const seen = new Map<string, VideoFileInfo>();
+  const prefix = 'annotations:';
+
+  for (let i = 0; i < localStorage.length; i += 1) {
+    const key = localStorage.key(i);
+    if (!key || !key.startsWith(prefix)) continue;
+
+    // Strip known suffixes to get the base key
+    const stripped = key
+      .replace(/:meta$/, '')
+      .replace(/:next:meta$/, '')
+      .replace(/:next$/, '')
+      .replace(/:backup:pointer$/, '')
+      .replace(/:backup:\d+$/, '');
+
+    if (seen.has(stripped)) continue;
+
+    // Parse fileName and fileSize from the base key: "annotations:{name}:{size}"
+    const withoutPrefix = stripped.slice(prefix.length);
+    const lastColon = withoutPrefix.lastIndexOf(':');
+    if (lastColon === -1) continue;
+
+    const fileName = withoutPrefix.slice(0, lastColon);
+    const fileSize = Number(withoutPrefix.slice(lastColon + 1));
+    if (!fileName || isNaN(fileSize)) continue;
+    // Skip the pseudo no-video key
+    if (fileName === 'no-video' && fileSize === 0) continue;
+
+    // Only include if there is at least one valid backup slot
+    const hasBackup = listBackups(stripped).length > 0;
+    if (!hasBackup) continue;
+
+    seen.set(stripped, { fileName, fileSize, storageKey: stripped });
+  }
+
+  // Sort alphabetically by file name
+  return [...seen.values()].sort((a, b) => a.fileName.localeCompare(b.fileName));
+}
+
+/** Delete all backups (and optionally primary data) for a specific video's annotation key. */
+export function deleteVideoBackups(fileName: string, fileSize: number): void {
+  const baseKey = getStorageKey(fileName, fileSize);
+  const ringSize = ringSizeForKey(baseKey);
+  // Remove backup ring
+  localStorage.removeItem(getBackupPointerKey(baseKey));
+  for (let slot = 0; slot < ringSize; slot += 1) {
+    localStorage.removeItem(getBackupKey(baseKey, slot));
+  }
+  // Remove staged writes
+  localStorage.removeItem(getNextKey(baseKey));
+  localStorage.removeItem(getNextMetaKey(baseKey));
+  // Remove primary + meta only if there is no actual cue data (empty array or absent)
+  const primary = localStorage.getItem(baseKey);
+  let isEmpty = true;
+  if (primary) {
+    try {
+      const parsed = JSON.parse(primary);
+      if (Array.isArray(parsed) && parsed.length > 0) isEmpty = false;
+    } catch { /* treat as empty */ }
+  }
+  if (isEmpty) {
+    localStorage.removeItem(baseKey);
+    localStorage.removeItem(getMetaKey(baseKey));
+  }
 }

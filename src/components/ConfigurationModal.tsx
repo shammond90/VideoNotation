@@ -8,7 +8,10 @@ import {
   getBackupPayload,
   getAnnotationStorageKey,
   getConfigStorageKey,
+  listVideoFilesWithBackups,
+  deleteVideoBackups,
   type BackupSnapshot,
+  type VideoFileInfo,
 } from '../utils/storage';
 import { exportAnnotationsToCSV } from '../utils/csv';
 import {
@@ -169,6 +172,7 @@ export function ConfigurationModal({
   const [editingName, setEditingName] = useState('');
   const [columnView, setColumnView] = useState<string>('default');
   const [recoveryTick, setRecoveryTick] = useState(0);
+  const [selectedVideoKey, setSelectedVideoKey] = useState<string>('');
   const importRef = useRef<HTMLInputElement>(null);
 
   const sensors = useSensors(
@@ -177,11 +181,32 @@ export function ConfigurationModal({
   );
 
   // These useMemo hooks MUST be before the early return to satisfy Rules of Hooks
-  const currentVideoBackups = useMemo<BackupSnapshot[]>(() => {
-    if (!currentVideoName || currentVideoSize === undefined) return [];
-    const key = getAnnotationStorageKey(currentVideoName, currentVideoSize);
-    return listBackups(key);
-  }, [currentVideoName, currentVideoSize, recoveryTick]);
+  const videoFiles = useMemo<VideoFileInfo[]>(() => {
+    return listVideoFilesWithBackups();
+  }, [recoveryTick]);
+
+  // Auto-select current video if nothing selected yet
+  const effectiveSelectedKey = useMemo(() => {
+    if (selectedVideoKey && videoFiles.some((v) => v.storageKey === selectedVideoKey)) {
+      return selectedVideoKey;
+    }
+    // Default to current video if available
+    if (currentVideoName && currentVideoSize !== undefined) {
+      const currentKey = getAnnotationStorageKey(currentVideoName, currentVideoSize);
+      if (videoFiles.some((v) => v.storageKey === currentKey)) return currentKey;
+    }
+    // Fall back to first video
+    return videoFiles.length > 0 ? videoFiles[0].storageKey : '';
+  }, [selectedVideoKey, videoFiles, currentVideoName, currentVideoSize]);
+
+  const selectedVideoInfo = useMemo(() => {
+    return videoFiles.find((v) => v.storageKey === effectiveSelectedKey) ?? null;
+  }, [videoFiles, effectiveSelectedKey]);
+
+  const selectedVideoBackups = useMemo<BackupSnapshot[]>(() => {
+    if (!effectiveSelectedKey) return [];
+    return listBackups(effectiveSelectedKey);
+  }, [effectiveSelectedKey, recoveryTick]);
 
   const configBackups = useMemo<BackupSnapshot[]>(() => {
     return listBackups(getConfigStorageKey());
@@ -299,7 +324,7 @@ export function ConfigurationModal({
           </button>
           <button
             type="button"
-            onClick={() => setActiveTab('savefiles')}
+            onClick={() => { setRecoveryTick((prev) => prev + 1); setActiveTab('savefiles'); }}
             className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors ${
               activeTab === 'savefiles'
                 ? 'text-indigo-400 border-b-2 border-indigo-400 bg-slate-700/30'
@@ -635,10 +660,10 @@ export function ConfigurationModal({
                 </div>
               </div>
 
-              {/* Recovery / Restore section */}
+              {/* Per-video recovery section */}
               <div className="p-4 bg-slate-700/30 border border-slate-600/50 rounded-lg space-y-3">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-medium text-slate-200">Recovery</h3>
+                  <h3 className="text-sm font-medium text-slate-200">Video File Backups</h3>
                   <button
                     type="button"
                     onClick={() => setRecoveryTick((prev) => prev + 1)}
@@ -648,123 +673,178 @@ export function ConfigurationModal({
                   </button>
                 </div>
 
-                {currentVideoName && currentVideoSize !== undefined && (
-                  <div className="space-y-2">
-                    <p className="text-xs text-slate-400">Current video backups ({currentVideoName})</p>
-                    {currentVideoBackups.length === 0 ? (
-                      <p className="text-[11px] text-slate-500">No backups yet.</p>
-                    ) : (
-                      <div className="space-y-1.5">
-                        {currentVideoBackups.map((snapshot) => (
-                          <div
-                            key={`video-backup-${snapshot.slot}`}
-                            className="flex items-center justify-between gap-3 px-3 py-2 rounded border border-slate-600/50 bg-slate-800/40"
-                          >
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2">
-                                <p className="text-xs text-slate-200 truncate">
-                                  {new Date(snapshot.savedAt).toLocaleString()}
-                                </p>
-                                <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full bg-slate-700 text-slate-400">
-                                  {relativeTimeAgo(snapshot.savedAt)}
-                                </span>
-                              </div>
-                              <p className="text-[10px] text-slate-500">
-                                {snapshot.itemCount ?? 0} cues · {snapshot.bytes} bytes
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const key = getAnnotationStorageKey(currentVideoName, currentVideoSize);
-                                  const payload = getBackupPayload(key, snapshot.slot);
-                                  if (!payload) return;
-                                  try {
-                                    const parsed = JSON.parse(payload);
-                                    if (Array.isArray(parsed)) {
-                                      exportAnnotationsToCSV(parsed, `${currentVideoName}-backup-${snapshot.slot}`);
-                                    }
-                                  } catch { /* ignore */ }
-                                }}
-                                className="text-xs px-2 py-1 rounded bg-slate-700 text-slate-300 hover:bg-slate-600 transition-colors"
-                                title="Export this backup as CSV"
-                              >
-                                <Download className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (
-                                    confirm(
-                                      `Restore current video cues from backup at ${new Date(snapshot.savedAt).toLocaleString()}?`,
-                                    )
-                                  ) {
-                                    const key = getAnnotationStorageKey(currentVideoName, currentVideoSize);
-                                    if (restoreBackup(key, snapshot.slot)) {
-                                      onRecoverCurrentVideoCues();
-                                      setRecoveryTick((prev) => prev + 1);
-                                    }
-                                  }
-                                }}
-                                className="text-xs px-2 py-1 rounded bg-indigo-600 text-white hover:bg-indigo-500 transition-colors"
-                              >
-                                Restore
-                              </button>
-                            </div>
-                          </div>
+                {videoFiles.length === 0 ? (
+                  <p className="text-[11px] text-slate-500">No video files with backups found.</p>
+                ) : (
+                  <>
+                    {/* Video file dropdown */}
+                    <div className="flex items-center gap-2 min-w-0">
+                      <label className="text-xs text-slate-400 shrink-0">Select video:</label>
+                      <select
+                        value={effectiveSelectedKey}
+                        onChange={(e) => { setSelectedVideoKey(e.target.value); setRecoveryTick((prev) => prev + 1); }}
+                        className="min-w-0 flex-1 bg-slate-700 text-slate-200 text-sm rounded px-2 py-1.5 border border-slate-600 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none cursor-pointer"
+                      >
+                        {videoFiles.map((vf) => (
+                          <option key={vf.storageKey} value={vf.storageKey}>
+                            {vf.fileName}
+                            {currentVideoName === vf.fileName && currentVideoSize === vf.fileSize
+                              ? ' (current)'
+                              : ''}
+                          </option>
                         ))}
+                      </select>
+                    </div>
+
+                    {/* Backup list for the selected video */}
+                    {selectedVideoInfo && (
+                      <div className="space-y-2">
+                        {selectedVideoBackups.length === 0 ? (
+                          <p className="text-[11px] text-slate-500">No backups for this video.</p>
+                        ) : (
+                          <div className="space-y-1.5">
+                            {selectedVideoBackups.map((snapshot) => (
+                              <div
+                                key={`video-backup-${snapshot.slot}`}
+                                className="flex items-center justify-between gap-3 px-3 py-2 rounded border border-slate-600/50 bg-slate-800/40"
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <p className="text-xs text-slate-200 truncate">
+                                      {new Date(snapshot.savedAt).toLocaleString()}
+                                    </p>
+                                    <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full bg-slate-700 text-slate-400">
+                                      {relativeTimeAgo(snapshot.savedAt)}
+                                    </span>
+                                  </div>
+                                  <p className="text-[10px] text-slate-500">
+                                    {snapshot.itemCount ?? 0} cues · {snapshot.bytes} bytes
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const payload = getBackupPayload(effectiveSelectedKey, snapshot.slot);
+                                      if (!payload) return;
+                                      try {
+                                        const parsed = JSON.parse(payload);
+                                        if (Array.isArray(parsed)) {
+                                          exportAnnotationsToCSV(
+                                            parsed,
+                                            `${selectedVideoInfo.fileName}-backup-${snapshot.slot}`,
+                                          );
+                                        }
+                                      } catch {
+                                        /* ignore */
+                                      }
+                                    }}
+                                    className="text-xs px-2 py-1 rounded bg-slate-700 text-slate-300 hover:bg-slate-600 transition-colors"
+                                    title="Export this backup as CSV"
+                                  >
+                                    <Download className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (
+                                        confirm(
+                                          `Restore cues from backup at ${new Date(snapshot.savedAt).toLocaleString()}?\n\nThis will replace the saved cues for "${selectedVideoInfo.fileName}".`,
+                                        )
+                                      ) {
+                                        if (restoreBackup(effectiveSelectedKey, snapshot.slot)) {
+                                          // If restoring the currently loaded video, reload it in the app
+                                          if (
+                                            currentVideoName === selectedVideoInfo.fileName &&
+                                            currentVideoSize === selectedVideoInfo.fileSize
+                                          ) {
+                                            onRecoverCurrentVideoCues();
+                                          }
+                                          setRecoveryTick((prev) => prev + 1);
+                                        }
+                                      }
+                                    }}
+                                    className="text-xs px-2 py-1 rounded bg-indigo-600 text-white hover:bg-indigo-500 transition-colors"
+                                  >
+                                    Restore
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Delete all backups for this video */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (
+                              confirm(
+                                `⚠️ Delete all backups for "${selectedVideoInfo.fileName}"?\n\nThis will permanently remove all backup snapshots for this video file. The video will no longer appear in this dropdown until new cues are created for it.\n\nThis cannot be undone.`,
+                              )
+                            ) {
+                              deleteVideoBackups(selectedVideoInfo.fileName, selectedVideoInfo.fileSize);
+                              setSelectedVideoKey('');
+                              setRecoveryTick((prev) => prev + 1);
+                            }
+                          }}
+                          className="w-full flex items-center justify-center gap-1.5 px-3 py-2 mt-1 text-xs text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded-md border border-red-800/40 transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          Delete All Backups for This Video
+                        </button>
                       </div>
                     )}
+                  </>
+                )}
+              </div>
+
+              {/* Config backups section */}
+              <div className="p-4 bg-slate-700/30 border border-slate-600/50 rounded-lg space-y-3">
+                <h3 className="text-sm font-medium text-slate-200">Configuration Backups</h3>
+                {configBackups.length === 0 ? (
+                  <p className="text-[11px] text-slate-500">No configuration backups yet.</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {configBackups.map((snapshot) => (
+                      <div
+                        key={`config-backup-${snapshot.slot}`}
+                        className="flex items-center justify-between gap-3 px-3 py-2 rounded border border-slate-600/50 bg-slate-800/40"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <p className="text-xs text-slate-200 truncate">
+                              {new Date(snapshot.savedAt).toLocaleString()}
+                            </p>
+                            <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full bg-slate-700 text-slate-400">
+                              {relativeTimeAgo(snapshot.savedAt)}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-slate-500">{snapshot.bytes} bytes</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (
+                              confirm(
+                                `Restore configuration from backup at ${new Date(snapshot.savedAt).toLocaleString()}?`,
+                              )
+                            ) {
+                              const key = getConfigStorageKey();
+                              if (restoreBackup(key, snapshot.slot)) {
+                                onRecoverConfig();
+                                setRecoveryTick((prev) => prev + 1);
+                              }
+                            }
+                          }}
+                          className="shrink-0 text-xs px-2 py-1 rounded bg-indigo-600 text-white hover:bg-indigo-500 transition-colors"
+                        >
+                          Restore
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 )}
-
-                <div className="space-y-2">
-                  <p className="text-xs text-slate-400">Configuration backups</p>
-                  {configBackups.length === 0 ? (
-                    <p className="text-[11px] text-slate-500">No backups yet.</p>
-                  ) : (
-                    <div className="space-y-1.5">
-                      {configBackups.map((snapshot) => (
-                        <div
-                          key={`config-backup-${snapshot.slot}`}
-                          className="flex items-center justify-between gap-3 px-3 py-2 rounded border border-slate-600/50 bg-slate-800/40"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                              <p className="text-xs text-slate-200 truncate">
-                                {new Date(snapshot.savedAt).toLocaleString()}
-                              </p>
-                              <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full bg-slate-700 text-slate-400">
-                                {relativeTimeAgo(snapshot.savedAt)}
-                              </span>
-                            </div>
-                            <p className="text-[10px] text-slate-500">{snapshot.bytes} bytes</p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (
-                                confirm(
-                                  `Restore configuration from backup at ${new Date(snapshot.savedAt).toLocaleString()}?`,
-                                )
-                              ) {
-                                const key = getConfigStorageKey();
-                                if (restoreBackup(key, snapshot.slot)) {
-                                  onRecoverConfig();
-                                  setRecoveryTick((prev) => prev + 1);
-                                }
-                              }
-                            }}
-                            className="shrink-0 text-xs px-2 py-1 rounded bg-indigo-600 text-white hover:bg-indigo-500 transition-colors"
-                          >
-                            Restore
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
               </div>
             </div>
           )}

@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import type { AppConfig, ColumnConfig } from '../types';
 import { DEFAULT_CONFIG, DEFAULT_VISIBLE_COLUMNS, RESERVED_CUE_TYPES } from '../types';
-import { loadConfig, saveConfig, backupConfig, exportConfigToJSON, importConfigFromJSON, clearStorageFamily } from '../utils/storage';
+import { loadConfig, saveConfig, backupConfig, exportConfigToJSON, importConfigFromJSON, clearStorageFamily, clearPrimaryData } from '../utils/storage';
 
 export function useConfiguration() {
   const [config, setConfig] = useState<AppConfig>(() => loadConfig());
@@ -187,13 +187,21 @@ export function useConfiguration() {
   }, []);
 
   const clearAllData = useCallback(() => {
-    // Clear all annotations for all videos
+    // Clear all annotations for all videos (including backups)
     const keys = Object.keys(localStorage);
+    const baseKeys = new Set<string>();
     keys.forEach((key) => {
       if (key.startsWith('annotations:')) {
-        localStorage.removeItem(key);
+        const stripped = key
+          .replace(/:meta$/, '')
+          .replace(/:next:meta$/, '')
+          .replace(/:next$/, '')
+          .replace(/:backup:pointer$/, '')
+          .replace(/:backup:\d+$/, '');
+        baseKeys.add(stripped);
       }
     });
+    baseKeys.forEach((baseKey) => clearStorageFamily(baseKey));
     // Clear config and all backup/recovery metadata
     clearStorageFamily('app-config');
     // Reset to default config
@@ -202,17 +210,25 @@ export function useConfiguration() {
 
   const clearCurrentVideoCues = useCallback((fileName: string, fileSize: number) => {
     const key = `annotations:${fileName}:${fileSize}`;
-    clearStorageFamily(key);
+    clearPrimaryData(key);
   }, []);
 
   const clearAllCues = useCallback(() => {
-    // Clear all annotations but keep config
+    // Clear primary cues for all videos but keep backups and config
     const keys = Object.keys(localStorage);
+    const baseKeys = new Set<string>();
     keys.forEach((key) => {
       if (key.startsWith('annotations:')) {
-        localStorage.removeItem(key);
+        const stripped = key
+          .replace(/:meta$/, '')
+          .replace(/:next:meta$/, '')
+          .replace(/:next$/, '')
+          .replace(/:backup:pointer$/, '')
+          .replace(/:backup:\d+$/, '');
+        baseKeys.add(stripped);
       }
     });
+    baseKeys.forEach((baseKey) => clearPrimaryData(baseKey));
   }, []);
 
   const reloadConfig = useCallback(() => {

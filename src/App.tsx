@@ -32,6 +32,7 @@ export default function App() {
   const cueFormSaveRef = useRef<(() => void) | null>(null);
   const previousUrlRef = useRef<string>('');
   const cuesDirtyRef = useRef(false);
+  const isConfigOpenRef = useRef(false);
 
   const { state: playerState, actions: playerActions } = useVideoPlayer(videoRef, containerRef, videoSrc);
   const {
@@ -122,7 +123,7 @@ export default function App() {
           backupAnnotations(currentFileName, currentFileSize, annotationsRef.current);
           cuesDirtyRef.current = false;
         }
-        saveConfigBackup();
+        if (isConfigOpenRef.current) saveConfigBackup();
       }
     };
     const handleBeforeUnload = () => {
@@ -132,7 +133,7 @@ export default function App() {
         backupAnnotations(currentFileName, currentFileSize, annotationsRef.current);
         cuesDirtyRef.current = false;
       }
-      saveConfigBackup();
+      if (isConfigOpenRef.current) saveConfigBackup();
     };
     document.addEventListener('visibilitychange', handleVisibility);
     window.addEventListener('beforeunload', handleBeforeUnload);
@@ -518,7 +519,7 @@ export default function App() {
           {/* Settings button */}
           <button
             type="button"
-            onClick={() => setIsConfigOpen(true)}
+            onClick={() => { isConfigOpenRef.current = true; setIsConfigOpen(true); }}
             className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-700 rounded-md transition-colors"
             title="Configuration"
           >
@@ -776,6 +777,7 @@ export default function App() {
         isOpen={isConfigOpen}
         onClose={() => {
           saveConfigBackup();
+          isConfigOpenRef.current = false;
           setIsConfigOpen(false);
         }}
         cueTypes={config.cueTypes}
