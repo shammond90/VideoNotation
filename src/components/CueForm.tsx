@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo, useCallback, type MutableRefObject } from 'react';
 import type { CueFields, Annotation } from '../types';
 import { EMPTY_CUE_FIELDS, CUE_FIELD_LABELS } from '../types';
-import { formatTime, parseTime, FPS } from '../utils/formatTime';
+import { formatTime, parseTime } from '../utils/formatTime';
 import { SearchableDropdown } from './SearchableDropdown';
 
 export type CueFormMode = 'create' | 'edit';
@@ -95,13 +95,9 @@ function TextAreaField({
 
 // ── Timestamp overwrite-mode input ──
 
+/** Convert seconds to drop-frame timecode for the editable input */
 function secondsToTimecodeStr(seconds: number): string {
-  if (!isFinite(seconds) || seconds < 0) return '00:00:00:00';
-  const h = String(Math.floor(seconds / 3600)).padStart(2, '0');
-  const m = String(Math.floor((seconds % 3600) / 60)).padStart(2, '0');
-  const s = String(Math.floor(seconds % 60)).padStart(2, '0');
-  const f = String(Math.floor((seconds % 1) * FPS)).padStart(2, '0');
-  return `${h}:${m}:${s}:${f}`;
+  return formatTime(seconds);
 }
 
 /**
@@ -115,7 +111,7 @@ function TimecodeInput({
   readOnly,
   className,
 }: {
-  value: string; // "HH:MM:SS:FF"
+  value: string; // "HH:MM:SS;FF" (drop-frame)
   onChange: (newValue: string) => void;
   readOnly?: boolean;
   className?: string;
@@ -135,8 +131,8 @@ function TimecodeInput({
 
       if (/^\d$/.test(e.key)) {
         let pos = input.selectionStart ?? 0;
-        // Skip colon positions
-        while (pos < value.length && value[pos] === ':') pos++;
+        // Skip colon and semicolon positions
+        while (pos < value.length && (value[pos] === ':' || value[pos] === ';')) pos++;
         if (pos >= value.length) return;
 
         const chars = value.split('');
@@ -144,9 +140,9 @@ function TimecodeInput({
         const newValue = chars.join('');
         onChange(newValue);
 
-        // Advance cursor past the typed digit (and any following colon)
+        // Advance cursor past the typed digit (and any following colon/semicolon)
         let nextPos = pos + 1;
-        while (nextPos < newValue.length && newValue[nextPos] === ':') nextPos++;
+        while (nextPos < newValue.length && (newValue[nextPos] === ':' || newValue[nextPos] === ';')) nextPos++;
 
         requestAnimationFrame(() => {
           input.setSelectionRange(nextPos, nextPos);
@@ -155,7 +151,7 @@ function TimecodeInput({
 
       if (e.key === 'Backspace') {
         let pos = (input.selectionStart ?? 1) - 1;
-        while (pos >= 0 && value[pos] === ':') pos--;
+        while (pos >= 0 && (value[pos] === ':' || value[pos] === ';')) pos--;
         if (pos >= 0) {
           const chars = value.split('');
           chars[pos] = '0';
@@ -168,13 +164,13 @@ function TimecodeInput({
 
       if (e.key === 'Delete') {
         let pos = input.selectionStart ?? 0;
-        while (pos < value.length && value[pos] === ':') pos++;
+        while (pos < value.length && (value[pos] === ':' || value[pos] === ';')) pos++;
         if (pos < value.length) {
           const chars = value.split('');
           chars[pos] = '0';
           onChange(chars.join(''));
           let nextPos = pos + 1;
-          while (nextPos < value.length && value[nextPos] === ':') nextPos++;
+          while (nextPos < value.length && (value[nextPos] === ':' || value[nextPos] === ';')) nextPos++;
           requestAnimationFrame(() => {
             input.setSelectionRange(nextPos, nextPos);
           });

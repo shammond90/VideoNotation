@@ -60,7 +60,8 @@ export function VideoDropZone({ onFileSelected, onContinueWithoutVideo }: VideoD
         <Upload className="w-16 h-16 text-slate-400 mb-4" />
         <h2 className="text-xl font-semibold text-slate-200 mb-2">Drop a video here to get started</h2>
         <p className="text-sm text-slate-400 mb-6">or click to browse files</p>
-        <p className="text-xs text-slate-500">Supports MP4, WebM, MOV and other browser-compatible formats</p>
+        <p className="text-xs text-slate-500 mb-4">Supports MP4, WebM, MOV and other browser-compatible formats</p>
+        <p className="text-xs text-slate-500 italic">The system uses 29.97 fps NTSC Drop Frame timecode</p>
         <input
           ref={fileInputRef}
           type="file"

@@ -1,4 +1,5 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
+import { FRAME_DURATION } from '../utils/formatTime';
 
 export interface VideoPlayerState {
   isPlaying: boolean;
@@ -26,7 +27,7 @@ export interface VideoPlayerActions {
   toggleFullscreen: () => void;
 }
 
-const FRAME_DURATION = 1 / 25; // ~25fps
+const FRAME_DUR = FRAME_DURATION; // re-alias to keep usage short
 
 export function useVideoPlayer(
   videoRef: React.RefObject<HTMLVideoElement | null>,
@@ -252,7 +253,7 @@ export function useVideoPlayer(
     const video = videoRef.current;
     if (video) {
       video.pause();
-      video.currentTime = Math.max(0, Math.min(video.currentTime + direction * FRAME_DURATION, video.duration));
+      video.currentTime = Math.max(0, Math.min(video.currentTime + direction * FRAME_DUR, video.duration));
       setState((prev) => ({ ...prev, currentTime: video.currentTime }));
     }
   }, [videoRef]);
