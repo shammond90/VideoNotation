@@ -1,7 +1,9 @@
-import { useState, useRef, useMemo } from 'react';
-import { X, Plus, Trash2, GripVertical, Download, Upload, Lock, Pencil, Check, AlertTriangle } from 'lucide-react';
+import React, { useState, useRef, useMemo, useCallback, useEffect } from 'react';
+import { X, Plus, Trash2, GripVertical, Download, Upload, Lock, Pencil, Check, AlertTriangle, ChevronDown, ChevronRight, Save, FileDown, FileUp } from 'lucide-react';
 import type { ColumnConfig } from '../types';
-import { RESERVED_CUE_TYPES } from '../types';
+import { RESERVED_CUE_TYPES, LOOP_CUE_TYPE, EDITABLE_FIELD_KEYS, EDITABLE_FIELD_LABELS, AUTOFOLLOW_COLUMN_KEYS, LINK_COLUMN_KEYS, getDefaultFieldsForType } from '../types';
+import type { ConfigTemplate, ConfigTemplateCategory } from '../utils/configTemplates';
+import { loadConfigTemplates, saveConfigTemplate, deleteConfigTemplate, renameConfigTemplate, exportTemplateToJSON, exportAllTemplatesToJSON, importTemplatesFromJSON } from '../utils/configTemplates';
 import {
   listBackups,
   restoreBackup,
@@ -53,23 +55,31 @@ interface ConfigurationModalProps {
   onClose: () => void;
   cueTypes: string[];
   cueTypeColors: Record<string, string>;
-  cueTypeAllowStandby: Record<string, boolean>;
-  cueTypeAllowWarning: Record<string, boolean>;
+  cueTypeShortCodes: Record<string, string>;
+  cueTypeFields: Record<string, string[]>;
   visibleColumns: ColumnConfig[];
   cueTypeColumns: Record<string, ColumnConfig[]>;
   usedCueTypes: Set<string>;
+  showShortCodes: boolean;
+  showPastCues: boolean;
+  showSkippedCues: boolean;
   distanceView: boolean;
+  showVideoTimecode: boolean;
   currentVideoName?: string;
   currentVideoSize?: number;
   cueBackupIntervalMinutes: number;
   onSetCueBackupInterval: (minutes: number) => void;
-  onSetDistanceView: (v: boolean) => void;
   onAddCueType: (name: string) => void;
   onRemoveCueType: (name: string) => void;
   onRenameCueType: (oldName: string, newName: string) => void;
   onSetCueTypeColor: (cueType: string, color: string) => void;
-  onSetCueTypeAllowStandby: (cueType: string, allow: boolean) => void;
-  onSetCueTypeAllowWarning: (cueType: string, allow: boolean) => void;
+  onSetCueTypeShortCode: (cueType: string, shortCode: string) => void;
+  onSetShowShortCodes: (show: boolean) => void;
+  onSetShowPastCues: (show: boolean) => void;
+  onSetShowSkippedCues: (show: boolean) => void;
+  onSetDistanceView: (value: boolean) => void;
+  onSetShowVideoTimecode: (show: boolean) => void;
+  onSetCueTypeFields: (cueType: string, fields: string[]) => void;
   onToggleColumn: (key: string, cueType?: string) => void;
   onReorderColumns: (fromIndex: number, toIndex: number, cueType?: string) => void;
   onAddCueTypeColumns: (cueType: string) => void;
@@ -81,6 +91,22 @@ interface ConfigurationModalProps {
   onClearAllData: () => void;
   onClearCurrentVideoCues: (fileName: string, fileSize: number) => void;
   onClearAllCues: () => void;
+  onApplyCueTypesTemplate: (data: CueTypesTemplateData) => void;
+  onApplyColumnsTemplate: (data: ColumnsTemplateData) => void;
+}
+
+/** Data shape stored in a "cueTypes" template. */
+export interface CueTypesTemplateData {
+  cueTypes: string[];
+  cueTypeColors: Record<string, string>;
+  cueTypeShortCodes: Record<string, string>;
+  cueTypeFields: Record<string, string[]>;
+}
+
+/** Data shape stored in a "columns" template. */
+export interface ColumnsTemplateData {
+  visibleColumns: ColumnConfig[];
+  cueTypeColumns: Record<string, ColumnConfig[]>;
 }
 
 // ── Sortable column item ──
@@ -130,6 +156,73 @@ function SortableColumnItem({
   );
 }
 
+// ── Sortable field item for cue type field ordering ──
+
+/** Fields that are always locked at the top of every cue type and cannot be moved or removed. */
+const LOCKED_FIELD_KEYS = ['timestamp', 'cueNumber'];
+
+function SortableFieldItem({
+  fieldKey,
+  label,
+  isActive,
+  isLocked,
+  onToggle,
+}: {
+  fieldKey: string;
+  label: string;
+  isActive: boolean;
+  isLocked: boolean;
+  onToggle: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: `field-${fieldKey}`,
+    disabled: isLocked,
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`flex items-center gap-2 px-2 py-1.5 rounded-md border ${
+        isLocked
+          ? 'bg-slate-700/30 border-slate-600/30'
+          : 'bg-slate-700/50 border-slate-600/50 hover:bg-slate-700'
+      }`}
+    >
+      {isLocked ? (
+        <Lock className="w-3.5 h-3.5 text-slate-600 shrink-0" />
+      ) : (
+        <button
+          type="button"
+          className="cursor-grab active:cursor-grabbing text-slate-500 hover:text-slate-300 touch-none shrink-0"
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="w-3.5 h-3.5" />
+        </button>
+      )}
+      <label className={`flex items-center gap-1.5 flex-1 ${isLocked ? '' : 'cursor-pointer'} select-none`}>
+        <input
+          type="checkbox"
+          checked={isActive}
+          onChange={onToggle}
+          disabled={isLocked}
+          className="w-3.5 h-3.5 rounded border-slate-500 bg-slate-600 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-0 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+        />
+        <span className={`text-[11px] ${isActive ? 'text-slate-200' : 'text-slate-500'}`}>
+          {label}
+        </span>
+      </label>
+    </div>
+  );
+}
+
 // ── Main modal ──
 
 export function ConfigurationModal({
@@ -137,23 +230,31 @@ export function ConfigurationModal({
   onClose,
   cueTypes,
   cueTypeColors,
-  cueTypeAllowStandby,
-  cueTypeAllowWarning,
+  cueTypeShortCodes,
+  cueTypeFields,
   visibleColumns,
   cueTypeColumns,
   usedCueTypes,
+  showShortCodes,
+  showPastCues,
+  showSkippedCues,
   distanceView,
+  showVideoTimecode,
   currentVideoName,
   currentVideoSize,
   cueBackupIntervalMinutes,
   onSetCueBackupInterval,
-  onSetDistanceView,
   onAddCueType,
   onRemoveCueType,
   onRenameCueType,
   onSetCueTypeColor,
-  onSetCueTypeAllowStandby,
-  onSetCueTypeAllowWarning,
+  onSetCueTypeShortCode,
+  onSetShowShortCodes,
+  onSetShowPastCues,
+  onSetShowSkippedCues,
+  onSetDistanceView,
+  onSetShowVideoTimecode,
+  onSetCueTypeFields,
   onToggleColumn,
   onReorderColumns,
   onAddCueTypeColumns,
@@ -165,24 +266,49 @@ export function ConfigurationModal({
   onClearAllData,
   onClearCurrentVideoCues,
   onClearAllCues,
+  onApplyCueTypesTemplate,
+  onApplyColumnsTemplate,
 }: ConfigurationModalProps) {
   const [newTypeName, setNewTypeName] = useState('');
-  const [activeTab, setActiveTab] = useState<'types' | 'columns' | 'view' | 'savefiles' | 'data'>('types');
+  const [activeTab, setActiveTab] = useState<'types' | 'columns' | 'view' | 'templates' | 'savefiles' | 'data'>('types');
   const [editingType, setEditingType] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const [columnView, setColumnView] = useState<string>('default');
   const [recoveryTick, setRecoveryTick] = useState(0);
   const [selectedVideoKey, setSelectedVideoKey] = useState<string>('');
+  const [expandedFieldType, setExpandedFieldType] = useState<string | null>(null);
   const importRef = useRef<HTMLInputElement>(null);
+  const templateImportRef = useRef<HTMLInputElement>(null);
+
+  // Template state
+  const [savedTemplates, setSavedTemplates] = useState<ConfigTemplate[]>([]);
+  const [typesTemplateId, setTypesTemplateId] = useState('');
+  const [typesTemplateName, setTypesTemplateName] = useState('');
+  const [columnsTemplateId, setColumnsTemplateId] = useState('');
+  const [columnsTemplateName, setColumnsTemplateName] = useState('');
+  // Templates tab state
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const [editingTemplateName, setEditingTemplateName] = useState('');
+  const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
+
+  // Load templates on mount
+  useEffect(() => {
+    loadConfigTemplates().then(setSavedTemplates);
+  }, []);
+
+  const refreshTemplates = useCallback(async () => {
+    setSavedTemplates(await loadConfigTemplates());
+  }, []);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  // These useMemo hooks MUST be before the early return to satisfy Rules of Hooks
-  const videoFiles = useMemo<VideoFileInfo[]>(() => {
-    return listVideoFilesWithBackups();
+  // These state hooks MUST be before the early return to satisfy Rules of Hooks
+  const [videoFiles, setVideoFiles] = useState<VideoFileInfo[]>([]);
+  useEffect(() => {
+    listVideoFilesWithBackups().then(setVideoFiles);
   }, [recoveryTick]);
 
   // Auto-select current video if nothing selected yet
@@ -203,14 +329,41 @@ export function ConfigurationModal({
     return videoFiles.find((v) => v.storageKey === effectiveSelectedKey) ?? null;
   }, [videoFiles, effectiveSelectedKey]);
 
-  const selectedVideoBackups = useMemo<BackupSnapshot[]>(() => {
-    if (!effectiveSelectedKey) return [];
-    return listBackups(effectiveSelectedKey);
+  const [selectedVideoBackups, setSelectedVideoBackups] = useState<BackupSnapshot[]>([]);
+  useEffect(() => {
+    if (!effectiveSelectedKey) { setSelectedVideoBackups([]); return; }
+    listBackups(effectiveSelectedKey).then(setSelectedVideoBackups);
   }, [effectiveSelectedKey, recoveryTick]);
 
-  const configBackups = useMemo<BackupSnapshot[]>(() => {
-    return listBackups(getConfigStorageKey());
+  const [configBackups, setConfigBackups] = useState<BackupSnapshot[]>([]);
+  useEffect(() => {
+    listBackups(getConfigStorageKey()).then(setConfigBackups);
   }, [recoveryTick]);
+
+  const activeColumns = useMemo(() => {
+    const base =
+      columnView !== 'default' && cueTypeColumns[columnView]
+        ? cueTypeColumns[columnView]
+        : visibleColumns;
+    // When viewing a specific type override, filter to only columns whose field is enabled for that type
+    if (columnView !== 'default') {
+      const typeFields = cueTypeFields[columnView] ?? getDefaultFieldsForType(columnView);
+      const hasAutofollow = typeFields.includes('addAutofollow');
+      const hasLinking = typeFields.includes('linkCueNumber');
+      // 'type' column is always shown; other columns shown only if their field is enabled for this type
+      // Visibility (checked/unchecked) is controlled separately
+      return base.filter((col) => {
+        if (col.key === 'type') return true;
+        // Autofollow columns are shown when addAutofollow is enabled for this type
+        if (hasAutofollow && AUTOFOLLOW_COLUMN_KEYS.includes(col.key)) return true;
+        // Link columns are shown when linkCueNumber is enabled for this type
+        if (hasLinking && LINK_COLUMN_KEYS.includes(col.key)) return true;
+        return typeFields.includes(col.key);
+      });
+    }
+    // For default view, show all columns
+    return base;
+  }, [columnView, cueTypeColumns, visibleColumns, cueTypeFields]);
 
   if (!isOpen) return null;
 
@@ -242,11 +395,6 @@ export function ConfigurationModal({
     setEditingName('');
   };
 
-  const activeColumns =
-    columnView !== 'default' && cueTypeColumns[columnView]
-      ? cueTypeColumns[columnView]
-      : visibleColumns;
-
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
@@ -270,7 +418,8 @@ export function ConfigurationModal({
   };
 
   const typesWithOverrides = Object.keys(cueTypeColumns);
-  const typesAvailableForOverride = cueTypes.filter((t) => !cueTypeColumns[t]);
+  const allTypesForOverride = [...new Set([...cueTypes, LOOP_CUE_TYPE])];
+  const typesAvailableForOverride = allTypesForOverride.filter((t) => !cueTypeColumns[t]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
@@ -324,6 +473,17 @@ export function ConfigurationModal({
           </button>
           <button
             type="button"
+            onClick={() => { refreshTemplates(); setActiveTab('templates'); }}
+            className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors ${
+              activeTab === 'templates'
+                ? 'text-indigo-400 border-b-2 border-indigo-400 bg-slate-700/30'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            Templates
+          </button>
+          <button
+            type="button"
             onClick={() => { setRecoveryTick((prev) => prev + 1); setActiveTab('savefiles'); }}
             className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors ${
               activeTab === 'savefiles'
@@ -350,6 +510,85 @@ export function ConfigurationModal({
         <div className="flex-1 overflow-y-auto annotation-scroll p-6">
           {activeTab === 'types' && (
             <div className="space-y-4">
+              {/* Template selector bar */}
+              <div className="flex items-center gap-2 p-3 bg-slate-700/30 border border-slate-600/40 rounded-lg">
+                <label className="text-xs text-slate-400 font-medium shrink-0">Template:</label>
+                <div className="relative flex-1 max-w-[180px]">
+                  <select
+                    value={typesTemplateId}
+                    onChange={(e) => {
+                      const tpl = savedTemplates.find((t) => t.id === e.target.value);
+                      if (tpl) {
+                        setTypesTemplateId(tpl.id);
+                        setTypesTemplateName(tpl.name);
+                      } else {
+                        setTypesTemplateId('');
+                        setTypesTemplateName('');
+                      }
+                    }}
+                    className="w-full bg-slate-700 border border-slate-600 rounded-md px-2 py-1.5 text-xs text-slate-200 appearance-none pr-7 focus:border-indigo-500 focus:outline-none"
+                  >
+                    <option value="">New template…</option>
+                    {savedTemplates.filter((t) => t.category === 'cueTypes').map((t) => (
+                      <option key={t.id} value={t.id}>{t.name}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                </div>
+                <input
+                  type="text"
+                  value={typesTemplateName}
+                  onChange={(e) => setTypesTemplateName(e.target.value)}
+                  placeholder="Template name"
+                  className="flex-1 max-w-[180px] bg-slate-700 border border-slate-600 rounded-md px-2 py-1.5 text-xs text-slate-200 focus:border-indigo-500 focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const name = typesTemplateName.trim() || `Cue Types ${savedTemplates.filter((t) => t.category === 'cueTypes').length + 1}`;
+                    const data: CueTypesTemplateData = {
+                      cueTypes: [...cueTypes],
+                      cueTypeColors: { ...cueTypeColors },
+                      cueTypeShortCodes: { ...cueTypeShortCodes },
+                      cueTypeFields: { ...cueTypeFields },
+                    };
+                    const template: ConfigTemplate = {
+                      id: typesTemplateId || crypto.randomUUID(),
+                      name,
+                      category: 'cueTypes',
+                      data,
+                      createdAt: typesTemplateId
+                        ? savedTemplates.find((t) => t.id === typesTemplateId)?.createdAt ?? new Date().toISOString()
+                        : new Date().toISOString(),
+                      updatedAt: new Date().toISOString(),
+                    };
+                    await saveConfigTemplate(template);
+                    await refreshTemplates();
+                    setTypesTemplateId(template.id);
+                    setTypesTemplateName(template.name);
+                  }}
+                  className="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-indigo-600 text-white rounded-md hover:bg-indigo-500 transition-colors shrink-0"
+                >
+                  <Save className="w-3 h-3" />
+                  Save
+                </button>
+                {typesTemplateId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const tpl = savedTemplates.find((t) => t.id === typesTemplateId);
+                      if (!tpl) return;
+                      if (confirm(`Apply template "${tpl.name}"?\n\nThis will update your cue type configuration. Reserved and in-use types will be preserved; other types may be removed.`)) {
+                        onApplyCueTypesTemplate(tpl.data as CueTypesTemplateData);
+                      }
+                    }}
+                    className="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-emerald-600 text-white rounded-md hover:bg-emerald-500 transition-colors shrink-0"
+                  >
+                    Apply
+                  </button>
+                )}
+              </div>
+
               <p className="text-xs text-slate-400">
                 Define the cue types available in the dropdown when creating or editing a cue.
                 Types that are in use cannot be deleted. You can rename any type.
@@ -383,15 +622,15 @@ export function ConfigurationModal({
 
               {/* Type list */}
               <div className="space-y-1.5">
-                {cueTypes.map((type) => {
+                {[...cueTypes, ...(cueTypes.includes(LOOP_CUE_TYPE) ? [] : [LOOP_CUE_TYPE])].map((type) => {
                   const isReserved = (RESERVED_CUE_TYPES as readonly string[]).includes(type);
                   const isInUse = usedCueTypes.has(type);
                   const isLocked = isReserved || isInUse;
                   const isEditing = editingType === type;
 
                   return (
+                    <React.Fragment key={type}>
                     <div
-                      key={type}
                       className="flex items-center justify-between px-3 py-2 bg-slate-700/50 rounded-md border border-slate-600/50"
                     >
                       <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -451,35 +690,15 @@ export function ConfigurationModal({
                       </div>
                       {!isEditing && (
                         <div className="flex items-center gap-1.5 ml-2">
-                          {/* Standby / Warning allow checkboxes (non-reserved types only) */}
-                          {!isReserved && (
-                            <>
-                              <label
-                                className="flex items-center gap-2 cursor-pointer"
-                                title="Allow Standby cues for this type"
-                              >
-                                <span className="text-[11px] font-medium text-amber-400">Standby</span>
-                                <input
-                                  type="checkbox"
-                                  checked={!!cueTypeAllowStandby[type]}
-                                  onChange={(e) => onSetCueTypeAllowStandby(type, e.target.checked)}
-                                  className="w-4 h-4 rounded border-slate-500 bg-slate-600 text-amber-500 focus:ring-amber-500 focus:ring-offset-0 cursor-pointer"
-                                />
-                              </label>
-                              <label
-                                className="flex items-center gap-2 cursor-pointer"
-                                title="Allow Warning cues for this type"
-                              >
-                                <span className="text-[11px] font-medium text-blue-400">Warning</span>
-                                <input
-                                  type="checkbox"
-                                  checked={!!cueTypeAllowWarning[type]}
-                                  onChange={(e) => onSetCueTypeAllowWarning(type, e.target.checked)}
-                                  className="w-4 h-4 rounded border-slate-500 bg-slate-600 text-blue-500 focus:ring-blue-500 focus:ring-offset-0 cursor-pointer"
-                                />
-                              </label>
-                            </>
-                          )}
+                          {/* Expand / collapse field selection */}
+                          <button
+                            type="button"
+                            onClick={() => setExpandedFieldType((prev) => (prev === type ? null : type))}
+                            className="p-1 text-slate-400 hover:text-indigo-400 hover:bg-slate-600 rounded transition-colors"
+                            title="Configure visible fields"
+                          >
+                            {expandedFieldType === type ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                          </button>
                           {/* Colour picker */}
                           <label
                             className="relative w-6 h-6 rounded cursor-pointer border border-slate-500 shrink-0 overflow-hidden"
@@ -493,10 +712,20 @@ export function ConfigurationModal({
                               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                             />
                           </label>
+                          {/* Short code input */}
+                          <input
+                            type="text"
+                            value={cueTypeShortCodes[type] || ''}
+                            onChange={(e) => onSetCueTypeShortCode(type, e.target.value)}
+                            placeholder="SC"
+                            maxLength={4}
+                            title="Short code (max 4 characters)"
+                            className="w-10 h-6 text-center text-xs bg-slate-600 text-slate-200 rounded border border-slate-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none placeholder-slate-500"
+                          />
                           <button
                             type="button"
                             onClick={() => handleStartEdit(type)}
-                            className="p-1 text-slate-500 hover:text-slate-300 hover:bg-slate-600 rounded transition-colors"
+                            className={`p-1 text-slate-500 hover:text-slate-300 hover:bg-slate-600 rounded transition-colors ${type === LOOP_CUE_TYPE ? 'hidden' : ''}`}
                             title={`Rename ${type}`}
                           >
                             <Pencil className="w-3.5 h-3.5" />
@@ -514,6 +743,90 @@ export function ConfigurationModal({
                         </div>
                       )}
                     </div>
+
+                    {/* Expandable field selection — now a sortable list with locked fields at top */}
+                    {expandedFieldType === type && !isEditing && (() => {
+                      const currentFields = cueTypeFields[type] ?? getDefaultFieldsForType(type);
+                      const allCount = EDITABLE_FIELD_KEYS.length;
+                      const selectedCount = currentFields.length;
+
+                      const toggleField = (fieldKey: string) => {
+                        if (LOCKED_FIELD_KEYS.includes(fieldKey)) return;
+                        const next = currentFields.includes(fieldKey)
+                          ? currentFields.filter((f) => f !== fieldKey)
+                          : [...currentFields, fieldKey];
+                        onSetCueTypeFields(type, next);
+                      };
+
+                      const selectAll = () => {
+                        // Keep locked at top, add remaining in EDITABLE order
+                        const ordered = [...LOCKED_FIELD_KEYS, ...EDITABLE_FIELD_KEYS.filter((k) => !LOCKED_FIELD_KEYS.includes(k))];
+                        onSetCueTypeFields(type, ordered);
+                      };
+                      const selectNone = () => onSetCueTypeFields(type, [...LOCKED_FIELD_KEYS]);
+                      const resetDefaults = () => onSetCueTypeFields(type, getDefaultFieldsForType(type));
+
+                      // Build the ordered display list:
+                      // 1. Locked fields always at top (always active)
+                      // 2. Active (non-locked) fields in their current order
+                      // 3. Inactive fields at the bottom in EDITABLE_FIELD_KEYS order
+                      const activeNonLocked = currentFields.filter((k) => !LOCKED_FIELD_KEYS.includes(k));
+                      const inactiveFields = EDITABLE_FIELD_KEYS.filter((k) => !LOCKED_FIELD_KEYS.includes(k) && !currentFields.includes(k));
+                      const orderedKeys = [...LOCKED_FIELD_KEYS, ...activeNonLocked, ...inactiveFields];
+
+                      const handleFieldDragEnd = (event: DragEndEvent) => {
+                        const { active, over } = event;
+                        if (!over || active.id === over.id) return;
+                        const activeKey = String(active.id).replace('field-', '');
+                        const overKey = String(over.id).replace('field-', '');
+                        // Don't allow moving into the locked zone
+                        if (LOCKED_FIELD_KEYS.includes(activeKey) || LOCKED_FIELD_KEYS.includes(overKey)) return;
+                        // Reorder within active fields
+                        const activeIdx = activeNonLocked.indexOf(activeKey);
+                        const overIdx = activeNonLocked.indexOf(overKey);
+                        if (activeIdx === -1) return; // can't move inactive fields by drag
+                        if (overIdx === -1) return;
+                        const reordered = [...activeNonLocked];
+                        const [moved] = reordered.splice(activeIdx, 1);
+                        reordered.splice(overIdx, 0, moved);
+                        onSetCueTypeFields(type, [...LOCKED_FIELD_KEYS, ...reordered]);
+                      };
+
+                      return (
+                        <div className="mt-1 ml-4 mr-2 mb-1 p-3 bg-slate-800/60 border border-slate-600/40 rounded-md space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] uppercase tracking-wider text-slate-500">
+                              Fields &amp; order ({selectedCount}/{allCount})
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <button type="button" onClick={selectAll} className="text-[10px] text-indigo-400 hover:text-indigo-300">All</button>
+                              <button type="button" onClick={selectNone} className="text-[10px] text-indigo-400 hover:text-indigo-300">None</button>
+                              <button type="button" onClick={resetDefaults} className="text-[10px] text-indigo-400 hover:text-indigo-300">Defaults</button>
+                            </div>
+                          </div>
+                          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleFieldDragEnd}>
+                            <SortableContext
+                              items={orderedKeys.map((k) => `field-${k}`)}
+                              strategy={verticalListSortingStrategy}
+                            >
+                              <div className="space-y-1 max-h-60 overflow-y-auto annotation-scroll">
+                                {orderedKeys.map((fieldKey) => (
+                                  <SortableFieldItem
+                                    key={fieldKey}
+                                    fieldKey={fieldKey}
+                                    label={EDITABLE_FIELD_LABELS[fieldKey] || fieldKey}
+                                    isActive={LOCKED_FIELD_KEYS.includes(fieldKey) || currentFields.includes(fieldKey)}
+                                    isLocked={LOCKED_FIELD_KEYS.includes(fieldKey)}
+                                    onToggle={() => toggleField(fieldKey)}
+                                  />
+                                ))}
+                              </div>
+                            </SortableContext>
+                          </DndContext>
+                        </div>
+                      );
+                    })()}
+                    </React.Fragment>
                   );
                 })}
               </div>
@@ -522,6 +835,85 @@ export function ConfigurationModal({
 
           {activeTab === 'columns' && (
             <div className="space-y-4">
+              {/* Template selector bar */}
+              <div className="flex items-center gap-2 p-3 bg-slate-700/30 border border-slate-600/40 rounded-lg">
+                <label className="text-xs text-slate-400 font-medium shrink-0">Template:</label>
+                <div className="relative flex-1 max-w-[180px]">
+                  <select
+                    value={columnsTemplateId}
+                    onChange={(e) => {
+                      const tpl = savedTemplates.find((t) => t.id === e.target.value);
+                      if (tpl) {
+                        setColumnsTemplateId(tpl.id);
+                        setColumnsTemplateName(tpl.name);
+                      } else {
+                        setColumnsTemplateId('');
+                        setColumnsTemplateName('');
+                      }
+                    }}
+                    className="w-full bg-slate-700 border border-slate-600 rounded-md px-2 py-1.5 text-xs text-slate-200 appearance-none pr-7 focus:border-indigo-500 focus:outline-none"
+                  >
+                    <option value="">New template…</option>
+                    {savedTemplates.filter((t) => t.category === 'columns').map((t) => (
+                      <option key={t.id} value={t.id}>{t.name}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                </div>
+                <input
+                  type="text"
+                  value={columnsTemplateName}
+                  onChange={(e) => setColumnsTemplateName(e.target.value)}
+                  placeholder="Template name"
+                  className="flex-1 max-w-[180px] bg-slate-700 border border-slate-600 rounded-md px-2 py-1.5 text-xs text-slate-200 focus:border-indigo-500 focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const name = columnsTemplateName.trim() || `Columns ${savedTemplates.filter((t) => t.category === 'columns').length + 1}`;
+                    const data: ColumnsTemplateData = {
+                      visibleColumns: visibleColumns.map((c) => ({ ...c })),
+                      cueTypeColumns: Object.fromEntries(
+                        Object.entries(cueTypeColumns).map(([k, v]) => [k, v.map((c) => ({ ...c }))])
+                      ),
+                    };
+                    const template: ConfigTemplate = {
+                      id: columnsTemplateId || crypto.randomUUID(),
+                      name,
+                      category: 'columns',
+                      data,
+                      createdAt: columnsTemplateId
+                        ? savedTemplates.find((t) => t.id === columnsTemplateId)?.createdAt ?? new Date().toISOString()
+                        : new Date().toISOString(),
+                      updatedAt: new Date().toISOString(),
+                    };
+                    await saveConfigTemplate(template);
+                    await refreshTemplates();
+                    setColumnsTemplateId(template.id);
+                    setColumnsTemplateName(template.name);
+                  }}
+                  className="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-indigo-600 text-white rounded-md hover:bg-indigo-500 transition-colors shrink-0"
+                >
+                  <Save className="w-3 h-3" />
+                  Save
+                </button>
+                {columnsTemplateId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const tpl = savedTemplates.find((t) => t.id === columnsTemplateId);
+                      if (!tpl) return;
+                      if (confirm(`Apply template "${tpl.name}"?\n\nThis will replace your default column configuration and rebuild all type-specific overrides from the template.`)) {
+                        onApplyColumnsTemplate(tpl.data as ColumnsTemplateData);
+                      }
+                    }}
+                    className="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-emerald-600 text-white rounded-md hover:bg-emerald-500 transition-colors shrink-0"
+                  >
+                    Apply
+                  </button>
+                )}
+              </div>
+
               <p className="text-xs text-slate-400">
                 Choose which fields appear in the abridged cue list.
                 Drag to reorder. Toggle visibility with the checkbox.
@@ -544,7 +936,7 @@ export function ConfigurationModal({
                   ))}
                 </select>
 
-                {typesAvailableForOverride.length > 0 && columnView === 'default' && (
+                {typesAvailableForOverride.length > 0 && (
                   <div className="flex items-center gap-1 ml-auto">
                     <select
                       id="add-override-type"
@@ -609,24 +1001,269 @@ export function ConfigurationModal({
           {activeTab === 'view' && (
             <div className="space-y-4">
               <p className="text-xs text-slate-400">
-                Configure how the cue sheet is displayed.
+                Control how cues are displayed in the cue sheet.
               </p>
 
+              {/* Distance View toggle */}
               <label className="flex items-center gap-3 px-3 py-3 bg-slate-700/50 rounded-md border border-slate-600/50 cursor-pointer select-none hover:bg-slate-700">
                 <input
                   type="checkbox"
                   checked={distanceView}
-                  onChange={(e) => onSetDistanceView(e.target.checked)}
+                  onChange={() => onSetDistanceView(!distanceView)}
                   className="w-4 h-4 rounded border-slate-500 bg-slate-600 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-0 cursor-pointer"
                 />
                 <div>
                   <span className="text-sm text-slate-200 font-medium">Distance View</span>
                   <p className="text-[10px] text-slate-500 mt-0.5">
-                    Shows a large type + cue # badge on the left of each cue card in the cue sheet.
-                    When disabled, uses a compact overlapping badge.
+                    Show cue type and number as a large colour-coded badge on the left side of each cue card.
                   </p>
                 </div>
               </label>
+
+              {/* Show short codes toggle */}
+              <label className="flex items-center gap-3 px-3 py-3 bg-slate-700/50 rounded-md border border-slate-600/50 cursor-pointer select-none hover:bg-slate-700">
+                <input
+                  type="checkbox"
+                  checked={showShortCodes}
+                  onChange={() => onSetShowShortCodes(!showShortCodes)}
+                  className="w-4 h-4 rounded border-slate-500 bg-slate-600 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-0 cursor-pointer"
+                />
+                <div>
+                  <span className="text-sm text-slate-200 font-medium">Show Short Codes</span>
+                  <p className="text-[10px] text-slate-500 mt-0.5">
+                    Display short codes instead of full cue type names in the cue sheet (if defined).
+                  </p>
+                </div>
+              </label>
+
+              {/* Show past cues toggle */}
+              <label className="flex items-center gap-3 px-3 py-3 bg-slate-700/50 rounded-md border border-slate-600/50 cursor-pointer select-none hover:bg-slate-700">
+                <input
+                  type="checkbox"
+                  checked={showPastCues}
+                  onChange={() => onSetShowPastCues(!showPastCues)}
+                  className="w-4 h-4 rounded border-slate-500 bg-slate-600 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-0 cursor-pointer"
+                />
+                <div>
+                  <span className="text-sm text-slate-200 font-medium">Show Past Cues</span>
+                  <p className="text-[10px] text-slate-500 mt-0.5">
+                    Display cues that have already passed, greyed out above the current position.
+                  </p>
+                </div>
+              </label>
+
+              {/* Show skipped cues toggle */}
+              <label className="flex items-center gap-3 px-3 py-3 bg-slate-700/50 rounded-md border border-slate-600/50 cursor-pointer select-none hover:bg-slate-700">
+                <input
+                  type="checkbox"
+                  checked={showSkippedCues}
+                  onChange={() => onSetShowSkippedCues(!showSkippedCues)}
+                  className="w-4 h-4 rounded border-slate-500 bg-slate-600 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-0 cursor-pointer"
+                />
+                <div>
+                  <span className="text-sm text-slate-200 font-medium">Show Skipped Cues</span>
+                  <p className="text-[10px] text-slate-500 mt-0.5">
+                    Show cues that fall between two linked cues. When hidden, skipped cues are removed from the cue sheet.
+                  </p>
+                </div>
+              </label>
+
+              {/* Video timecode overlay toggle */}
+              <label className="flex items-center gap-3 px-3 py-3 bg-slate-700/50 rounded-md border border-slate-600/50 cursor-pointer select-none hover:bg-slate-700">
+                <input
+                  type="checkbox"
+                  checked={showVideoTimecode}
+                  onChange={() => onSetShowVideoTimecode(!showVideoTimecode)}
+                  className="w-4 h-4 rounded border-slate-500 bg-slate-600 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-0 cursor-pointer"
+                />
+                <div>
+                  <span className="text-sm text-slate-200 font-medium">Video Timecode</span>
+                  <p className="text-[10px] text-slate-500 mt-0.5">
+                    Show a timecode overlay on the video. Drag it to reposition.
+                  </p>
+                </div>
+              </label>
+            </div>
+          )}
+
+          {activeTab === 'templates' && (
+            <div className="space-y-5">
+              <p className="text-xs text-slate-400">
+                Manage saved templates for Cue Types, Columns, and XLSX Export configurations.
+                You can rename, delete, export, and import templates here.
+              </p>
+
+              {/* Import / Export All bar */}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await exportAllTemplatesToJSON();
+                  }}
+                  disabled={savedTemplates.length === 0}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-slate-700 text-slate-300 rounded-md hover:bg-slate-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <FileDown className="w-3.5 h-3.5" />
+                  Export All Templates
+                </button>
+                <button
+                  type="button"
+                  onClick={() => templateImportRef.current?.click()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-slate-700 text-slate-300 rounded-md hover:bg-slate-600 transition-colors"
+                >
+                  <FileUp className="w-3.5 h-3.5" />
+                  Import Templates
+                </button>
+                <input
+                  ref={templateImportRef}
+                  type="file"
+                  accept=".json"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    try {
+                      const result = await importTemplatesFromJSON(file);
+                      refreshTemplates();
+                      alert(`Imported ${result.imported} template(s)${result.skipped ? `, skipped ${result.skipped}` : ''}.`);
+                    } catch {
+                      alert('Failed to import templates. Please check the JSON file.');
+                    }
+                    if (templateImportRef.current) templateImportRef.current.value = '';
+                  }}
+                  className="hidden"
+                />
+              </div>
+
+              {/* Template categories */}
+              {(['cueTypes', 'columns', 'xlsxExport'] as const).map((category) => {
+                const categoryLabels: Record<string, string> = {
+                  cueTypes: 'Cue Types',
+                  columns: 'Columns',
+                  xlsxExport: 'XLSX Export',
+                };
+                const categoryTemplates = savedTemplates.filter((t) => t.category === category);
+
+                return (
+                  <div key={category} className="p-4 bg-slate-700/30 border border-slate-600/50 rounded-lg space-y-2">
+                    <h3 className="text-sm font-medium text-slate-200">{categoryLabels[category]} Templates</h3>
+                    {categoryTemplates.length === 0 ? (
+                      <p className="text-[11px] text-slate-500 italic">No templates saved.</p>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {categoryTemplates.map((tpl) => {
+                          const isEditingThis = editingTemplateId === tpl.id;
+                          const isDeletingThis = deletingTemplateId === tpl.id;
+
+                          return (
+                            <div
+                              key={tpl.id}
+                              className="flex items-center gap-2 px-3 py-2 bg-slate-800/50 border border-slate-600/40 rounded-md"
+                            >
+                              {isEditingThis ? (
+                                <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                                  <input
+                                    type="text"
+                                    value={editingTemplateName}
+                                    onChange={(e) => setEditingTemplateName(e.target.value)}
+                                    onKeyDown={async (e) => {
+                                      if (e.key === 'Enter') {
+                                        await renameConfigTemplate(tpl.id, editingTemplateName);
+                                        await refreshTemplates();
+                                        setEditingTemplateId(null);
+                                      }
+                                      if (e.key === 'Escape') setEditingTemplateId(null);
+                                    }}
+                                    autoFocus
+                                    className="flex-1 bg-slate-600 text-slate-200 rounded px-2 py-1 text-xs border border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      await renameConfigTemplate(tpl.id, editingTemplateName);
+                                      await refreshTemplates();
+                                      setEditingTemplateId(null);
+                                    }}
+                                    className="p-1 text-emerald-400 hover:text-emerald-300 rounded"
+                                  >
+                                    <Check className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingTemplateId(null)}
+                                    className="p-1 text-slate-500 hover:text-slate-300 rounded"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs text-slate-200 truncate">{tpl.name}</p>
+                                    <p className="text-[10px] text-slate-500 truncate">
+                                      Updated {relativeTimeAgo(tpl.updatedAt)}
+                                    </p>
+                                  </div>
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    <button
+                                      type="button"
+                                      onClick={() => { setEditingTemplateId(tpl.id); setEditingTemplateName(tpl.name); }}
+                                      className="p-1 text-slate-500 hover:text-slate-300 hover:bg-slate-600 rounded transition-colors"
+                                      title="Rename"
+                                    >
+                                      <Pencil className="w-3 h-3" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => exportTemplateToJSON(tpl)}
+                                      className="p-1 text-slate-500 hover:text-slate-300 hover:bg-slate-600 rounded transition-colors"
+                                      title="Export as JSON"
+                                    >
+                                      <Download className="w-3 h-3" />
+                                    </button>
+                                    {isDeletingThis ? (
+                                      <div className="flex items-center gap-1 bg-red-900/30 border border-red-700/50 rounded px-2 py-1">
+                                        <AlertTriangle className="w-3 h-3 text-red-400" />
+                                        <span className="text-[10px] text-red-300">Delete?</span>
+                                        <button
+                                          type="button"
+                                          onClick={async () => {
+                                            await deleteConfigTemplate(tpl.id);
+                                            await refreshTemplates();
+                                            setDeletingTemplateId(null);
+                                          }}
+                                          className="text-[10px] text-red-400 hover:text-red-300 font-medium px-1"
+                                        >
+                                          Yes
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => setDeletingTemplateId(null)}
+                                          className="text-[10px] text-slate-400 hover:text-slate-300 px-1"
+                                        >
+                                          No
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => setDeletingTemplateId(tpl.id)}
+                                        className="p-1 text-slate-500 hover:text-red-400 hover:bg-slate-600 rounded transition-colors"
+                                        title="Delete template"
+                                      >
+                                        <Trash2 className="w-3 h-3" />
+                                      </button>
+                                    )}
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
 
@@ -728,8 +1365,8 @@ export function ConfigurationModal({
                                 <div className="flex items-center gap-1.5 shrink-0">
                                   <button
                                     type="button"
-                                    onClick={() => {
-                                      const payload = getBackupPayload(effectiveSelectedKey, snapshot.slot);
+                                    onClick={async () => {
+                                      const payload = await getBackupPayload(effectiveSelectedKey, snapshot.slot);
                                       if (!payload) return;
                                       try {
                                         const parsed = JSON.parse(payload);
@@ -750,13 +1387,13 @@ export function ConfigurationModal({
                                   </button>
                                   <button
                                     type="button"
-                                    onClick={() => {
+                                    onClick={async () => {
                                       if (
                                         confirm(
                                           `Restore cues from backup at ${new Date(snapshot.savedAt).toLocaleString()}?\n\nThis will replace the saved cues for "${selectedDisplayName}".`,
                                         )
                                       ) {
-                                        if (restoreBackup(effectiveSelectedKey, snapshot.slot)) {
+                                        if (await restoreBackup(effectiveSelectedKey, snapshot.slot)) {
                                           // If restoring the currently loaded video, reload it in the app
                                           if (
                                             currentVideoName === selectedVideoInfo.fileName &&
@@ -781,13 +1418,13 @@ export function ConfigurationModal({
                         {/* Delete all backups for this video */}
                         <button
                           type="button"
-                          onClick={() => {
+                          onClick={async () => {
                             if (
                               confirm(
                                 `⚠️ Delete all backups for "${selectedDisplayName}"?\n\nThis will permanently remove all backup snapshots for this video file. The video will no longer appear in this dropdown until new cues are created for it.\n\nThis cannot be undone.`,
                               )
                             ) {
-                              deleteVideoBackups(selectedVideoInfo.fileName, selectedVideoInfo.fileSize);
+                              await deleteVideoBackups(selectedVideoInfo.fileName, selectedVideoInfo.fileSize);
                               setSelectedVideoKey('');
                               setRecoveryTick((prev) => prev + 1);
                             }
@@ -829,14 +1466,14 @@ export function ConfigurationModal({
                         </div>
                         <button
                           type="button"
-                          onClick={() => {
+                          onClick={async () => {
                             if (
                               confirm(
                                 `Restore configuration from backup at ${new Date(snapshot.savedAt).toLocaleString()}?`,
                               )
                             ) {
                               const key = getConfigStorageKey();
-                              if (restoreBackup(key, snapshot.slot)) {
+                              if (await restoreBackup(key, snapshot.slot)) {
                                 onRecoverConfig();
                                 setRecoveryTick((prev) => prev + 1);
                               }

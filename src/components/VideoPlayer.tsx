@@ -11,21 +11,30 @@ import {
   Loader2,
 } from 'lucide-react';
 import { formatTime } from '../utils/formatTime';
-import type { VideoPlayerState, VideoPlayerActions } from '../hooks/useVideoPlayer';
+import type { VideoPlayerState, VideoPlayerActions, LoopRegion } from '../hooks/useVideoPlayer';
 
 interface VideoPlayerProps {
   src: string;
   state: VideoPlayerState;
   actions: VideoPlayerActions;
   onVideoError: () => void;
+  loopRegion?: LoopRegion | null;
+  showVideoTimecode?: boolean;
+  videoTimecodePosition?: { x: number; y: number };
+  onVideoTimecodePositionChange?: (pos: { x: number; y: number }) => void;
 }
 
 const SPEEDS = [1, 1.5, 2, 4, 8];
 
 export const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
-  ({ src, state, actions, onVideoError }, ref) => {
+  ({ src, state, actions, onVideoError, loopRegion, showVideoTimecode, videoTimecodePosition, onVideoTimecodePositionChange }, ref) => {
     const progressRef = useRef<HTMLDivElement>(null);
+    const videoContainerRef = useRef<HTMLDivElement>(null);
     const [isDragging, setIsDragging] = useState(false);
+
+    // ── Timecode overlay drag state ──
+    const [isOverlayDragging, setIsOverlayDragging] = useState(false);
+    const overlayDragStart = useRef<{ mouseX: number; mouseY: number; startX: number; startY: number } | null>(null);
 
     const seekToPosition = useCallback(
       (clientX: number) => {
@@ -64,6 +73,40 @@ export const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
       };
     }, [isDragging, seekToPosition]);
 
+    // ── Timecode overlay drag handling ──
+    const handleOverlayMouseDown = useCallback((e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const pos = videoTimecodePosition ?? { x: 2, y: 4 };
+      setIsOverlayDragging(true);
+      overlayDragStart.current = { mouseX: e.clientX, mouseY: e.clientY, startX: pos.x, startY: pos.y };
+    }, [videoTimecodePosition]);
+
+    useEffect(() => {
+      if (!isOverlayDragging) return;
+      const handleMouseMove = (e: MouseEvent) => {
+        e.preventDefault();
+        const container = videoContainerRef.current;
+        if (!container || !overlayDragStart.current) return;
+        const rect = container.getBoundingClientRect();
+        const dx = ((e.clientX - overlayDragStart.current.mouseX) / rect.width) * 100;
+        const dy = ((e.clientY - overlayDragStart.current.mouseY) / rect.height) * 100;
+        const newX = Math.max(0, Math.min(90, overlayDragStart.current.startX + dx));
+        const newY = Math.max(0, Math.min(90, overlayDragStart.current.startY + dy));
+        onVideoTimecodePositionChange?.({ x: newX, y: newY });
+      };
+      const handleMouseUp = () => {
+        setIsOverlayDragging(false);
+        overlayDragStart.current = null;
+      };
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+    }, [isOverlayDragging, onVideoTimecodePositionChange]);
+
     const handleVolumeChange = useCallback(
       (e: React.ChangeEvent<HTMLInputElement>) => {
         actions.setVolume(parseFloat(e.target.value));
@@ -72,7 +115,7 @@ export const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
     );
 
     return (
-      <div className="flex flex-col bg-black rounded-lg overflow-hidden">
+      <div className="flex flex-col bg-black rounded-lg overflow-hidden shrink min-h-0">
         {/* Loading progress bar */}
         {!state.isReady && state.loadProgress > 0 && (
           <div className="h-1 bg-slate-800 w-full">
@@ -84,15 +127,32 @@ export const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
         )}
 
         {/* Video element */}
-        <div className="relative cursor-pointer" onClick={actions.togglePlay}>
+        <div ref={videoContainerRef} className="relative cursor-pointer" onClick={actions.togglePlay}>
           <video
             ref={ref}
             src={src}
-            className="w-full aspect-video bg-black max-h-[60vh] lg:max-h-[calc(100vh-9rem)] object-contain"
+            className="w-full bg-black max-h-[50vh] lg:max-h-[calc(100vh-16rem)] object-contain"
             onError={onVideoError}
             playsInline
             preload="auto"
           />
+
+          {/* Timecode overlay */}
+          {showVideoTimecode && (
+            <div
+              className={`absolute select-none font-mono text-white bg-black/60 backdrop-blur-sm px-2.5 py-1 rounded text-sm leading-none shadow-lg border border-white/10 ${isOverlayDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+              style={{
+                left: `${videoTimecodePosition?.x ?? 2}%`,
+                top: `${videoTimecodePosition?.y ?? 4}%`,
+                zIndex: 20,
+              }}
+              onMouseDown={handleOverlayMouseDown}
+              onClick={(e) => e.stopPropagation()}
+              title="Drag to reposition"
+            >
+              {formatTime(state.currentTime)}
+            </div>
+          )}
 
           {/* Loading spinner overlay */}
           {state.isLoading && (
@@ -130,6 +190,17 @@ export const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
               className="absolute top-0 left-0 h-full bg-slate-600 rounded-full"
               style={{ width: `${state.duration ? (state.buffered / state.duration) * 100 : 0}%` }}
             />
+            {/* Loop region overlay */}
+            {loopRegion && state.duration > 0 && (
+              <div
+                className="absolute top-0 h-full bg-amber-500/30 border-x border-amber-400/60"
+                style={{
+                  left: `${(loopRegion.toTime / state.duration) * 100}%`,
+                  width: `${((loopRegion.fromTime - loopRegion.toTime) / state.duration) * 100}%`,
+                }}
+                title={`Loop: ${formatTime(loopRegion.toTime)} → ${formatTime(loopRegion.fromTime)}`}
+              />
+            )}
             {/* Progress */}
             <div
               className="absolute top-0 left-0 h-full bg-indigo-500 rounded-full transition-[width] duration-75"

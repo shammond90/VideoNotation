@@ -4,15 +4,18 @@ import { VideoPlayer } from './components/VideoPlayer';
 import { CueForm } from './components/CueForm';
 import { AnnotationPanel } from './components/AnnotationPanel';
 import { ConfigurationModal } from './components/ConfigurationModal';
+import { ExportDialog } from './components/ExportDialog';
+import { ExportTemplateBuilder } from './components/ExportTemplateBuilder';
 import { ToastContainer } from './components/ToastContainer';
 import { useVideoPlayer } from './hooks/useVideoPlayer';
 import { useAnnotations } from './hooks/useAnnotations';
 import { useConfiguration } from './hooks/useConfiguration';
 import { useToast } from './hooks/useToast';
 import { exportAnnotationsToCSV, importAnnotationsFromCSV } from './utils/csv';
-import { saveAnnotations, loadAnnotations, backupAnnotations, popRecoveryEvents } from './utils/storage';
+import { formatTime } from './utils/formatTime';
+import { saveAnnotations, loadAnnotations, backupAnnotations, popRecoveryEvents, migrateNoVideoAnnotations, hasAnnotationData } from './utils/storage';
 import type { CueFields } from './types';
-import { RESERVED_CUE_TYPES } from './types';
+import { RESERVED_CUE_TYPES, LOOP_CUE_TYPE } from './types';
 import { Film, Settings, X as XIcon } from 'lucide-react';
 
 export default function App() {
@@ -25,6 +28,9 @@ export default function App() {
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   // "Change video" modal state
   const [isChangeVideoOpen, setIsChangeVideoOpen] = useState(false);
+  // Export dialog / XLSX builder state
+  const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
+  const [isXlsxBuilderOpen, setIsXlsxBuilderOpen] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -33,18 +39,26 @@ export default function App() {
   const previousUrlRef = useRef<string>('');
   const cuesDirtyRef = useRef(false);
   const isConfigOpenRef = useRef(false);
+  const loopRegionRef = useRef<import('./hooks/useVideoPlayer').LoopRegion | null>(null);
 
-  const { state: playerState, actions: playerActions } = useVideoPlayer(videoRef, containerRef, videoSrc);
+  const { state: playerState, actions: playerActions } = useVideoPlayer(videoRef, containerRef, videoSrc, loopRegionRef);
   const {
     config,
+    configLoaded,
     setCueTypes,
     addCueType,
     removeCueType,
     renameCueType,
     setCueTypeColor,
+    setCueTypeShortCode,
+    setShowShortCodes,
+    setExpandedSearchFilter,
+    setShowPastCues,
+    setShowSkippedCues,
     setDistanceView,
-    setCueTypeAllowStandby,
-    setCueTypeAllowWarning,
+    setShowVideoTimecode,
+    setVideoTimecodePosition,
+    setCueTypeFields,
     toggleColumnVisibility,
     reorderColumns,
     addCueTypeColumns,
@@ -57,11 +71,15 @@ export default function App() {
     clearAllData,
     clearCurrentVideoCues,
     clearAllCues,
+    applyCueTypesTemplate,
+    applyColumnsTemplate,
   } = useConfiguration();
 
   const {
     annotations,
     activeId,
+    skippedIds,
+    loopAnnotation,
     addAnnotation,
     updateAnnotation,
     deleteAnnotation,
@@ -71,6 +89,18 @@ export default function App() {
   } = useAnnotations(annotationScope.fileName, annotationScope.fileSize, playerState.duration);
   const annotationsRef = useRef(annotations);
   const { toasts, addToast, removeToast } = useToast();
+
+  // Compute and keep loop region ref in sync for the video player animation frame
+  const loopRegion = useMemo(() => {
+    if (!loopAnnotation) return null;
+    const targetTs = parseFloat(loopAnnotation.cue.loopTargetTimestamp);
+    if (isNaN(targetTs)) return null;
+    return { fromTime: loopAnnotation.timestamp, toTime: targetTs };
+  }, [loopAnnotation]);
+
+  useEffect(() => {
+    loopRegionRef.current = loopRegion;
+  }, [loopRegion]);
 
   useEffect(() => {
     const events = popRecoveryEvents();
@@ -216,42 +246,18 @@ export default function App() {
       setIsAnnotating(false);
       setIsNoVideoMode(false);
 
-      // Check for no-video annotations to preserve
-      const noVideoKey = `annotations:no-video:0`;
-      const noVideoSaved = localStorage.getItem(noVideoKey);
-      let hasNoVideoAnnotations = false;
-      
-      if (noVideoSaved) {
-        try {
-          const parsed = JSON.parse(noVideoSaved);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            hasNoVideoAnnotations = true;
-            // Migrate no-video annotations to this video
-            const newKey = `annotations:${file.name}:${file.size}`;
-            localStorage.setItem(newKey, JSON.stringify(parsed));
-            localStorage.removeItem(noVideoKey);
-            addToast(`Migrated ${parsed.length} annotation${parsed.length !== 1 ? 's' : ''} to this video`, 'info');
-          }
-        } catch {
-          // ignore
-        }
-      }
-
-      // If no no-video annotations, check for existing annotations on this video
-      if (!hasNoVideoAnnotations) {
-        const key = `annotations:${file.name}:${file.size}`;
-        const saved = localStorage.getItem(key);
-        if (saved) {
-          try {
-            const parsed = JSON.parse(saved);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              addToast(`Restored ${parsed.length} annotation${parsed.length !== 1 ? 's' : ''} from previous session`, 'info');
-            }
-          } catch {
-            // ignore
+      // Check for no-video annotations to migrate, or existing annotations on this video
+      (async () => {
+        const migrated = await migrateNoVideoAnnotations(file.name, file.size);
+        if (migrated > 0) {
+          addToast(`Migrated ${migrated} annotation${migrated !== 1 ? 's' : ''} to this video`, 'info');
+        } else {
+          const { exists, count } = await hasAnnotationData(file.name, file.size);
+          if (exists) {
+            addToast(`Restored ${count} annotation${count !== 1 ? 's' : ''} from previous session`, 'info');
           }
         }
-      }
+      })();
     },
     [addToast],
   );
@@ -320,8 +326,23 @@ export default function App() {
 
   // Save cue — close form and resume playback
   const handleSaveCue = useCallback(
-    (cue: CueFields) => {
-      addAnnotation(annotateTimestamp, cue);
+    (cue: CueFields, overrideTimestamp?: number) => {
+      addAnnotation(typeof overrideTimestamp === 'number' ? overrideTimestamp : annotateTimestamp, cue);
+
+      // When saving a LOOP FROM, also create the LOOP TO at the target timestamp
+      if (cue.type === LOOP_CUE_TYPE && cue.loopTargetTimestamp) {
+        const targetTs = parseFloat(cue.loopTargetTimestamp);
+        if (!isNaN(targetTs)) {
+          const loopToCue: CueFields = {
+            ...cue,
+            cueNumber: 'LOOP TO',
+            duration: '',
+            what: `← ${formatTime(typeof overrideTimestamp === 'number' ? overrideTimestamp : annotateTimestamp)}`,
+          };
+          addAnnotation(targetTs, loopToCue);
+        }
+      }
+
       setIsAnnotating(false);
       addToast('Cue saved', 'success');
       // Resume playback after saving
@@ -353,12 +374,24 @@ export default function App() {
     [playerActions],
   );
 
-  // Export
+  // Export — open the format chooser dialog
   const handleExport = useCallback(() => {
     if (annotations.length === 0) return;
+    setIsExportDialogOpen(true);
+  }, [annotations.length]);
+
+  // Direct CSV export
+  const handleExportCSV = useCallback(() => {
+    if (annotations.length === 0) return;
     exportAnnotationsToCSV(annotations, videoFile?.name ?? 'video');
-    addToast(`Exported ${annotations.length} annotations`, 'success');
+    addToast(`Exported ${annotations.length} cues to CSV`, 'success');
   }, [annotations, videoFile, addToast]);
+
+  // Open XLSX template builder (closes the export dialog)
+  const handleExportXLSX = useCallback(() => {
+    setIsExportDialogOpen(false);
+    setIsXlsxBuilderOpen(true);
+  }, []);
 
   // Import
   const handleImport = useCallback(() => {
@@ -483,8 +516,17 @@ export default function App() {
     };
   }, []);
 
+  // Gate on config loaded from IndexedDB
+  if (!configLoaded) {
+    return (
+      <div className="h-screen bg-slate-900 flex items-center justify-center">
+        <div className="text-slate-400 text-sm">Loading...</div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-200 flex flex-col">
+    <div className="h-screen bg-slate-900 text-slate-200 flex flex-col overflow-hidden">
       {/* Header */}
       <header className="flex items-center justify-between px-6 py-3 bg-slate-800/80 border-b border-slate-700 shrink-0">
         <div className="flex items-center gap-2.5">
@@ -537,7 +579,7 @@ export default function App() {
           />
         </main>
       ) : (
-        <main className="flex-1 flex flex-col lg:flex-row gap-4 p-4 overflow-auto">
+        <main className="flex-1 flex flex-col lg:flex-row gap-4 p-4 min-h-0 overflow-hidden">
           {/* Left: Video + cue form */}
           <div ref={containerRef} className="flex-[2] flex flex-col min-w-0 min-h-0">
             {!isNoVideoMode ? (
@@ -547,6 +589,10 @@ export default function App() {
                 state={playerState}
                 actions={playerActions}
                 onVideoError={handleVideoError}
+                loopRegion={loopRegion}
+                showVideoTimecode={config.showVideoTimecode}
+                videoTimecodePosition={config.videoTimecodePosition}
+                onVideoTimecodePositionChange={setVideoTimecodePosition}
               />
             ) : (
               <div className="w-full bg-black rounded-lg overflow-hidden flex flex-col items-center justify-center min-h-[300px] border border-slate-700">
@@ -581,9 +627,8 @@ export default function App() {
                   mode="create"
                   timestamp={annotateTimestamp}
                   allAnnotations={annotations}
-                  cueTypes={config.cueTypes}
-                  cueTypeAllowStandby={config.cueTypeAllowStandby}
-                  cueTypeAllowWarning={config.cueTypeAllowWarning}
+                  cueTypes={loopAnnotation ? config.cueTypes : [...config.cueTypes, LOOP_CUE_TYPE]}
+                  cueTypeFields={config.cueTypeFields}
                   onSave={handleSaveCue}
                   onCancel={handleCancelNote}
                   saveRef={cueFormSaveRef}
@@ -696,16 +741,23 @@ export default function App() {
             )}
           </div>
 
-          {/* Right: Cue Sheet panel */}
-          <div className="flex-1 min-w-[300px] max-w-md lg:max-w-sm xl:max-w-md overflow-auto">
+          {/* Right: Cue Sheet panel — constrained height so it scrolls independently */}
+          <div className="flex-1 min-w-[300px] max-w-md lg:max-w-sm xl:max-w-md h-[calc(100vh-5rem)] overflow-hidden">
             <AnnotationPanel
               annotations={annotations}
               activeId={activeId}
+              skippedIds={skippedIds}
+              showSkippedCues={config.showSkippedCues}
               currentTime={playerState.currentTime}
+              isPlaying={playerState.isPlaying}
               cueTypeColors={config.cueTypeColors}
+              cueTypeShortCodes={config.cueTypeShortCodes}
+              showShortCodes={config.showShortCodes}
+              expandedSearchFilter={config.expandedSearchFilter}
+              onSetExpandedSearchFilter={setExpandedSearchFilter}
+              showPastCues={config.showPastCues}
               distanceView={config.distanceView}
-              cueTypeAllowStandby={config.cueTypeAllowStandby}
-              cueTypeAllowWarning={config.cueTypeAllowWarning}
+              cueTypeFields={config.cueTypeFields}
               onSeek={handleSeek}
               onEdit={updateAnnotation}
               onDelete={deleteAnnotation}
@@ -782,23 +834,31 @@ export default function App() {
         }}
         cueTypes={config.cueTypes}
         cueTypeColors={config.cueTypeColors}
-        cueTypeAllowStandby={config.cueTypeAllowStandby}
-        cueTypeAllowWarning={config.cueTypeAllowWarning}
+        cueTypeShortCodes={config.cueTypeShortCodes}
+        cueTypeFields={config.cueTypeFields}
         visibleColumns={config.visibleColumns}
         cueTypeColumns={config.cueTypeColumns}
         usedCueTypes={usedCueTypes}
+        showShortCodes={config.showShortCodes}
+        showPastCues={config.showPastCues}
+        onSetShowPastCues={setShowPastCues}
+        showSkippedCues={config.showSkippedCues}
+        onSetShowSkippedCues={setShowSkippedCues}
         distanceView={config.distanceView}
+        showVideoTimecode={config.showVideoTimecode}
+        onSetDistanceView={setDistanceView}
+        onSetShowVideoTimecode={setShowVideoTimecode}
         currentVideoName={videoFile?.name}
         currentVideoSize={videoFile?.size}
         cueBackupIntervalMinutes={config.cueBackupIntervalMinutes}
         onSetCueBackupInterval={setCueBackupInterval}
-        onSetDistanceView={setDistanceView}
         onAddCueType={addCueType}
         onRemoveCueType={removeCueType}
         onRenameCueType={handleRenameCueType}
         onSetCueTypeColor={setCueTypeColor}
-        onSetCueTypeAllowStandby={setCueTypeAllowStandby}
-        onSetCueTypeAllowWarning={setCueTypeAllowWarning}
+        onSetCueTypeShortCode={setCueTypeShortCode}
+        onSetShowShortCodes={setShowShortCodes}
+        onSetCueTypeFields={setCueTypeFields}
         onToggleColumn={toggleColumnVisibility}
         onReorderColumns={reorderColumns}
         onAddCueTypeColumns={addCueTypeColumns}
@@ -810,6 +870,29 @@ export default function App() {
         onClearAllData={handleClearAllData}
         onClearCurrentVideoCues={handleClearCurrentVideoCues}
         onClearAllCues={handleClearAllCues}
+        onApplyCueTypesTemplate={(data) => applyCueTypesTemplate(data, usedCueTypes)}
+        onApplyColumnsTemplate={applyColumnsTemplate}
+      />
+
+      {/* Export Dialog — CSV vs XLSX chooser */}
+      <ExportDialog
+        isOpen={isExportDialogOpen}
+        onClose={() => setIsExportDialogOpen(false)}
+        onExportCSV={handleExportCSV}
+        onExportXLSX={handleExportXLSX}
+        annotationCount={annotations.length}
+      />
+
+      {/* XLSX Template Builder */}
+      <ExportTemplateBuilder
+        isOpen={isXlsxBuilderOpen}
+        onClose={() => setIsXlsxBuilderOpen(false)}
+        annotations={annotations}
+        cueTypes={config.cueTypes}
+        cueTypeColors={config.cueTypeColors}
+        cueTypeShortCodes={config.cueTypeShortCodes}
+        skippedIds={skippedIds}
+        videoName={videoFile?.name ?? 'video'}
       />
 
       {/* Hidden import input */}

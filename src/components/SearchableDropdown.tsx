@@ -7,6 +7,8 @@ interface SearchableDropdownProps {
   placeholder?: string;
   className?: string;
   autoFocus?: boolean;
+  /** 'contains' (default) matches anywhere; 'prefix' matches from the start */
+  filterMode?: 'contains' | 'prefix';
 }
 
 export function SearchableDropdown({
@@ -16,6 +18,7 @@ export function SearchableDropdown({
   placeholder = 'Select...',
   className = '',
   autoFocus = false,
+  filterMode = 'contains',
 }: SearchableDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchText, setSearchText] = useState('');
@@ -25,7 +28,9 @@ export function SearchableDropdown({
   const containerRef = useRef<HTMLDivElement>(null);
 
   const filtered = options.filter((opt) =>
-    opt.toLowerCase().includes(searchText.toLowerCase()),
+    filterMode === 'prefix'
+      ? opt.toLowerCase().startsWith(searchText.toLowerCase())
+      : opt.toLowerCase().includes(searchText.toLowerCase()),
   );
 
   // Close on click outside

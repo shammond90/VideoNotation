@@ -1,6 +1,12 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { FRAME_DURATION } from '../utils/formatTime';
 
+/** Region on the timeline where the loop lives: from = trigger, to = jump destination. */
+export interface LoopRegion {
+  fromTime: number;  // The later timestamp — when playback crosses this, jump back
+  toTime: number;    // The earlier timestamp — the jump destination
+}
+
 export interface VideoPlayerState {
   isPlaying: boolean;
   currentTime: number;
@@ -13,6 +19,7 @@ export interface VideoPlayerState {
   isLoading: boolean;
   isReady: boolean;
   loadProgress: number; // 0-100
+  loopCount: number;    // How many consecutive loops have fired without user input
 }
 
 export interface VideoPlayerActions {
@@ -25,6 +32,7 @@ export interface VideoPlayerActions {
   setSpeed: (rate: number) => void;
   stepFrame: (direction: 1 | -1) => void;
   toggleFullscreen: () => void;
+  resetLoopCount: () => void;
 }
 
 const FRAME_DUR = FRAME_DURATION; // re-alias to keep usage short
@@ -33,6 +41,7 @@ export function useVideoPlayer(
   videoRef: React.RefObject<HTMLVideoElement | null>,
   containerRef: React.RefObject<HTMLDivElement | null>,
   src: string,
+  loopRegionRef?: React.RefObject<LoopRegion | null>,
 ) {
   const [state, setState] = useState<VideoPlayerState>({
     isPlaying: false,
@@ -46,9 +55,14 @@ export function useVideoPlayer(
     isLoading: false,
     isReady: false,
     loadProgress: 0,
+    loopCount: 0,
   });
 
   const animationRef = useRef<number>(0);
+  // Loop playback refs
+  const previousTimeRef = useRef<number>(0);
+  const wasSeekedRef = useRef<boolean>(false);
+  const loopCountRef = useRef<number>(0);
 
   // Reset state when src changes
   useEffect(() => {
@@ -61,8 +75,12 @@ export function useVideoPlayer(
       isLoading: !!src,
       isReady: false,
       loadProgress: 0,
+      loopCount: 0,
     }));
     cancelAnimationFrame(animationRef.current);
+    previousTimeRef.current = 0;
+    wasSeekedRef.current = false;
+    loopCountRef.current = 0;
 
     // Force the browser to load the new source — React updates the <video>
     // src attribute, but browsers don't reliably start loading without an
@@ -73,11 +91,33 @@ export function useVideoPlayer(
     }
   }, [src, videoRef]);
 
-  // Smooth time update via requestAnimationFrame
+  // Smooth time update via requestAnimationFrame — also handles loop detection
   const updateTime = useCallback(() => {
     const video = videoRef.current;
     if (video && !video.paused) {
-      setState((prev) => ({ ...prev, currentTime: video.currentTime }));
+      const cur = video.currentTime;
+      const prev = previousTimeRef.current;
+      previousTimeRef.current = cur;
+
+      // Loop detection: did we cross the fromTime going forward?
+      const lr = loopRegionRef?.current;
+      if (lr && !wasSeekedRef.current && cur > prev && prev < lr.fromTime && cur >= lr.fromTime) {
+        loopCountRef.current++;
+        if (loopCountRef.current >= 3) {
+          // Pause after 3 consecutive loops with no user input
+          video.pause();
+          setState((p) => ({ ...p, loopCount: loopCountRef.current }));
+        } else {
+          // Jump to the loop target
+          video.currentTime = lr.toTime;
+          previousTimeRef.current = lr.toTime;
+          setState((p) => ({ ...p, currentTime: lr.toTime, loopCount: loopCountRef.current }));
+        }
+      } else {
+        setState((p) => ({ ...p, currentTime: cur }));
+      }
+
+      wasSeekedRef.current = false;
       animationRef.current = requestAnimationFrame(updateTime);
     }
   }, [videoRef]);
@@ -194,19 +234,28 @@ export function useVideoPlayer(
     };
   }, [videoRef, src, updateTime]);
 
+  /** Reset loop counter — called on any user-initiated action */
+  const resetLoop = useCallback(() => {
+    loopCountRef.current = 0;
+    setState((prev) => prev.loopCount !== 0 ? { ...prev, loopCount: 0 } : prev);
+  }, []);
+
   const play = useCallback(() => {
+    resetLoop();
     const video = videoRef.current;
     if (!video) return;
     video.play().catch((err) => {
       console.warn('Play failed:', err.message);
     });
-  }, [videoRef]);
+  }, [videoRef, resetLoop]);
 
   const pause = useCallback(() => {
+    resetLoop();
     videoRef.current?.pause();
-  }, [videoRef]);
+  }, [videoRef, resetLoop]);
 
   const togglePlay = useCallback(() => {
+    resetLoop();
     const video = videoRef.current;
     if (!video) return;
     if (video.paused) {
@@ -216,15 +265,18 @@ export function useVideoPlayer(
     } else {
       video.pause();
     }
-  }, [videoRef]);
+  }, [videoRef, resetLoop]);
 
   const seek = useCallback((time: number) => {
     const video = videoRef.current;
     if (video) {
+      wasSeekedRef.current = true;
+      resetLoop();
       video.currentTime = Math.max(0, Math.min(time, video.duration || 0));
+      previousTimeRef.current = video.currentTime;
       setState((prev) => ({ ...prev, currentTime: video.currentTime }));
     }
-  }, [videoRef]);
+  }, [videoRef, resetLoop]);
 
   const setVolume = useCallback((vol: number) => {
     const video = videoRef.current;
@@ -252,11 +304,14 @@ export function useVideoPlayer(
   const stepFrame = useCallback((direction: 1 | -1) => {
     const video = videoRef.current;
     if (video) {
+      resetLoop();
+      wasSeekedRef.current = true;
       video.pause();
       video.currentTime = Math.max(0, Math.min(video.currentTime + direction * FRAME_DUR, video.duration));
+      previousTimeRef.current = video.currentTime;
       setState((prev) => ({ ...prev, currentTime: video.currentTime }));
     }
-  }, [videoRef]);
+  }, [videoRef, resetLoop]);
 
   const toggleFullscreen = useCallback(() => {
     const container = containerRef.current;
@@ -278,6 +333,7 @@ export function useVideoPlayer(
     setSpeed,
     stepFrame,
     toggleFullscreen,
+    resetLoopCount: resetLoop,
   };
 
   return { state, actions };

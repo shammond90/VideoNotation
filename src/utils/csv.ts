@@ -1,9 +1,12 @@
 import Papa from 'papaparse';
 import { formatTime } from './formatTime';
 import type { Annotation, CueFields } from '../types';
+import { LOOP_CUE_TYPE } from '../types';
 
 export function exportAnnotationsToCSV(annotations: Annotation[], videoName: string): void {
-  const sorted = [...annotations].sort((a, b) => a.timestamp - b.timestamp);
+  const sorted = [...annotations]
+    .filter((a) => a.cue.type !== LOOP_CUE_TYPE)
+    .sort((a, b) => a.timestamp - b.timestamp);
 
   const data = sorted.map((a) => ({
     timestamp_seconds: a.timestamp.toFixed(3),
@@ -33,6 +36,9 @@ export function exportAnnotationsToCSV(annotations: Annotation[], videoName: str
     cueing_notes: a.cue.cueingNotes,
     standby_time: a.cue.standbyTime,
     warning_time: a.cue.warningTime,
+    autofollow: a.cue.autofollow,
+    follow_cue_number: a.cue.followCueNumber,
+    link_cue_number: a.cue.linkCueNumber,
     created_at: a.createdAt,
     updated_at: a.updatedAt,
   }));
@@ -88,6 +94,9 @@ export function importAnnotationsFromCSV(file: File): Promise<Annotation[]> {
               cueingNotes: row.cueing_notes || '',
               standbyTime: row.standby_time || '',
               warningTime: row.warning_time || '',
+              autofollow: row.autofollow || '',
+              followCueNumber: row.follow_cue_number || '',
+              linkCueNumber: row.link_cue_number || '',
             };
             const timeInTitle = row.time_in_title ? parseFloat(row.time_in_title) : null;
             return {
