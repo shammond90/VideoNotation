@@ -18,19 +18,53 @@ import type { CueFields } from './types';
 import { RESERVED_CUE_TYPES, LOOP_CUE_TYPE } from './types';
 import { Film, Settings, X as XIcon } from 'lucide-react';
 
-export default function App() {
-  const [videoFile, setVideoFile] = useState<File | null>(null);
+interface AppProps {
+  projectId?: string;
+  projectName?: string;
+  initialVideoFile?: File;
+  onGoHome?: () => void;
+  onSwitchProject?: () => void;
+  onVideoLoaded?: (file: File, duration: number) => void;
+  onUnsavedChangesChange?: (hasChanges: boolean) => void;
+  onSave?: () => void;
+}
+
+export default function App({
+  projectId,
+  projectName,
+  initialVideoFile,
+  onGoHome,
+  onSwitchProject,
+  onVideoLoaded,
+  onUnsavedChangesChange,
+  onSave,
+}: AppProps = {}) {
+  const [videoFile, setVideoFile] = useState<File | null>(initialVideoFile || null);
   const [videoSrc, setVideoSrc] = useState<string>('');
-  const [annotationScope, setAnnotationScope] = useState<{ fileName: string; fileSize: number }>({ fileName: '', fileSize: 0 });
+  const [annotationScope, setAnnotationScope] = useState<{ fileName: string; fileSize: number }>({
+    fileName: projectId || '',
+    fileSize: 0,
+  });
   const [isAnnotating, setIsAnnotating] = useState(false);
   const [annotateTimestamp, setAnnotateTimestamp] = useState(0);
   const [isNoVideoMode, setIsNoVideoMode] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   // "Change video" modal state
   const [isChangeVideoOpen, setIsChangeVideoOpen] = useState(false);
   // Export dialog / XLSX builder state
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
   const [isXlsxBuilderOpen, setIsXlsxBuilderOpen] = useState(false);
+
+  // ── Resizable split panel state ──
+  const PANEL_MIN_PX = 260;
+  const PANEL_MAX_RATIO = 0.65; // cue sheet never wider than 65% of viewport
+  const [panelWidthPx, setPanelWidthPx] = useState<number>(() => {
+    const saved = localStorage.getItem(`cuetation:panelWidth:${projectId ?? '__global__'}`);
+    return saved ? Number(saved) : 380;
+  });
+  const splitterDragRef = useRef<{ startX: number; startWidth: number } | null>(null);
+  const mainRef = useRef<HTMLElement>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -40,6 +74,39 @@ export default function App() {
   const cuesDirtyRef = useRef(false);
   const isConfigOpenRef = useRef(false);
   const loopRegionRef = useRef<import('./hooks/useVideoPlayer').LoopRegion | null>(null);
+
+  // ── Splitter drag effect ──
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      const drag = splitterDragRef.current;
+      if (!drag || !mainRef.current) return;
+      e.preventDefault();
+      const mainRect = mainRef.current.getBoundingClientRect();
+      const maxPx = mainRect.width * PANEL_MAX_RATIO;
+      // Moving mouse left => panel gets wider (panel is on the right)
+      const delta = drag.startX - e.clientX;
+      const newWidth = Math.max(PANEL_MIN_PX, Math.min(maxPx, drag.startWidth + delta));
+      setPanelWidthPx(newWidth);
+    };
+    const onMouseUp = () => {
+      if (splitterDragRef.current) {
+        splitterDragRef.current = null;
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      }
+    };
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+    return () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+  }, []);
+
+  // Persist panel width on change
+  useEffect(() => {
+    localStorage.setItem(`cuetation:panelWidth:${projectId ?? '__global__'}`, String(Math.round(panelWidthPx)));
+  }, [panelWidthPx, projectId]);
 
   const { state: playerState, actions: playerActions } = useVideoPlayer(videoRef, containerRef, videoSrc, loopRegionRef);
   const {
@@ -115,8 +182,10 @@ export default function App() {
       initialLoadRef.current = false;
     } else {
       cuesDirtyRef.current = true;
+      setHasUnsavedChanges(true);
+      onUnsavedChangesChange?.(true);
     }
-  }, [annotations]);
+  }, [annotations, onUnsavedChangesChange]);
 
   // Reset initialLoadRef when scope changes so initial load of a new video isn't "dirty"
   useEffect(() => {
@@ -131,6 +200,7 @@ export default function App() {
     const currentFileSize = annotationScope.fileName ? annotationScope.fileSize : 0;
     backupAnnotations(currentFileName, currentFileSize, annotationsRef.current);
     cuesDirtyRef.current = false;
+    setHasUnsavedChanges(false);
     addToast('The cues have been saved.', 'success', 3000);
   }, [annotationScope, addToast]);
 
@@ -156,12 +226,14 @@ export default function App() {
         if (isConfigOpenRef.current) saveConfigBackup();
       }
     };
-    const handleBeforeUnload = () => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (cuesDirtyRef.current) {
         const currentFileName = annotationScope.fileName || 'no-video';
         const currentFileSize = annotationScope.fileName ? annotationScope.fileSize : 0;
         backupAnnotations(currentFileName, currentFileSize, annotationsRef.current);
         cuesDirtyRef.current = false;
+        // Show browser warning for unsaved changes
+        e.preventDefault();
       }
       if (isConfigOpenRef.current) saveConfigBackup();
     };
@@ -214,9 +286,10 @@ export default function App() {
   const handleRecoverCurrentVideoCues = useCallback(() => {
     const currentFileName = annotationScope.fileName || 'no-video';
     const currentFileSize = annotationScope.fileName ? annotationScope.fileSize : 0;
-    const restored = loadAnnotations(currentFileName, currentFileSize);
-    replaceAll(restored);
-    addToast(`Restored ${restored.length} cue${restored.length !== 1 ? 's' : ''} for current video`, 'success');
+    loadAnnotations(currentFileName, currentFileSize).then((restored) => {
+      replaceAll(restored);
+      addToast(`Restored ${restored.length} cue${restored.length !== 1 ? 's' : ''} for current video`, 'success');
+    });
   }, [annotationScope, replaceAll, addToast]);
 
   const handleRecoverConfig = useCallback(() => {
@@ -242,9 +315,21 @@ export default function App() {
 
       setVideoFile(file);
       setVideoSrc(url);
-      setAnnotationScope({ fileName: file.name, fileSize: file.size });
+      // When a project is open, cues belong to the project — don't re-scope to the video
+      if (!projectId) {
+        setAnnotationScope({ fileName: file.name, fileSize: file.size });
+      }
       setIsAnnotating(false);
       setIsNoVideoMode(false);
+
+      // Notify parent (AppShell) so it can update the project's video reference
+      if (onVideoLoaded) {
+        const tempVideo = document.createElement('video');
+        tempVideo.src = url;
+        tempVideo.onloadedmetadata = () => {
+          onVideoLoaded(file, tempVideo.duration);
+        };
+      }
 
       // Check for no-video annotations to migrate, or existing annotations on this video
       (async () => {
@@ -259,7 +344,7 @@ export default function App() {
         }
       })();
     },
-    [addToast],
+    [addToast, onVideoLoaded, projectId],
   );
 
   // Handle continue without video
@@ -270,11 +355,14 @@ export default function App() {
     }
     setVideoFile(null);
     setVideoSrc('');
-    setAnnotationScope({ fileName: '', fileSize: 0 });
+    // When a project is open, cues belong to the project — don't re-scope
+    if (!projectId) {
+      setAnnotationScope({ fileName: '', fileSize: 0 });
+    }
     setIsAnnotating(false);
     setIsNoVideoMode(true);
     addToast('Ready to add annotations. Upload a video anytime.', 'info');
-  }, [addToast]);
+  }, [addToast, projectId]);
 
   // Handle video error
   const handleVideoError = useCallback(() => {
@@ -431,9 +519,24 @@ export default function App() {
     [replaceAll, addToast, setCueTypes, setCueTypeColor, config.cueTypeColors],
   );
 
+  // Ctrl+S explicit save handler
+  const handleExplicitSave = useCallback(() => {
+    if (!cuesDirtyRef.current) return; // silent no-op
+    performCueBackup();
+    onSave?.();
+    onUnsavedChangesChange?.(false);
+  }, [performCueBackup, onSave, onUnsavedChangesChange]);
+
   // Global keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+S / Cmd+S for explicit save
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        handleExplicitSave();
+        return;
+      }
+
       // Don't intercept when config modal is open
       if (isConfigOpen) return;
 
@@ -507,7 +610,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleTogglePlay, handleEnterAnnotate, playerActions, playerState.playbackRate, playerState.currentTime, addToast, isNoVideoMode, isConfigOpen, handleSeek]);
+  }, [handleTogglePlay, handleEnterAnnotate, handleExplicitSave, playerActions, playerState.playbackRate, playerState.currentTime, addToast, isNoVideoMode, isConfigOpen, handleSeek]);
 
   // Cleanup video URL on unmount
   useEffect(() => {
@@ -519,69 +622,230 @@ export default function App() {
   // Gate on config loaded from IndexedDB
   if (!configLoaded) {
     return (
-      <div className="h-screen bg-slate-900 flex items-center justify-center">
-        <div className="text-slate-400 text-sm">Loading...</div>
+      <div className="h-screen flex items-center justify-center" style={{ background: 'var(--bg)' }}>
+        <span className="font-mono text-sm tracking-widest uppercase" style={{ color: 'var(--text-dim)' }}>Loading…</span>
       </div>
     );
   }
 
   return (
-    <div className="h-screen bg-slate-900 text-slate-200 flex flex-col overflow-hidden">
+    <div className="h-screen flex flex-col overflow-hidden" style={{ background: 'var(--bg)', color: 'var(--text)' }}>
       {/* Header */}
-      <header className="flex items-center justify-between px-6 py-3 bg-slate-800/80 border-b border-slate-700 shrink-0">
-        <div className="flex items-center gap-2.5">
-          <Film className="w-5 h-5 text-indigo-400" />
-          <h1 className="text-base font-semibold tracking-tight">Video Annotation</h1>
+      <header style={{
+        height: 44,
+        background: 'var(--bg)',
+        borderBottom: '1px solid var(--border)',
+        display: 'flex',
+        alignItems: 'center',
+        padding: '0 16px',
+        gap: 0,
+        flexShrink: 0,
+      }}>
+        {/* Logo */}
+        <div className="font-display" style={{
+          fontSize: 17,
+          color: 'var(--text)',
+          letterSpacing: '-0.01em',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          paddingRight: 16,
+          borderRight: '1px solid var(--border)',
+          marginRight: 12,
+        }}>
+          Cue<em style={{ fontStyle: 'italic', color: 'var(--amber)' }}>tation</em>
         </div>
-        <div className="flex items-center gap-3">
+
+        {/* Home link */}
+        {onGoHome && (
+          <button
+            type="button"
+            onClick={onGoHome}
+            style={{
+              fontSize: 12,
+              color: 'var(--text-mid)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5,
+              cursor: 'pointer',
+              padding: '4px 8px',
+              borderRadius: 'var(--r-sm)',
+              border: 'none',
+              background: 'transparent',
+              transition: 'all 0.15s',
+              fontFamily: 'inherit',
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--text)'; (e.currentTarget as HTMLButtonElement).style.background = 'var(--bg-hover)'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-mid)'; (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
+          >
+            ← Home
+          </button>
+        )}
+
+        {/* Project */}
+        {projectName && (
+          <>
+            <div style={{ width: 1, height: 16, background: 'var(--border)', margin: '0 4px' }} />
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '4px 10px',
+              borderRadius: 'var(--r-sm)',
+            }}>
+              <div style={{
+                width: 18, height: 18,
+                background: 'var(--amber-dim)',
+                border: '1px solid rgba(191,87,0,0.3)',
+                borderRadius: 3,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Film style={{ width: 10, height: 10, color: 'var(--amber)' }} />
+              </div>
+              <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>{projectName}</span>
+              {hasUnsavedChanges && (
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--yellow)', animation: 'pulse 2s infinite', display: 'inline-block' }} title="Unsaved changes" />
+              )}
+              {onSwitchProject && (
+                <button
+                  type="button"
+                  onClick={onSwitchProject}
+                  style={{
+                    fontSize: 11,
+                    color: 'var(--text-dim)',
+                    padding: '3px 7px',
+                    border: '1px solid var(--border)',
+                    borderRadius: 'var(--r-sm)',
+                    marginLeft: 4,
+                    cursor: 'pointer',
+                    background: 'transparent',
+                    transition: 'all 0.15s',
+                    fontFamily: 'inherit',
+                  }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border-hi)'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-mid)'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border)'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-dim)'; }}
+                >
+                  Switch ▾
+                </button>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* Spacer */}
+        <div style={{ flex: 1 }} />
+
+        {/* Right side */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {/* Video filename */}
           {videoFile && (
             <>
-              <span className="text-xs text-slate-400 truncate max-w-[200px]">{videoFile.name}</span>
+              <span className="font-mono" style={{
+                fontSize: 10,
+                color: 'var(--text-dim)',
+                maxWidth: 180,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                paddingRight: 10,
+                borderRight: '1px solid var(--border)',
+                marginRight: 4,
+              }}>{videoFile.name}</span>
               <button
                 type="button"
                 onClick={() => setIsChangeVideoOpen(true)}
-                className="text-xs text-slate-500 hover:text-slate-300 px-2 py-1 rounded hover:bg-slate-700 transition-colors"
+                className="font-mono"
+                style={{
+                  fontSize: 10,
+                  color: 'var(--text-dim)',
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                  background: 'transparent',
+                  border: 'none',
+                  fontFamily: 'inherit',
+                }}
+                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-mid)'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-dim)'; }}
               >
-                Change video
+                Change
               </button>
             </>
           )}
           {isNoVideoMode && !videoFile && (
-            <>
-              <span className="text-xs text-slate-400">No video loaded</span>
-              <button
-                type="button"
-                onClick={() => setIsNoVideoMode(false)}
-                className="text-xs text-slate-500 hover:text-slate-300 px-2 py-1 rounded hover:bg-slate-700 transition-colors"
-              >
-                Upload video
-              </button>
-            </>
+            <button
+              type="button"
+              onClick={() => setIsNoVideoMode(false)}
+              className="font-mono"
+              style={{
+                fontSize: 10,
+                color: 'var(--text-dim)',
+                cursor: 'pointer',
+                textDecoration: 'underline',
+                background: 'transparent',
+                border: 'none',
+                fontFamily: 'inherit',
+              }}
+            >
+              Upload video
+            </button>
           )}
           {/* Settings button */}
           <button
             type="button"
             onClick={() => { isConfigOpenRef.current = true; setIsConfigOpen(true); }}
-            className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-700 rounded-md transition-colors"
+            style={{
+              width: 28, height: 28,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              borderRadius: 'var(--r-sm)',
+              cursor: 'pointer',
+              color: 'var(--text-mid)',
+              border: '1px solid transparent',
+              background: 'transparent',
+              transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = 'var(--bg-hover)'; b.style.borderColor = 'var(--border)'; b.style.color = 'var(--text)'; }}
+            onMouseLeave={e => { const b = e.currentTarget as HTMLButtonElement; b.style.background = 'transparent'; b.style.borderColor = 'transparent'; b.style.color = 'var(--text-mid)'; }}
             title="Configuration"
           >
-            <Settings className="w-5 h-5" />
+            <Settings className="w-4 h-4" />
+          </button>
+          {/* Export button */}
+          <button
+            type="button"
+            onClick={() => setIsExportDialogOpen(true)}
+            style={{
+              height: 28,
+              padding: '0 12px',
+              background: 'var(--amber)',
+              color: 'var(--text-inv)',
+              border: 'none',
+              borderRadius: 'var(--r-sm)',
+              fontSize: 12,
+              fontWeight: 500,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              transition: 'background 0.15s',
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--amber-hi)'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--amber)'; }}
+          >
+            ↓ Export
           </button>
         </div>
       </header>
 
       {/* Main content */}
       {!videoSrc && !isNoVideoMode ? (
-        <main className="flex-1 flex items-center justify-center p-8">
+        <main className="flex-1 flex items-center justify-center p-8" style={{ background: 'var(--bg)' }}>
           <VideoDropZone
             onFileSelected={handleFileSelected}
             onContinueWithoutVideo={handleContinueWithoutVideo}
           />
         </main>
       ) : (
-        <main className="flex-1 flex flex-col lg:flex-row gap-4 p-4 min-h-0 overflow-hidden">
+        <main ref={mainRef} className="flex-1 flex flex-col lg:flex-row gap-0 min-h-0 overflow-hidden" style={{ background: 'var(--bg)' }}>
           {/* Left: Video + cue form */}
-          <div ref={containerRef} className="flex-[2] flex flex-col min-w-0 min-h-0">
+          <div ref={containerRef} className="flex flex-col min-w-0 min-h-0" style={{ flex: '1 1 0%', borderRight: 'none', background: '#0a0a0c' }}>
             {!isNoVideoMode ? (
               <VideoPlayer
                 ref={videoRef}
@@ -595,10 +859,10 @@ export default function App() {
                 onVideoTimecodePositionChange={setVideoTimecodePosition}
               />
             ) : (
-              <div className="w-full bg-black rounded-lg overflow-hidden flex flex-col items-center justify-center min-h-[300px] border border-slate-700">
-                <div className="text-center text-slate-400">
-                  <p className="text-sm font-medium mb-2">No video loaded</p>
-                  <p className="text-xs text-slate-500">Annotations will default to 0:00</p>
+              <div className="w-full flex flex-col items-center justify-center min-h-[300px]" style={{ background: 'linear-gradient(135deg, #0f0f12 0%, #141418 100%)' }}>
+                <div className="text-center">
+                  <p className="font-mono text-sm" style={{ color: 'var(--text-dim)', letterSpacing: '0.05em' }}>NO VIDEO LOADED</p>
+                  <p className="font-mono text-xs mt-1" style={{ color: 'var(--text-dim)' }}>Cues will default to 0:00</p>
                 </div>
               </div>
             )}
@@ -609,18 +873,20 @@ export default function App() {
                   <button
                     type="button"
                     onClick={handleCancelNote}
-                    className="flex items-center justify-center gap-1.5 flex-1 px-3 py-2 bg-slate-800 text-slate-300 rounded-lg border border-slate-700 hover:bg-slate-700 transition-colors text-sm"
+                    className="flex items-center justify-center gap-1.5 flex-1 px-3 py-2 rounded-lg transition-colors text-sm"
+                    style={{ background: 'var(--bg-panel)', color: 'var(--text-mid)', border: '1px solid var(--border)' }}
                   >
-                    <kbd className="inline-flex items-center justify-center w-7 h-7 text-[11px] font-mono font-bold bg-slate-700 text-slate-400 rounded border border-slate-600">Esc</kbd>
-                    <span className="text-xs text-slate-400">Cancel</span>
+                    <kbd className="inline-flex items-center justify-center w-7 h-7 text-[11px] font-mono font-bold rounded" style={{ background: 'var(--bg-input)', color: 'var(--text-dim)', border: '1px solid var(--border-hi)' }}>Esc</kbd>
+                    <span className="text-xs">Cancel</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => cueFormSaveRef.current?.()}
-                    className="flex items-center justify-center gap-1.5 flex-1 px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 transition-colors text-sm"
+                    className="flex items-center justify-center gap-1.5 flex-1 px-3 py-2 rounded-lg transition-colors text-sm"
+                    style={{ background: 'var(--amber)', color: 'var(--text-inv)', border: 'none' }}
                   >
-                    <kbd className="inline-flex items-center justify-center w-7 h-7 text-[11px] font-mono font-bold bg-indigo-700 text-indigo-200 rounded border border-indigo-500">C-↵</kbd>
-                    <span className="text-xs">Save Cue</span>
+                    <kbd className="inline-flex items-center justify-center w-7 h-7 text-[11px] font-mono font-bold rounded" style={{ background: 'rgba(0,0,0,0.2)', color: 'var(--text-inv)', border: '1px solid rgba(0,0,0,0.3)' }}>C-↵</kbd>
+                    <span className="text-xs font-medium">Save Cue</span>
                   </button>
                 </div>
                 <CueForm
@@ -637,60 +903,78 @@ export default function App() {
             )}
             {/* Clickable keyboard hints */}
             {!isAnnotating && videoSrc && (
-              <div className="mt-2 flex flex-wrap items-center gap-2 px-1">
+              <div className="flex flex-wrap items-center gap-1 px-3 py-2" style={{ borderTop: '1px solid var(--border)', background: 'var(--bg-raised)' }}>
                 <button
                   type="button"
                   onClick={handleTogglePlay}
-                  className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-md hover:bg-slate-700 active:bg-slate-600 transition-colors"
+                  className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-md transition-colors"
+                  style={{ color: 'var(--text-mid)' }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = '')}
                   title="Play / Pause"
                 >
-                  <kbd className="inline-flex items-center justify-center w-7 h-7 text-[11px] font-mono font-bold bg-slate-700 text-slate-400 rounded border border-slate-600">␣</kbd>
-                  <span className="text-xs text-slate-500">{playerState.isPlaying ? 'Pause' : 'Play'}</span>
+                  <kbd className="inline-flex items-center justify-center w-7 h-7 text-[11px] font-mono font-bold rounded" style={{ background: 'var(--bg-panel)', color: 'var(--text-mid)', border: '1px solid var(--border-hi)' }}>␣</kbd>
+                  <span className="text-xs" style={{ color: 'var(--text-dim)' }}>{playerState.isPlaying ? 'Pause' : 'Play'}</span>
                 </button>
                 <button
                   type="button"
                   onClick={handleEnterAnnotate}
-                  className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-md bg-indigo-600/20 hover:bg-indigo-600/40 active:bg-indigo-600/60 transition-colors"
+                  className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-md transition-colors"
+                  style={{ background: 'rgba(191,87,0,0.12)', color: 'var(--amber)' }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'rgba(191,87,0,0.22)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'rgba(191,87,0,0.12)')}
                   title="New Cue"
                 >
-                  <kbd className="inline-flex items-center justify-center w-7 h-7 text-[11px] font-mono font-bold bg-indigo-700 text-indigo-200 rounded border border-indigo-500">↵</kbd>
-                  <span className="text-xs text-indigo-300">Cue</span>
+                  <kbd className="inline-flex items-center justify-center w-7 h-7 text-[11px] font-mono font-bold rounded" style={{ background: 'rgba(191,87,0,0.25)', color: 'var(--amber)', border: '1px solid rgba(191,87,0,0.5)' }}>↵</kbd>
+                  <span className="text-xs font-medium" style={{ color: 'var(--amber)' }}>Cue</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => handleSeek(playerState.currentTime - 5)}
-                  className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-md hover:bg-slate-700 active:bg-slate-600 transition-colors"
+                  className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-md transition-colors"
+                  style={{ color: 'var(--text-mid)' }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = '')}
                   title="Back 5s"
                 >
-                  <kbd className="inline-flex items-center justify-center w-7 h-7 text-[11px] font-mono font-bold bg-slate-700 text-slate-400 rounded border border-slate-600">←</kbd>
-                  <span className="text-xs text-slate-500">−5s</span>
+                  <kbd className="inline-flex items-center justify-center w-7 h-7 text-[11px] font-mono font-bold rounded" style={{ background: 'var(--bg-panel)', color: 'var(--text-mid)', border: '1px solid var(--border-hi)' }}>←</kbd>
+                  <span className="text-xs" style={{ color: 'var(--text-dim)' }}>−5s</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => handleSeek(playerState.currentTime + 5)}
-                  className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-md hover:bg-slate-700 active:bg-slate-600 transition-colors"
+                  className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-md transition-colors"
+                  style={{ color: 'var(--text-mid)' }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = '')}
                   title="Forward 5s"
                 >
-                  <kbd className="inline-flex items-center justify-center w-7 h-7 text-[11px] font-mono font-bold bg-slate-700 text-slate-400 rounded border border-slate-600">→</kbd>
-                  <span className="text-xs text-slate-500">+5s</span>
+                  <kbd className="inline-flex items-center justify-center w-7 h-7 text-[11px] font-mono font-bold rounded" style={{ background: 'var(--bg-panel)', color: 'var(--text-mid)', border: '1px solid var(--border-hi)' }}>→</kbd>
+                  <span className="text-xs" style={{ color: 'var(--text-dim)' }}>+5s</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => playerActions.stepFrame(-1)}
-                  className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-md hover:bg-slate-700 active:bg-slate-600 transition-colors"
+                  className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-md transition-colors"
+                  style={{ color: 'var(--text-mid)' }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = '')}
                   title="Previous frame"
                 >
-                  <kbd className="inline-flex items-center justify-center w-7 h-7 text-[11px] font-mono font-bold bg-slate-700 text-slate-400 rounded border border-slate-600">,</kbd>
-                  <span className="text-xs text-slate-500">−1f</span>
+                  <kbd className="inline-flex items-center justify-center w-7 h-7 text-[11px] font-mono font-bold rounded" style={{ background: 'var(--bg-panel)', color: 'var(--text-mid)', border: '1px solid var(--border-hi)' }}>,</kbd>
+                  <span className="text-xs" style={{ color: 'var(--text-dim)' }}>−1f</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => playerActions.stepFrame(1)}
-                  className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-md hover:bg-slate-700 active:bg-slate-600 transition-colors"
+                  className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-md transition-colors"
+                  style={{ color: 'var(--text-mid)' }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = '')}
                   title="Next frame"
                 >
-                  <kbd className="inline-flex items-center justify-center w-7 h-7 text-[11px] font-mono font-bold bg-slate-700 text-slate-400 rounded border border-slate-600">.</kbd>
-                  <span className="text-xs text-slate-500">+1f</span>
+                  <kbd className="inline-flex items-center justify-center w-7 h-7 text-[11px] font-mono font-bold rounded" style={{ background: 'var(--bg-panel)', color: 'var(--text-mid)', border: '1px solid var(--border-hi)' }}>.</kbd>
+                  <span className="text-xs" style={{ color: 'var(--text-dim)' }}>+1f</span>
                 </button>
                 <button
                   type="button"
@@ -702,11 +986,14 @@ export default function App() {
                       addToast(`Speed: ${speeds[idx + 1]}x`, 'info', 1500);
                     }
                   }}
-                  className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-md hover:bg-slate-700 active:bg-slate-600 transition-colors"
+                  className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-md transition-colors"
+                  style={{ color: 'var(--text-mid)' }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = '')}
                   title="Speed up"
                 >
-                  <kbd className="inline-flex items-center justify-center w-7 h-7 text-[11px] font-mono font-bold bg-slate-700 text-slate-400 rounded border border-slate-600">+</kbd>
-                  <span className="text-xs text-slate-500">Fast</span>
+                  <kbd className="inline-flex items-center justify-center w-7 h-7 text-[11px] font-mono font-bold rounded" style={{ background: 'var(--bg-panel)', color: 'var(--text-mid)', border: '1px solid var(--border-hi)' }}>+</kbd>
+                  <span className="text-xs" style={{ color: 'var(--text-dim)' }}>Fast</span>
                 </button>
                 <button
                   type="button"
@@ -718,11 +1005,14 @@ export default function App() {
                       addToast(`Speed: ${speeds[idx - 1]}x`, 'info', 1500);
                     }
                   }}
-                  className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-md hover:bg-slate-700 active:bg-slate-600 transition-colors"
+                  className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-md transition-colors"
+                  style={{ color: 'var(--text-mid)' }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = '')}
                   title="Slow down"
                 >
-                  <kbd className="inline-flex items-center justify-center w-7 h-7 text-[11px] font-mono font-bold bg-slate-700 text-slate-400 rounded border border-slate-600">−</kbd>
-                  <span className="text-xs text-slate-500">Slow</span>
+                  <kbd className="inline-flex items-center justify-center w-7 h-7 text-[11px] font-mono font-bold rounded" style={{ background: 'var(--bg-panel)', color: 'var(--text-mid)', border: '1px solid var(--border-hi)' }}>−</kbd>
+                  <span className="text-xs" style={{ color: 'var(--text-dim)' }}>Slow</span>
                 </button>
               </div>
             )}
@@ -731,18 +1021,37 @@ export default function App() {
                 <button
                   type="button"
                   onClick={handleEnterAnnotate}
-                  className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-md bg-indigo-600/20 hover:bg-indigo-600/40 active:bg-indigo-600/60 transition-colors"
+                  className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-md transition-colors"
+                  style={{ background: 'rgba(191,87,0,0.12)', color: 'var(--amber)' }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'rgba(191,87,0,0.22)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'rgba(191,87,0,0.12)')}
                   title="Add Cue"
                 >
-                  <kbd className="inline-flex items-center justify-center w-7 h-7 text-[11px] font-mono font-bold bg-indigo-700 text-indigo-200 rounded border border-indigo-500">↵</kbd>
-                  <span className="text-xs text-indigo-300">Add Cue</span>
+                  <kbd className="inline-flex items-center justify-center w-7 h-7 text-[11px] font-mono font-bold rounded" style={{ background: 'rgba(191,87,0,0.25)', color: 'var(--amber)', border: '1px solid rgba(191,87,0,0.5)' }}>↵</kbd>
+                  <span className="text-xs font-medium" style={{ color: 'var(--amber)' }}>Add Cue</span>
                 </button>
               </div>
             )}
           </div>
 
+          {/* Draggable splitter handle */}
+          <div
+            className="hidden lg:flex items-center justify-center shrink-0 cursor-col-resize group"
+            style={{ width: 6, background: 'var(--bg)', borderLeft: '1px solid var(--border)', borderRight: '1px solid var(--border)' }}
+            onMouseDown={(e) => {
+              e.preventDefault();
+              splitterDragRef.current = { startX: e.clientX, startWidth: panelWidthPx };
+              document.body.style.cursor = 'col-resize';
+              document.body.style.userSelect = 'none';
+            }}
+            onDoubleClick={() => setPanelWidthPx(380)}
+            title="Drag to resize • Double-click to reset"
+          >
+            <div className="w-[2px] h-8 rounded-full transition-colors" style={{ background: 'var(--border-hi)' }} />
+          </div>
+
           {/* Right: Cue Sheet panel — constrained height so it scrolls independently */}
-          <div className="flex-1 min-w-[300px] max-w-md lg:max-w-sm xl:max-w-md h-[calc(100vh-5rem)] overflow-hidden">
+          <div className="h-[calc(100vh-5rem)] overflow-hidden shrink-0" style={{ width: panelWidthPx }}>
             <AnnotationPanel
               annotations={annotations}
               activeId={activeId}
@@ -775,18 +1084,21 @@ export default function App() {
       {/* Change Video Modal */}
       {isChangeVideoOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-slate-800 border border-slate-700 rounded-xl shadow-2xl w-full max-w-sm p-6">
+          <div className="rounded-xl shadow-2xl w-full max-w-sm p-6" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-slate-100">Change Video</h2>
+              <h2 className="text-lg font-semibold" style={{ color: 'var(--text)' }}>Change Video</h2>
               <button
                 type="button"
                 onClick={() => setIsChangeVideoOpen(false)}
-                className="p-1 text-slate-400 hover:text-slate-200 hover:bg-slate-700 rounded-md transition-colors"
+                className="p-1 rounded-md transition-colors"
+                style={{ color: 'var(--text-mid)' }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = ''; e.currentTarget.style.color = 'var(--text-mid)'; }}
               >
                 <XIcon className="w-5 h-5" />
               </button>
             </div>
-            <p className="text-sm text-slate-400 mb-5">
+            <p className="text-sm mb-5" style={{ color: 'var(--text-mid)' }}>
               Select a new video file. Copy cues to the new video, or switch and keep that video's own cues.
             </p>
             <div className="flex flex-col gap-2">
@@ -801,7 +1113,10 @@ export default function App() {
                     addToast('Switched video and copied current cues', 'success');
                   });
                 }}
-                className="w-full px-4 py-2.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 transition-colors"
+                className="w-full px-4 py-2.5 text-sm text-white rounded-lg transition-colors"
+                style={{ background: 'var(--amber)' }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'var(--amber-hi)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'var(--amber)')}
               >
                 Select New Video (Copy Cues)
               </button>
@@ -815,7 +1130,10 @@ export default function App() {
                     addToast('Switched video \u2014 loaded its own cues', 'info');
                   });
                 }}
-                className="w-full px-4 py-2.5 text-sm bg-slate-700 text-slate-300 rounded-lg hover:bg-slate-600 transition-colors"
+                className="w-full px-4 py-2.5 text-sm rounded-lg transition-colors"
+                style={{ background: 'var(--bg-panel)', color: 'var(--text-mid)' }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'var(--bg-panel)')}
               >
                 Select New Video (Clear Cues)
               </button>

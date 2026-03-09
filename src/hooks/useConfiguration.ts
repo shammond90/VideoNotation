@@ -2,7 +2,8 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import type { AppConfig, ColumnConfig } from '../types';
 import { DEFAULT_CONFIG, DEFAULT_VISIBLE_COLUMNS, RESERVED_CUE_TYPES, getDefaultFieldsForType } from '../types';
 import type { CueTypesTemplateData, ColumnsTemplateData } from '../components/ConfigurationModal';
-import { loadConfig, saveConfig, backupConfig, exportConfigToJSON, importConfigFromJSON, clearStorageFamily, clearPrimaryData, clearAllIDBData } from '../utils/storage';
+import { openDB } from 'idb';
+import { loadConfig, saveConfig, backupConfig, exportConfigToJSON, importConfigFromJSON, clearPrimaryData, clearAllIDBData } from '../utils/storage';
 
 export function useConfiguration() {
   const [config, setConfig] = useState<AppConfig>(DEFAULT_CONFIG);
@@ -269,7 +270,6 @@ export function useConfiguration() {
 
   const clearAllCues = useCallback(async () => {
     // We need to scan IDB keys for annotation base keys
-    const { default: { openDB } } = await import('idb');
     const db = await openDB('cuetation-db', 1);
     const allKeys = (await db.getAllKeys('keyval')).map(String);
     const baseKeys = new Set<string>();
@@ -308,7 +308,6 @@ export function useConfiguration() {
   const applyCueTypesTemplate = useCallback((data: CueTypesTemplateData, usedCueTypes?: Set<string>) => {
     setConfig((prev) => {
       const used = usedCueTypes ?? new Set<string>();
-      const templateTypeSet = new Set(data.cueTypes);
       const reservedSet = new Set(RESERVED_CUE_TYPES as readonly string[]);
 
       // Start with types that are protected (reserved or in use), in their current order

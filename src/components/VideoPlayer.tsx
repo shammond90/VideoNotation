@@ -118,10 +118,10 @@ export const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
       <div className="flex flex-col bg-black rounded-lg overflow-hidden shrink min-h-0">
         {/* Loading progress bar */}
         {!state.isReady && state.loadProgress > 0 && (
-          <div className="h-1 bg-slate-800 w-full">
+          <div className="h-1 w-full" style={{ background: 'var(--bg-raised)' }}>
             <div
-              className="h-full bg-indigo-500 transition-all duration-300"
-              style={{ width: `${state.loadProgress}%` }}
+              className="h-full transition-all duration-300"
+              style={{ width: `${state.loadProgress}%`, background: 'var(--amber)' }}
             />
           </div>
         )}
@@ -178,23 +178,27 @@ export const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
         </div>
 
         {/* Controls */}
-        <div className="px-3 py-2 bg-slate-900 space-y-2">
+        <div className="px-3 py-2 space-y-2" style={{ background: 'var(--bg-raised)' }}>
           {/* Progress bar */}
           <div
             ref={progressRef}
-            className={`relative h-2 bg-slate-700 rounded-full cursor-pointer group ${isDragging ? 'h-3' : ''}`}
+            className={`relative rounded-full cursor-pointer group ${isDragging ? 'h-3' : 'h-2'}`}
+            style={{ background: 'var(--bg-panel)' }}
             onMouseDown={handleProgressMouseDown}
           >
             {/* Buffered */}
             <div
-              className="absolute top-0 left-0 h-full bg-slate-600 rounded-full"
-              style={{ width: `${state.duration ? (state.buffered / state.duration) * 100 : 0}%` }}
+              className="absolute top-0 left-0 h-full rounded-full"
+              style={{ width: `${state.duration ? (state.buffered / state.duration) * 100 : 0}%`, background: 'var(--bg-hover)' }}
             />
             {/* Loop region overlay */}
             {loopRegion && state.duration > 0 && (
               <div
-                className="absolute top-0 h-full bg-amber-500/30 border-x border-amber-400/60"
+                className="absolute top-0 h-full"
                 style={{
+                  background: 'rgba(191,87,0,0.25)',
+                  borderLeft: '1px solid rgba(191,87,0,0.6)',
+                  borderRight: '1px solid rgba(191,87,0,0.6)',
                   left: `${(loopRegion.toTime / state.duration) * 100}%`,
                   width: `${((loopRegion.fromTime - loopRegion.toTime) / state.duration) * 100}%`,
                 }}
@@ -203,24 +207,26 @@ export const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
             )}
             {/* Progress */}
             <div
-              className="absolute top-0 left-0 h-full bg-indigo-500 rounded-full transition-[width] duration-75"
-              style={{ width: `${state.duration ? (state.currentTime / state.duration) * 100 : 0}%` }}
+              className="absolute top-0 left-0 h-full rounded-full transition-[width] duration-75"
+              style={{ width: `${state.duration ? (state.currentTime / state.duration) * 100 : 0}%`, background: 'var(--amber)' }}
             />
             {/* Scrubber */}
             <div
-              className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-indigo-400 rounded-full transition-opacity shadow-lg ${isDragging ? 'opacity-100 scale-110' : 'opacity-0 group-hover:opacity-100'}`}
-              style={{ left: `calc(${state.duration ? (state.currentTime / state.duration) * 100 : 0}% - 8px)` }}
+              className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full transition-opacity shadow-lg ${isDragging ? 'opacity-100 scale-110' : 'opacity-0 group-hover:opacity-100'}`}
+              style={{ background: 'var(--amber)', left: `calc(${state.duration ? (state.currentTime / state.duration) * 100 : 0}% - 8px)` }}
             />
           </div>
 
           {/* Control buttons */}
-          <div className="flex items-center justify-between text-slate-300">
+          <div className="flex items-center justify-between" style={{ color: 'var(--text-mid)' }}>
             <div className="flex items-center gap-2">
               {/* Play/Pause */}
               <button
                 type="button"
                 onClick={actions.togglePlay}
-                className="p-1.5 hover:bg-slate-700 rounded-md transition-colors"
+                className="p-1.5 rounded-md transition-colors"
+                onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
+                onMouseLeave={e => (e.currentTarget.style.background = '')}
                 title={state.isPlaying ? 'Pause (Space)' : 'Play (Space)'}
               >
                 {state.isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
@@ -230,7 +236,9 @@ export const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
               <button
                 type="button"
                 onClick={() => actions.stepFrame(-1)}
-                className="p-1.5 hover:bg-slate-700 rounded-md transition-colors"
+                className="p-1.5 rounded-md transition-colors"
+                onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
+                onMouseLeave={e => (e.currentTarget.style.background = '')}
                 title="Previous frame (,)"
               >
                 <SkipBack className="w-4 h-4" />
@@ -240,14 +248,16 @@ export const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
               <button
                 type="button"
                 onClick={() => actions.stepFrame(1)}
-                className="p-1.5 hover:bg-slate-700 rounded-md transition-colors"
+                className="p-1.5 rounded-md transition-colors"
+                onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
+                onMouseLeave={e => (e.currentTarget.style.background = '')}
                 title="Next frame (.)"
               >
                 <SkipForward className="w-4 h-4" />
               </button>
 
               {/* Time display */}
-              <span className="text-sm font-mono ml-2">
+              <span className="text-sm font-mono ml-2" style={{ color: 'var(--text-mid)' }}>
                 {formatTime(state.currentTime)} / {formatTime(state.duration)}
               </span>
             </div>
@@ -257,7 +267,8 @@ export const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
               <select
                 value={state.playbackRate}
                 onChange={(e) => actions.setSpeed(parseFloat(e.target.value))}
-                className="bg-slate-700 text-slate-300 text-xs rounded px-2 py-1 border-none outline-none cursor-pointer"
+                className="text-xs rounded px-2 py-1 border-none outline-none cursor-pointer"
+                style={{ background: 'var(--bg-input)', color: 'var(--text-mid)' }}
               >
                 {SPEEDS.map((s) => (
                   <option key={s} value={s}>
@@ -270,7 +281,9 @@ export const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
               <button
                 type="button"
                 onClick={actions.toggleMute}
-                className="p-1.5 hover:bg-slate-700 rounded-md transition-colors"
+                className="p-1.5 rounded-md transition-colors"
+                onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
+                onMouseLeave={e => (e.currentTarget.style.background = '')}
               >
                 {state.isMuted || state.volume === 0 ? (
                   <VolumeX className="w-4 h-4" />
@@ -285,14 +298,17 @@ export const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
                 step="0.05"
                 value={state.isMuted ? 0 : state.volume}
                 onChange={handleVolumeChange}
-                className="w-20 h-1 accent-indigo-500 cursor-pointer"
+                className="w-20 h-1 cursor-pointer"
+                style={{ accentColor: 'var(--amber)' }}
               />
 
               {/* Fullscreen */}
               <button
                 type="button"
                 onClick={actions.toggleFullscreen}
-                className="p-1.5 hover:bg-slate-700 rounded-md transition-colors"
+                className="p-1.5 rounded-md transition-colors"
+                onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
+                onMouseLeave={e => (e.currentTarget.style.background = '')}
               >
                 {state.isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
               </button>

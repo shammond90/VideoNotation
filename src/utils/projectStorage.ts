@@ -1,0 +1,281 @@
+import { openDB } from 'idb';
+import type { Project, AppConfig, ColumnConfig } from '../types/index';
+import { DEFAULT_CONFIG, DEFAULT_VISIBLE_COLUMNS } from '../types/index';
+
+const DB_NAME = 'CuetationDB';
+const PROJECTS_STORE = 'projects';
+
+/**
+ * Get or create the IndexedDB database.
+ */
+async function getDB() {
+  return openDB(DB_NAME, 1, {
+    upgrade(db) {
+      if (!db.objectStoreNames.contains(PROJECTS_STORE)) {
+        db.createObjectStore(PROJECTS_STORE, { keyPath: 'id' });
+      }
+    },
+  });
+}
+
+/**
+ * Generate a unique project ID.
+ */
+function generateProjectId(): string {
+  return `project_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+}
+
+/**
+ * Create a new project with default configuration.
+ */
+export async function createProject(
+  name: string,
+  options?: {
+    production_name?: string;
+    choreographer?: string;
+    venue?: string;
+    year?: string;
+    notes?: string;
+    config_template_id?: string;
+    config?: AppConfig;
+    columns?: ColumnConfig[];
+  }
+): Promise<Project> {
+  const now = Date.now();
+  const config = options?.config || { ...DEFAULT_CONFIG };
+  const columns = options?.columns || [...DEFAULT_VISIBLE_COLUMNS];
+
+  const project: Project = {
+    id: generateProjectId(),
+    name,
+    created_at: now,
+    updated_at: now,
+    production_name: options?.production_name,
+    choreographer: options?.choreographer,
+    venue: options?.venue,
+    year: options?.year,
+    notes: options?.notes,
+    config_template_id: options?.config_template_id,
+    config,
+    columns,
+    export_templates: [],
+    // Video reference starts as all-null
+    video_filename: null,
+    video_path: null,
+    video_filesize: null,
+    video_duration: null,
+  };
+
+  const db = await getDB();
+  await db.put(PROJECTS_STORE, project);
+  return project;
+}
+
+/**
+ * Load all projects, sorted by updated_at (most recent first).
+ */
+export async function loadProjects(): Promise<Project[]> {
+  const db = await getDB();
+  const projects = await db.getAll(PROJECTS_STORE);
+  return projects.sort((a, b) => b.updated_at - a.updated_at);
+}
+
+/**
+ * Load a single project by ID.
+ */
+export async function loadProject(projectId: string): Promise<Project | undefined> {
+  const db = await getDB();
+  return db.get(PROJECTS_STORE, projectId);
+}
+
+/**
+ * Save/update a project.
+ */
+export async function saveProject(project: Project): Promise<void> {
+  project.updated_at = Date.now();
+  const db = await getDB();
+  await db.put(PROJECTS_STORE, project);
+}
+
+/**
+ * Delete a project by ID.
+ */
+export async function deleteProject(projectId: string): Promise<void> {
+  const db = await getDB();
+  await db.delete(PROJECTS_STORE, projectId);
+}
+
+/**
+ * Update video reference for a project.
+ * All four fields are set together, or all set to null.
+ */
+export async function updateProjectVideo(
+  projectId: string,
+  videoRef: {
+    filename: string;
+    path: string;
+    filesize: number;
+    duration: number;
+  } | null
+): Promise<void> {
+  const project = await loadProject(projectId);
+  if (!project) throw new Error(`Project ${projectId} not found`);
+
+  if (videoRef) {
+    project.video_filename = videoRef.filename;
+    project.video_path = videoRef.path;
+    project.video_filesize = videoRef.filesize;
+    project.video_duration = videoRef.duration;
+  } else {
+    project.video_filename = null;
+    project.video_path = null;
+    project.video_filesize = null;
+    project.video_duration = null;
+  }
+
+  await saveProject(project);
+}
+
+/**
+ * Update project metadata (production name, venue, etc.).
+ */
+export async function updateProjectMetadata(
+  projectId: string,
+  metadata: {
+    production_name?: string;
+    choreographer?: string;
+    venue?: string;
+    year?: string;
+    notes?: string;
+  }
+): Promise<void> {
+  const project = await loadProject(projectId);
+  if (!project) throw new Error(`Project ${projectId} not found`);
+
+  Object.assign(project, metadata);
+  await saveProject(project);
+}
+
+/**
+ * Get cue count for a project.
+ * Returns the number of annotations stored for this project.
+ */
+export async function getProjectCueCount(_projectId: string): Promise<number> {
+  // Cue count will be tracked when annotations are stored per project.
+  // For now returns 0 — will be updated when storage migration is complete.
+  return 0;
+}
+
+/**
+ * Efficiently check if a video file exists at the stored path and matches filesize.
+ * Note: This is a best-effort check. Actual file verification happens when user selects a file.
+ */
+export async function verifyProjectVideo(
+  projectId: string
+): Promise<{ exists: boolean; filename: string; duration: number } | null> {
+  const project = await loadProject(projectId);
+  if (!project || !project.video_filename) return null;
+
+  // In browser environment, we cannot directly check file existence.
+  // This would need to be handled by the component when attempting to load the video.
+  // Return the stored reference for display purposes.
+  return {
+    exists: true, // Placeholder — actual verification in component
+    filename: project.video_filename,
+    duration: project.video_duration || 0,
+  };
+}
+
+// ── Import / Export ──
+
+/**
+ * Export a project to a JSON object suitable for serialization.
+ */
+export function exportProjectToJSON(project: Project): object {
+  return {
+    cuetation_version: 1,
+    exported_at: new Date().toISOString(),
+    project: {
+      name: project.name,
+      created_at: project.created_at,
+      updated_at: project.updated_at,
+      production_name: project.production_name,
+      choreographer: project.choreographer,
+      venue: project.venue,
+      year: project.year,
+      notes: project.notes,
+      video_filename: project.video_filename,
+      video_path: project.video_path,
+      video_filesize: project.video_filesize,
+      video_duration: project.video_duration,
+      config_template_id: project.config_template_id,
+      config: project.config,
+      columns: project.columns,
+      export_templates: project.export_templates,
+    },
+  };
+}
+
+/**
+ * Validate and parse an imported JSON file into project data.
+ * Returns the parsed project data or throws with a descriptive error.
+ */
+export function parseImportedProject(json: unknown): Omit<Project, 'id'> {
+  if (!json || typeof json !== 'object') {
+    throw new Error('Invalid file: not a JSON object');
+  }
+
+  const data = json as Record<string, unknown>;
+
+  if (data.cuetation_version !== 1) {
+    throw new Error('Invalid file: unrecognized Cuetation format or version');
+  }
+
+  const proj = data.project as Record<string, unknown> | undefined;
+  if (!proj || typeof proj !== 'object') {
+    throw new Error('Invalid file: missing project data');
+  }
+
+  if (typeof proj.name !== 'string' || proj.name.trim().length === 0) {
+    throw new Error('Invalid file: project name is missing');
+  }
+
+  return {
+    name: proj.name as string,
+    created_at: typeof proj.created_at === 'number' ? proj.created_at : Date.now(),
+    updated_at: typeof proj.updated_at === 'number' ? proj.updated_at : Date.now(),
+    production_name: typeof proj.production_name === 'string' ? proj.production_name : undefined,
+    choreographer: typeof proj.choreographer === 'string' ? proj.choreographer : undefined,
+    venue: typeof proj.venue === 'string' ? proj.venue : undefined,
+    year: typeof proj.year === 'string' ? proj.year : undefined,
+    notes: typeof proj.notes === 'string' ? proj.notes : undefined,
+    video_filename: typeof proj.video_filename === 'string' ? proj.video_filename : null,
+    video_path: typeof proj.video_path === 'string' ? proj.video_path : null,
+    video_filesize: typeof proj.video_filesize === 'number' ? proj.video_filesize : null,
+    video_duration: typeof proj.video_duration === 'number' ? proj.video_duration : null,
+    config_template_id: typeof proj.config_template_id === 'string' ? proj.config_template_id : undefined,
+    config: (proj.config && typeof proj.config === 'object' ? proj.config : { ...DEFAULT_CONFIG }) as AppConfig,
+    columns: (Array.isArray(proj.columns) ? proj.columns : [...DEFAULT_VISIBLE_COLUMNS]) as ColumnConfig[],
+    export_templates: (Array.isArray(proj.export_templates) ? proj.export_templates : []) as Project['export_templates'],
+  };
+}
+
+/**
+ * Import a project, assigning a new ID and saving to IndexedDB.
+ * The name can be overridden (e.g., for conflict resolution with rename).
+ */
+export async function importProject(
+  data: Omit<Project, 'id'>,
+  nameOverride?: string
+): Promise<Project> {
+  const project: Project = {
+    ...data,
+    id: generateProjectId(),
+    name: nameOverride || data.name,
+    updated_at: Date.now(),
+  };
+
+  const db = await getDB();
+  await db.put(PROJECTS_STORE, project);
+  return project;
+}

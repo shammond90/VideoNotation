@@ -21,12 +21,12 @@ interface CueFormProps {
 }
 
 const inputClass =
-  'w-full bg-slate-700 text-slate-200 rounded px-2 py-1.5 text-xs border border-slate-600 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none placeholder-slate-500';
+  'w-full bg-[#2a2a32] text-[#ede9e3] rounded px-2 py-1.5 text-xs border border-[#2c2c36] focus:border-[#BF5700] focus:ring-1 focus:ring-[#BF5700] outline-none placeholder-[#4e4a56]';
 
 const readOnlyClass =
-  'w-full bg-slate-800 text-slate-400 rounded px-2 py-1.5 text-xs border border-slate-700 outline-none cursor-not-allowed';
+  'w-full bg-[#1f1f24] text-[#8a8680] rounded px-2 py-1.5 text-xs border border-[#2c2c36] outline-none cursor-not-allowed';
 
-const labelClass = 'text-[10px] uppercase tracking-wider text-slate-500 mb-0.5 block';
+const labelClass = 'text-[10px] uppercase tracking-wider text-[#4e4a56] mb-0.5 block font-mono';
 
 /** Map column count to literal Tailwind grid-cols class (needed for JIT scanning) */
 const gridColsClass = (n: number) =>
@@ -554,17 +554,18 @@ export function CueForm({
     <form
       onSubmit={handleSubmit}
       onKeyDown={handleKeyDown}
-      className="bg-slate-800 border border-indigo-500/50 rounded-lg p-4 mt-3 max-h-[60vh] overflow-y-auto annotation-scroll"
+      className="rounded-lg p-4 mt-3 max-h-[60vh] overflow-y-auto annotation-scroll"
+      style={{ background: 'var(--bg-card)', border: '1px solid rgba(191,87,0,0.3)' }}
     >
       {/* Header */}
-      <div className="flex items-center gap-2 mb-3 pb-2 border-b border-slate-700">
-        <span className="bg-indigo-500/20 text-indigo-300 text-xs font-mono px-2 py-0.5 rounded">
+      <div className="flex items-center gap-2 mb-3 pb-2 border-b" style={{ borderColor: 'var(--border)' }}>
+        <span className="text-xs font-mono px-2 py-0.5 rounded" style={{ background: 'rgba(191,87,0,0.15)', color: 'var(--amber)' }}>
           {formatTime(isCreate ? timestamp : editedTimestamp)}
         </span>
-        <span className="text-slate-400 text-sm font-medium">
+        <span className="text-sm font-medium" style={{ color: 'var(--text-mid)' }}>
           {isCreate ? 'New Cue' : 'Edit Cue'}
         </span>
-        <span className="ml-auto text-[10px] text-slate-600">Ctrl+Enter to save</span>
+        <span className="ml-auto text-[10px]" style={{ color: 'var(--text-dim)' }}>Ctrl+Enter to save</span>
       </div>
 
       {/* Timestamp + Time in Title (only if selected for this type, hidden for LOOP) */}
@@ -710,7 +711,7 @@ export function CueForm({
       {!isLoopType && (<>
       {/* ── Autofollow Section ── */}
       {autofollowEnabled && (
-        <div className="mb-2 border border-slate-600 rounded-md p-2">
+        <div className="mb-2 rounded-md p-2" style={{ border: '1px solid var(--border)' }}>
           <label className="flex items-center gap-2 cursor-pointer select-none mb-1">
             <input
               type="checkbox"
@@ -722,9 +723,9 @@ export function CueForm({
                   setAutofollowSuffix('');
                 }
               }}
-              className="accent-indigo-500"
+              className="accent-[#BF5700]"
             />
-            <span className="text-xs text-slate-300 font-medium">Auto-Follow</span>
+            <span className="text-xs font-medium" style={{ color: 'var(--text-mid)' }}>Auto-Follow</span>
           </label>
           {isAutofollow && (
             <div className="mt-1 space-y-2">
@@ -754,7 +755,7 @@ export function CueForm({
                 <div>
                   <label className={labelClass}>Cue# (Autofollow)</label>
                   <div className="flex">
-                    <span className="inline-flex items-center bg-slate-900 text-slate-400 text-xs border border-r-0 border-slate-600 rounded-l px-2 py-1.5 font-mono select-none">
+                    <span className="inline-flex items-center text-xs border border-r-0 rounded-l px-2 py-1.5 font-mono select-none" style={{ background: 'var(--bg)', color: 'var(--text-mid)', borderColor: 'var(--border)' }}>
                       {followCueNum ? followCueNum + '.' : '?.'}
                     </span>
                     <input
@@ -864,17 +865,23 @@ export function CueForm({
       </>)}{/* end !isLoopType */}
 
       {/* Actions */}
-      <div className="flex justify-end gap-2 pt-2 border-t border-slate-700">
+      <div className="flex justify-end gap-2 pt-2 border-t" style={{ borderColor: 'var(--border)' }}>
         <button
           type="button"
           onClick={onCancel}
-          className="px-3 py-1.5 text-xs text-slate-400 hover:text-slate-200 rounded-md hover:bg-slate-700 transition-colors"
+          className="px-3 py-1.5 text-xs rounded-md transition-colors"
+          style={{ color: 'var(--text-mid)' }}
+          onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text)'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = ''; e.currentTarget.style.color = 'var(--text-mid)'; }}
         >
           Cancel (Esc)
         </button>
         <button
           type="submit"
-          className="px-4 py-1.5 text-xs bg-indigo-600 text-white rounded-md hover:bg-indigo-500 transition-colors"
+          className="px-4 py-1.5 text-xs text-white rounded-md transition-colors"
+          style={{ background: 'var(--amber)' }}
+          onMouseEnter={e => (e.currentTarget.style.background = 'var(--amber-hi)')}
+          onMouseLeave={e => (e.currentTarget.style.background = 'var(--amber)')}
         >
           Save Cue (Ctrl+Enter)
         </button>

@@ -38,9 +38,9 @@ interface AnnotationPanelProps {
 function CueChip({ label, value }: { label: string; value: string }) {
   if (!value) return null;
   return (
-    <span className="inline-flex items-center gap-1 text-[10px] bg-slate-700/60 rounded px-1.5 py-0.5">
-      <span className="text-slate-500 uppercase">{label}</span>
-      <span className="text-slate-300">{value}</span>
+    <span className="inline-flex items-center gap-1 text-[10px] rounded px-1.5 py-0.5" style={{ background: "var(--bg-panel)" }}>
+      <span className="uppercase" style={{ color: "var(--text-dim)" }}>{label}</span>
+      <span style={{ color: 'var(--text)' }}>{value}</span>
     </span>
   );
 }
@@ -352,22 +352,22 @@ export function AnnotationPanel({
   }, [pastCues.length]);
 
   return (
-    <div className="flex flex-col h-full bg-slate-850 rounded-lg border border-slate-700">
+    <div className="flex flex-col h-full rounded-lg border" style={{ background: 'var(--bg-raised)', borderColor: 'var(--border)' }}>
       {/* Header */}
-      <div className="p-4 border-b border-slate-700">
+      <div className="p-4 border-b" style={{ borderColor: 'var(--border)' }}>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold text-slate-200 uppercase tracking-wider">
+          <h2 className="text-sm font-semibold uppercase tracking-wider" style={{ color: "var(--text)" }}>
             Cue Sheet
           </h2>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-400 bg-slate-700 px-2 py-0.5 rounded-full">
+            <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "var(--bg-panel)", color: "var(--text-mid)" }}>
               {annotations.length} cue{annotations.length !== 1 ? 's' : ''}
             </span>
             {getActiveTitle && (
               <button
                 type="button"
                 onClick={handleJumpToActiveTitle}
-                className="p-1 text-slate-400 hover:text-slate-200 hover:bg-slate-700 rounded transition-colors"
+                className="p-1 rounded transition-colors" style={{ color: "var(--text-mid)" }} onMouseEnter={e=>{e.currentTarget.style.background="var(--bg-hover)";e.currentTarget.style.color="var(--text)"}} onMouseLeave={e=>{e.currentTarget.style.background="";e.currentTarget.style.color="var(--text-mid)"}}
                 title="Jump to active title"
               >
                 <Target className="w-4 h-4" />
@@ -380,7 +380,7 @@ export function AnnotationPanel({
                 setIsSearchCollapsed(next);
                 onSetExpandedSearchFilter(!next);
               }}
-              className="p-1 text-slate-400 hover:text-slate-200 hover:bg-slate-700 rounded transition-colors"
+              className="p-1 rounded transition-colors" style={{ color: "var(--text-mid)" }} onMouseEnter={e=>{e.currentTarget.style.background="var(--bg-hover)";e.currentTarget.style.color="var(--text)"}} onMouseLeave={e=>{e.currentTarget.style.background="";e.currentTarget.style.color="var(--text-mid)"}}
               title={isSearchCollapsed ? 'Show search & filter' : 'Hide search & filter'}
             >
               <ChevronUp className="w-4 h-4" style={{ transform: isSearchCollapsed ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
@@ -392,19 +392,19 @@ export function AnnotationPanel({
           <>
             {/* Search */}
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: 'var(--text-dim)' }} />
               <input
                 type="text"
                 placeholder="Search cues, types, timestamps..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-slate-700 text-sm text-slate-200 pl-9 pr-8 py-2 rounded-lg border border-slate-600 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none placeholder-slate-500"
+                className="w-full text-sm pl-9 pr-8 py-2 rounded-lg outline-none" style={{ background: "var(--bg-input)", color: "var(--text)", border: "1px solid var(--border)", caretColor: "var(--amber)" }}
               />
               {searchQuery && (
                 <button
                   type="button"
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                  className="absolute right-2 top-1/2 -translate-y-1/2" style={{ color: "var(--text-dim)" }}
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -419,14 +419,14 @@ export function AnnotationPanel({
                   onClick={() => setIsFilterOpen((prev) => !prev)}
                   className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded-md transition-colors ${
                     typeFilter.size < cueTypes.length
-                      ? 'bg-indigo-500/20 text-indigo-300'
-                      : 'text-slate-500 hover:text-slate-300 hover:bg-slate-700'
+                      ? 'bg-[rgba(191,87,0,0.15)] text-[#BF5700]'
+                      : 'text-[#8a8680] hover:text-[#ede9e3] hover:bg-[#2e2e38]'
                   }`}
                 >
                   <Filter className="w-3.5 h-3.5" />
                   Filter by Type
                   {typeFilter.size < cueTypes.length && (
-                    <span className="bg-indigo-500 text-white text-[10px] font-bold px-1.5 py-0 rounded-full">
+                    <span className="text-white text-[10px] font-bold px-1.5 py-0 rounded-full" style={{ background: "var(--amber)" }}>
                       {cueTypes.length - typeFilter.size} hidden
                     </span>
                   )}
@@ -443,8 +443,8 @@ export function AnnotationPanel({
                         onClick={() => toggleTypeFilter(type)}
                         className={`text-[10px] font-bold px-2 py-1 rounded-md border transition-colors ${
                           isActive
-                            ? 'bg-indigo-500/30 border-indigo-500/60 text-indigo-300'
-                            : 'bg-slate-700/50 border-slate-600/50 text-slate-500 line-through hover:text-slate-300 hover:border-slate-500'
+                            ? 'bg-[rgba(191,87,0,0.2)] border-[rgba(191,87,0,0.5)] text-[#BF5700]'
+                            : 'bg-[#232329]/50 border-[#2c2c36]/50 text-[#4e4a56] line-through hover:text-[#ede9e3] hover:border-[#3a3a46]'
                         }`}
                       >
                         {type}
@@ -455,7 +455,7 @@ export function AnnotationPanel({
                     <button
                       type="button"
                       onClick={() => setTypeFilter(new Set(cueTypes))}
-                      className="text-[10px] text-slate-500 hover:text-slate-300 px-2 py-1 rounded-md hover:bg-slate-700 transition-colors"
+                      className="text-[10px] px-2 py-1 rounded-md transition-colors" style={{ color: "var(--text-dim)" }} onMouseEnter={e=>{e.currentTarget.style.background="var(--bg-hover)";e.currentTarget.style.color="var(--text)"}} onMouseLeave={e=>{e.currentTarget.style.background="";e.currentTarget.style.color="var(--text-dim)"}}
                     >
                       Select all
                     </button>
@@ -464,7 +464,7 @@ export function AnnotationPanel({
                     <button
                       type="button"
                       onClick={() => setTypeFilter(new Set())}
-                      className="text-[10px] text-slate-500 hover:text-slate-300 px-2 py-1 rounded-md hover:bg-slate-700 transition-colors"
+                      className="text-[10px] px-2 py-1 rounded-md transition-colors" style={{ color: "var(--text-dim)" }} onMouseEnter={e=>{e.currentTarget.style.background="var(--bg-hover)";e.currentTarget.style.color="var(--text)"}} onMouseLeave={e=>{e.currentTarget.style.background="";e.currentTarget.style.color="var(--text-dim)"}}
                     >
                       Clear all
                     </button>
@@ -487,12 +487,12 @@ export function AnnotationPanel({
               <button
                 type="button"
                 onClick={() => setIsPastCollapsed((p) => !p)}
-                className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 hover:text-slate-300 uppercase tracking-wider transition-colors"
+                className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider transition-colors" style={{ color: "var(--text-dim)" }}
               >
                 {isPastCollapsed ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
                 Past ({pastCues.length})
               </button>
-              <div className="flex-1 h-px bg-slate-600/40" />
+              <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
             </div>
 
             {!isPastCollapsed && (
@@ -517,9 +517,10 @@ export function AnnotationPanel({
                       onClick={() => { if (!isEditing) onSeek(annotation.timestamp); }}
                       className={`group rounded-lg border cursor-pointer relative transition-opacity ${
                         isPastSkipped
-                          ? 'bg-slate-900/20 border-slate-700/20 opacity-25 hover:opacity-50'
-                          : 'bg-slate-800/20 border-slate-700/30 opacity-50 hover:opacity-80'
+                          ? 'opacity-25 hover:opacity-50'
+                          : 'opacity-50 hover:opacity-80'
                       }`}
+                      style={{ background: 'var(--bg-card)', borderColor: 'var(--border)' }}
                     >
                       {isEditing ? (
                         <div className="p-3">
@@ -547,7 +548,7 @@ export function AnnotationPanel({
                             </div>
                           )}
                           {showTimestamp && (
-                            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-700 text-slate-400 shrink-0">
+                            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded shrink-0" style={{ background: "var(--bg-panel)", color: "var(--text-mid)" }}>
                               {formatTime(annotation.timestamp)}
                             </span>
                           )}
@@ -561,15 +562,15 @@ export function AnnotationPanel({
                           </div>
                           {!isDeleting && (
                             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                              <button type="button" onClick={(e) => { e.stopPropagation(); setEditingId(annotation.id); }} className="p-1 text-slate-500 hover:text-slate-300 hover:bg-slate-700 rounded" title="Edit"><Pencil className="w-3.5 h-3.5" /></button>
-                              <button type="button" onClick={(e) => { e.stopPropagation(); setDeletingId(annotation.id); }} className="p-1 text-slate-500 hover:text-red-400 hover:bg-slate-700 rounded" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
+                              <button type="button" onClick={(e) => { e.stopPropagation(); setEditingId(annotation.id); }} className="p-1 rounded" style={{ color: "var(--text-dim)" }} onMouseEnter={e=>{e.currentTarget.style.background="var(--bg-hover)";e.currentTarget.style.color="var(--text)"}} onMouseLeave={e=>{e.currentTarget.style.background="";e.currentTarget.style.color="var(--text-dim)"}} title="Edit"><Pencil className="w-3.5 h-3.5" /></button>
+                              <button type="button" onClick={(e) => { e.stopPropagation(); setDeletingId(annotation.id); }} className="p-1 rounded" style={{ color: "var(--text-dim)" }} onMouseEnter={e=>{e.currentTarget.style.background="var(--bg-hover)";e.currentTarget.style.color="#f87171"}} onMouseLeave={e=>{e.currentTarget.style.background="";e.currentTarget.style.color="var(--text-dim)"}} title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
                             </div>
                           )}
                           {isDeleting && (
                             <div className="flex items-center gap-2 text-sm">
                               <span className="text-red-400 text-xs">Delete?</span>
                               <button type="button" onClick={(e) => { e.stopPropagation(); onDelete(annotation.id); setDeletingId(null); }} className="text-xs px-2 py-0.5 bg-red-600 text-white rounded hover:bg-red-500">Yes</button>
-                              <button type="button" onClick={(e) => { e.stopPropagation(); setDeletingId(null); }} className="text-xs px-2 py-0.5 bg-slate-700 text-slate-300 rounded hover:bg-slate-600">No</button>
+                              <button type="button" onClick={(e) => { e.stopPropagation(); setDeletingId(null); }} className="text-xs px-2 py-0.5 rounded" style={{ background: "var(--bg-panel)", color: "var(--text-mid)" }} onMouseEnter={e=>(e.currentTarget.style.background="var(--bg-hover)")} onMouseLeave={e=>(e.currentTarget.style.background="var(--bg-panel)")}>No</button>
                             </div>
                           )}
                         </div>
@@ -582,9 +583,9 @@ export function AnnotationPanel({
 
             {/* "Now" divider */}
             <div className="shrink-0 flex items-center gap-2 px-3 py-1.5">
-              <div className="flex-1 h-px bg-slate-600/40" />
-              <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider select-none">Now</span>
-              <div className="flex-1 h-px bg-slate-600/40" />
+              <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
+              <span className="text-[9px] font-bold uppercase tracking-wider select-none" style={{ color: "var(--text-dim)" }}>Now</span>
+              <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
             </div>
           </>
         )}
@@ -596,7 +597,7 @@ export function AnnotationPanel({
           className="flex-1 min-h-0 overflow-y-auto annotation-scroll p-3 space-y-2"
         >
           {activeUpcomingAnnotations.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-slate-500">
+            <div className="flex flex-col items-center justify-center py-16" style={{ color: 'var(--text-dim)' }}>
               {annotations.length === 0 ? (
                 <>
                   <Clock className="w-10 h-10 mb-3 opacity-50" />
@@ -636,7 +637,7 @@ export function AnnotationPanel({
                 }}
                 className={`group rounded-lg border transition-all duration-200 cursor-pointer relative ${
                     isSkipped
-                      ? 'bg-slate-900/40 border-slate-700/30 opacity-40'
+                      ? 'opacity-40'
                       : isActive
                         ? 'bg-emerald-900/30 border-emerald-500/60 shadow-sm shadow-emerald-500/10'
                         : isStandby
@@ -644,9 +645,10 @@ export function AnnotationPanel({
                           : isWarning
                             ? 'bg-blue-900/20 border-blue-500/50 shadow-sm shadow-blue-500/10'
                             : annotation.id === activeId
-                              ? 'bg-indigo-500/10 border-indigo-500/40 shadow-sm shadow-indigo-500/10'
-                              : 'bg-slate-800/50 border-slate-700/50 hover:bg-slate-800 hover:border-slate-600'
+                              ? 'shadow-sm'
+                              : 'hover:border-[#3a3a46]'
                   }`}
+                style={{ background: (isActive || isStandby || isWarning) ? undefined : 'var(--bg-card)', borderColor: (isActive || isStandby || isWarning) ? undefined : 'var(--border)' }}
               >
                 {isEditing ? (
                   /* Full-field edit: show all fields in CueForm edit mode */
@@ -685,7 +687,7 @@ export function AnnotationPanel({
                       </span>
                     )}
                     {isSkipped && (
-                      <span className="absolute -top-2 right-2 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase z-10 bg-slate-600 text-slate-300 tracking-wider">
+                      <span className="absolute -top-2 right-2 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase z-10 tracking-wider" style={{ background: "var(--bg-hover)", color: "var(--text-mid)" }}>
                         Skipped
                       </span>
                     )}
@@ -713,11 +715,11 @@ export function AnnotationPanel({
                                 </div>
                               )}
                               <div className="flex flex-col items-center flex-1 min-w-0">
-                                <span className="text-lg font-semibold text-slate-100 text-center w-full truncate">
+                                <span className="text-lg font-semibold text-center w-full truncate" style={{ color: "var(--text)" }}>
                                   {cue[largeMode.large]}
                                 </span>
                                 {largeMode.small && (
-                                  <span className="text-xs text-slate-400 text-center w-full truncate">
+                                  <span className="text-xs text-center w-full truncate" style={{ color: "var(--text-mid)" }}>
                                     {cue[largeMode.small]}
                                   </span>
                                 )}
@@ -725,10 +727,10 @@ export function AnnotationPanel({
                               {/* Edit / Delete */}
                               {!isDeleting && (
                                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                                  <button type="button" onClick={(e) => { e.stopPropagation(); setEditingId(annotation.id); }} className="p-1 text-slate-500 hover:text-slate-300 hover:bg-slate-700 rounded" title="Edit">
+                                  <button type="button" onClick={(e) => { e.stopPropagation(); setEditingId(annotation.id); }} className="p-1 rounded" style={{ color: "var(--text-dim)" }} onMouseEnter={e=>{e.currentTarget.style.background="var(--bg-hover)";e.currentTarget.style.color="var(--text)"}} onMouseLeave={e=>{e.currentTarget.style.background="";e.currentTarget.style.color="var(--text-dim)"}} title="Edit">
                                     <Pencil className="w-3.5 h-3.5" />
                                   </button>
-                                  <button type="button" onClick={(e) => { e.stopPropagation(); setDeletingId(annotation.id); }} className="p-1 text-slate-500 hover:text-red-400 hover:bg-slate-700 rounded" title="Delete">
+                                  <button type="button" onClick={(e) => { e.stopPropagation(); setDeletingId(annotation.id); }} className="p-1 rounded" style={{ color: "var(--text-dim)" }} onMouseEnter={e=>{e.currentTarget.style.background="var(--bg-hover)";e.currentTarget.style.color="#f87171"}} onMouseLeave={e=>{e.currentTarget.style.background="";e.currentTarget.style.color="var(--text-dim)"}} title="Delete">
                                     <Trash2 className="w-3.5 h-3.5" />
                                   </button>
                                 </div>
@@ -768,7 +770,7 @@ export function AnnotationPanel({
                                       ? 'bg-amber-500/30 text-amber-300 hover:bg-amber-500/40'
                                       : isWarning
                                         ? 'bg-blue-500/30 text-blue-300 hover:bg-blue-500/40'
-                                        : 'bg-slate-700 text-slate-400 hover:bg-slate-600 hover:text-slate-300'}
+                                        : 'bg-[#232329] text-[#8a8680] hover:bg-[#2e2e38] hover:text-[#ede9e3]'}
                                 `}
                               >
                                 {formatTime(annotation.timestamp)}
@@ -788,10 +790,10 @@ export function AnnotationPanel({
                             {/* Edit / Delete actions */}
                             {!isDeleting && (
                               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                                <button type="button" onClick={(e) => { e.stopPropagation(); setEditingId(annotation.id); }} className="p-1 text-slate-500 hover:text-slate-300 hover:bg-slate-700 rounded" title="Edit">
+                                <button type="button" onClick={(e) => { e.stopPropagation(); setEditingId(annotation.id); }} className="p-1 rounded" style={{ color: "var(--text-dim)" }} onMouseEnter={e=>{e.currentTarget.style.background="var(--bg-hover)";e.currentTarget.style.color="var(--text)"}} onMouseLeave={e=>{e.currentTarget.style.background="";e.currentTarget.style.color="var(--text-dim)"}} title="Edit">
                                   <Pencil className="w-3.5 h-3.5" />
                                 </button>
-                                <button type="button" onClick={(e) => { e.stopPropagation(); setDeletingId(annotation.id); }} className="p-1 text-slate-500 hover:text-red-400 hover:bg-slate-700 rounded" title="Delete">
+                                <button type="button" onClick={(e) => { e.stopPropagation(); setDeletingId(annotation.id); }} className="p-1 rounded" style={{ color: "var(--text-dim)" }} onMouseEnter={e=>{e.currentTarget.style.background="var(--bg-hover)";e.currentTarget.style.color="#f87171"}} onMouseLeave={e=>{e.currentTarget.style.background="";e.currentTarget.style.color="var(--text-dim)"}} title="Delete">
                                   <Trash2 className="w-3.5 h-3.5" />
                                 </button>
                               </div>
@@ -820,21 +822,21 @@ export function AnnotationPanel({
                               )}
                               <div className="flex items-center gap-1.5 pt-2.5 px-3 pb-2">
                                 <div className="flex flex-col items-center flex-1 min-w-0">
-                                  <span className="text-lg font-semibold text-slate-100 text-center w-full truncate">
+                                  <span className="text-lg font-semibold text-center w-full truncate" style={{ color: "var(--text)" }}>
                                     {cue[largeMode.large]}
                                   </span>
                                   {largeMode.small && (
-                                    <span className="text-xs text-slate-400 text-center w-full truncate">
+                                    <span className="text-xs text-center w-full truncate" style={{ color: "var(--text-mid)" }}>
                                       {cue[largeMode.small]}
                                     </span>
                                   )}
                                 </div>
                                 {!isDeleting && (
                                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                                    <button type="button" onClick={(e) => { e.stopPropagation(); setEditingId(annotation.id); }} className="p-1 text-slate-500 hover:text-slate-300 hover:bg-slate-700 rounded" title="Edit">
+                                    <button type="button" onClick={(e) => { e.stopPropagation(); setEditingId(annotation.id); }} className="p-1 rounded" style={{ color: "var(--text-dim)" }} onMouseEnter={e=>{e.currentTarget.style.background="var(--bg-hover)";e.currentTarget.style.color="var(--text)"}} onMouseLeave={e=>{e.currentTarget.style.background="";e.currentTarget.style.color="var(--text-dim)"}} title="Edit">
                                       <Pencil className="w-3.5 h-3.5" />
                                     </button>
-                                    <button type="button" onClick={(e) => { e.stopPropagation(); setDeletingId(annotation.id); }} className="p-1 text-slate-500 hover:text-red-400 hover:bg-slate-700 rounded" title="Delete">
+                                    <button type="button" onClick={(e) => { e.stopPropagation(); setDeletingId(annotation.id); }} className="p-1 rounded" style={{ color: "var(--text-dim)" }} onMouseEnter={e=>{e.currentTarget.style.background="var(--bg-hover)";e.currentTarget.style.color="#f87171"}} onMouseLeave={e=>{e.currentTarget.style.background="";e.currentTarget.style.color="var(--text-dim)"}} title="Delete">
                                       <Trash2 className="w-3.5 h-3.5" />
                                     </button>
                                   </div>
@@ -872,7 +874,7 @@ export function AnnotationPanel({
                                         ? 'bg-amber-500/30 text-amber-300 hover:bg-amber-500/40'
                                         : isWarning
                                           ? 'bg-blue-500/30 text-blue-300 hover:bg-blue-500/40'
-                                          : 'bg-slate-700 text-slate-400 hover:bg-slate-600 hover:text-slate-300'}
+                                          : 'bg-[#232329] text-[#8a8680] hover:bg-[#2e2e38] hover:text-[#ede9e3]'}
                                   `}
                                 >
                                   {formatTime(annotation.timestamp)}
@@ -892,10 +894,10 @@ export function AnnotationPanel({
                               {/* Edit / Delete actions */}
                               {!isDeleting && (
                                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                                  <button type="button" onClick={(e) => { e.stopPropagation(); setEditingId(annotation.id); }} className="p-1 text-slate-500 hover:text-slate-300 hover:bg-slate-700 rounded" title="Edit">
+                                  <button type="button" onClick={(e) => { e.stopPropagation(); setEditingId(annotation.id); }} className="p-1 rounded" style={{ color: "var(--text-dim)" }} onMouseEnter={e=>{e.currentTarget.style.background="var(--bg-hover)";e.currentTarget.style.color="var(--text)"}} onMouseLeave={e=>{e.currentTarget.style.background="";e.currentTarget.style.color="var(--text-dim)"}} title="Edit">
                                     <Pencil className="w-3.5 h-3.5" />
                                   </button>
-                                  <button type="button" onClick={(e) => { e.stopPropagation(); setDeletingId(annotation.id); }} className="p-1 text-slate-500 hover:text-red-400 hover:bg-slate-700 rounded" title="Delete">
+                                  <button type="button" onClick={(e) => { e.stopPropagation(); setDeletingId(annotation.id); }} className="p-1 rounded" style={{ color: "var(--text-dim)" }} onMouseEnter={e=>{e.currentTarget.style.background="var(--bg-hover)";e.currentTarget.style.color="#f87171"}} onMouseLeave={e=>{e.currentTarget.style.background="";e.currentTarget.style.color="var(--text-dim)"}} title="Delete">
                                     <Trash2 className="w-3.5 h-3.5" />
                                   </button>
                                 </div>
@@ -908,7 +910,7 @@ export function AnnotationPanel({
 
                     {/* Delete confirmation */}
                     {isDeleting && (
-                      <div className="flex items-center gap-2 text-sm mt-2 pt-2 border-t border-slate-700/50">
+                      <div className="flex items-center gap-2 text-sm mt-2 pt-2 border-t" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
                         <span className="text-red-400 text-xs">Delete this cue?</span>
                         <button
                           type="button"
@@ -927,7 +929,10 @@ export function AnnotationPanel({
                             e.stopPropagation();
                             setDeletingId(null);
                           }}
-                          className="text-xs px-2 py-0.5 bg-slate-700 text-slate-300 rounded hover:bg-slate-600 transition-colors"
+                          className="text-xs px-2 py-0.5 rounded transition-colors"
+                          style={{ background: 'var(--bg-panel)', color: 'var(--text-mid)' }}
+                          onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
+                          onMouseLeave={e => (e.currentTarget.style.background = 'var(--bg-panel)')}
                         >
                           No
                         </button>
@@ -943,12 +948,15 @@ export function AnnotationPanel({
       </div>
 
       {/* Footer actions */}
-      <div className="p-3 border-t border-slate-700 flex gap-2">
+      <div className="p-3 border-t flex gap-2" style={{ borderColor: 'var(--border)' }}>
         <button
           type="button"
           onClick={onExport}
           disabled={annotations.length === 0}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-slate-700 text-slate-300 rounded-md hover:bg-slate-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex-1 justify-center"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex-1 justify-center"
+          style={{ background: 'var(--bg-panel)', color: 'var(--text-mid)' }}
+          onMouseEnter={e => { if (!e.currentTarget.disabled) e.currentTarget.style.background = 'var(--bg-hover)'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'var(--bg-panel)'; }}
         >
           <Download className="w-3.5 h-3.5" />
           Export
@@ -956,7 +964,10 @@ export function AnnotationPanel({
         <button
           type="button"
           onClick={onImport}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-slate-700 text-slate-300 rounded-md hover:bg-slate-600 transition-colors flex-1 justify-center"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md transition-colors flex-1 justify-center"
+          style={{ background: 'var(--bg-panel)', color: 'var(--text-mid)' }}
+          onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
+          onMouseLeave={e => (e.currentTarget.style.background = 'var(--bg-panel)')}
         >
           <Upload className="w-3.5 h-3.5" />
           Import CSV

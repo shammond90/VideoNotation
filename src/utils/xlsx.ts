@@ -19,7 +19,7 @@ export interface XlsxExportOptions {
 function resolveFieldValue(key: string, annotation: Annotation): string {
   if (key === 'timestamp') return formatTime(annotation.timestamp);
   if (key === 'timeInTitle') return annotation.timeInTitle !== null ? formatTime(annotation.timeInTitle) : '';
-  const val = (annotation.cue as Record<string, string>)[key];
+  const val = (annotation.cue as unknown as Record<string, string>)[key];
   return val ?? '';
 }
 

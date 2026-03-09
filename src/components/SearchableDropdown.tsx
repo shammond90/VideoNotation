@@ -132,12 +132,14 @@ export function SearchableDropdown({
         onFocus={handleFocus}
         onKeyDown={handleKeyDown}
         placeholder={value || placeholder}
-        className="w-full bg-slate-700 text-slate-200 rounded px-2 py-1.5 text-xs border border-slate-600 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none placeholder-slate-500"
+        className="w-full rounded px-2 py-1.5 text-xs outline-none"
+        style={{ background: 'var(--bg-input)', color: 'var(--text)', border: '1px solid var(--border)', caretColor: 'var(--amber)' }}
       />
       {isOpen && filtered.length > 0 && (
         <ul
           ref={listRef}
-          className="absolute z-50 top-full left-0 right-0 mt-1 bg-slate-700 border border-slate-600 rounded-md shadow-lg max-h-48 overflow-y-auto annotation-scroll"
+          className="absolute z-50 top-full left-0 right-0 mt-1 rounded-md shadow-lg max-h-48 overflow-y-auto annotation-scroll"
+          style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-hi)' }}
         >
           {filtered.map((opt, i) => (
             <li
@@ -147,11 +149,11 @@ export function SearchableDropdown({
                 selectOption(opt);
               }}
               onMouseEnter={() => setHighlightIndex(i)}
-              className={`px-3 py-1.5 text-xs cursor-pointer transition-colors ${
-                i === highlightIndex
-                  ? 'bg-indigo-600 text-white'
-                  : 'text-slate-200 hover:bg-slate-600'
-              } ${opt === value ? 'font-semibold' : ''}`}
+              className={`px-3 py-1.5 text-xs cursor-pointer transition-colors ${opt === value ? 'font-semibold' : ''}`}
+              style={{
+                background: i === highlightIndex ? 'var(--amber)' : undefined,
+                color: i === highlightIndex ? 'white' : 'var(--text)',
+              }}
             >
               {opt}
             </li>
@@ -159,7 +161,7 @@ export function SearchableDropdown({
         </ul>
       )}
       {isOpen && filtered.length === 0 && (
-        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-slate-700 border border-slate-600 rounded-md shadow-lg px-3 py-2 text-xs text-slate-500">
+        <div className="absolute z-50 top-full left-0 right-0 mt-1 rounded-md shadow-lg px-3 py-2 text-xs" style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-hi)', color: 'var(--text-dim)' }}>
           No matches
         </div>
       )}

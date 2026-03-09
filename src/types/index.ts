@@ -330,3 +330,40 @@ export const EXPORT_POOL_FIELDS: { key: string; label: string }[] = [
     .filter((k) => k !== 'type' && k !== 'cueNumber')
     .map((k) => ({ key: k, label: CUE_FIELD_LABELS[k] })),
 ];
+
+// ── Project Management types ──
+
+/** Video reference stored with a project. All four fields are either all populated or all null. */
+export interface VideoReference {
+  video_filename: string | null;
+  video_path: string | null;
+  video_filesize: number | null;
+  video_duration: number | null;
+}
+
+/** A project record. Top-level container for a production. */
+export interface Project {
+  id: string;
+  name: string;
+  created_at: number; // timestamp in milliseconds
+  updated_at: number; // timestamp in milliseconds
+
+  // Optional production metadata
+  production_name?: string;
+  choreographer?: string;
+  venue?: string;
+  year?: string;
+  notes?: string;
+
+  // Video reference (all or nothing)
+  video_filename: string | null;
+  video_path: string | null;
+  video_filesize: number | null;
+  video_duration: number | null;
+
+  // Configuration snapshot
+  config_template_id?: string; // informational, not linked after creation
+  config: AppConfig;
+  columns: ColumnConfig[];
+  export_templates: ExportTemplate[];
+}

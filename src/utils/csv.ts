@@ -97,6 +97,8 @@ export function importAnnotationsFromCSV(file: File): Promise<Annotation[]> {
               autofollow: row.autofollow || '',
               followCueNumber: row.follow_cue_number || '',
               linkCueNumber: row.link_cue_number || '',
+              loopTargetTimestamp: row.loop_target_timestamp || '',
+              loopTargetCueNumber: row.loop_target_cue_number || '',
             };
             const timeInTitle = row.time_in_title ? parseFloat(row.time_in_title) : null;
             return {
