@@ -648,10 +648,17 @@ export function ConfigurationModal({
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
-    const fromIndex = activeColumns.findIndex((c) => c.key === active.id);
-    const toIndex = activeColumns.findIndex((c) => c.key === over.id);
+    // Resolve indices against the FULL (unfiltered) column array so splice
+    // targets the correct positions even when activeColumns is a subset.
+    const cueType = columnView !== 'default' ? columnView : undefined;
+    const baseColumns =
+      cueType && cueTypeColumns[cueType]
+        ? cueTypeColumns[cueType]
+        : visibleColumns;
+    const fromIndex = baseColumns.findIndex((c) => c.key === active.id);
+    const toIndex = baseColumns.findIndex((c) => c.key === over.id);
     if (fromIndex !== -1 && toIndex !== -1) {
-      onReorderColumns(fromIndex, toIndex, columnView !== 'default' ? columnView : undefined);
+      onReorderColumns(fromIndex, toIndex, cueType);
     }
   };
 
