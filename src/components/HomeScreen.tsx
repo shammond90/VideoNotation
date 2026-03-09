@@ -73,7 +73,7 @@ export function HomeScreen({
             onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--text-dim)'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--text)'; }}
             onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border-hi)'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-mid)'; }}
           >
-            â†‘ Import
+            Import
           </button>
           <button
             onClick={onCreateProject}
@@ -159,7 +159,7 @@ export function HomeScreen({
  */
 function ProjectCard({ project, onSelect }: { project: Project; onSelect: () => void }) {
   const lastModified = formatRelativeTime(project.updated_at);
-  const prodLine = [project.production_name, project.venue, project.year].filter(Boolean).join(' Â· ');
+  const prodLine = [project.production_name, project.venue, project.year].filter(Boolean).join(' \u00B7 ');
 
   return (
     <div
@@ -233,7 +233,7 @@ function ProjectCard({ project, onSelect }: { project: Project; onSelect: () => 
         </div>
         <div className="font-mono" style={{ fontSize: 10, color: 'var(--text-dim)' }}>
           {project.video_filename ? (
-            <span>ðŸ“¹ <span style={{ color: 'var(--text-mid)' }}>{truncate(project.video_filename, 36)}</span></span>
+            <span>{'\uD83D\uDCF9'} <span style={{ color: 'var(--text-mid)' }}>{truncate(project.video_filename, 36)}</span></span>
           ) : (
             <span style={{ fontStyle: 'italic' }}>No video assigned</span>
           )}
@@ -244,7 +244,7 @@ function ProjectCard({ project, onSelect }: { project: Project; onSelect: () => 
 }
 
 function truncate(str: string, max: number): string {
-  return str.length > max ? str.slice(0, max - 1) + 'â€¦' : str;
+  return str.length > max ? str.slice(0, max - 1) + '\u2026' : str;
 }
 
 function formatRelativeTime(timestamp: number): string {

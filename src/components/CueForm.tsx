@@ -390,14 +390,15 @@ export function CueForm({
     }
   }, [timestamp, isCreate]);
 
-  // Auto-focus type dropdown
+  // Auto-focus type dropdown (only in create mode)
   useEffect(() => {
+    if (!isCreate) return;
     const timer = setTimeout(() => {
       const input = firstInputRef.current?.querySelector('input');
       input?.focus();
     }, 50);
     return () => clearTimeout(timer);
-  }, []);
+  }, [isCreate]);
 
   const handleChange = (name: keyof CueFields, value: string) => {
     setFields((prev) => ({ ...prev, [name]: value }));
@@ -614,8 +615,8 @@ export function CueForm({
                 options={cueTypes}
                 value={fields.type}
                 onChange={(val) => handleChange('type', val)}
-                placeholder="— Select Type —"
-                autoFocus={true}
+                placeholder="\u2014 Select Type \u2014"
+                autoFocus={isCreate}
               />
             </div>
             {showCueNumHere && (

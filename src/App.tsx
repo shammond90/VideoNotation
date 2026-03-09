@@ -737,58 +737,6 @@ export default function App({
 
         {/* Right side */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          {/* Video filename */}
-          {videoFile && (
-            <>
-              <span className="font-mono" style={{
-                fontSize: 10,
-                color: 'var(--text-dim)',
-                maxWidth: 180,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                paddingRight: 10,
-                borderRight: '1px solid var(--border)',
-                marginRight: 4,
-              }}>{videoFile.name}</span>
-              <button
-                type="button"
-                onClick={() => setIsChangeVideoOpen(true)}
-                className="font-mono"
-                style={{
-                  fontSize: 10,
-                  color: 'var(--text-dim)',
-                  cursor: 'pointer',
-                  textDecoration: 'underline',
-                  background: 'transparent',
-                  border: 'none',
-                  fontFamily: 'inherit',
-                }}
-                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-mid)'; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-dim)'; }}
-              >
-                Change
-              </button>
-            </>
-          )}
-          {isNoVideoMode && !videoFile && (
-            <button
-              type="button"
-              onClick={() => setIsNoVideoMode(false)}
-              className="font-mono"
-              style={{
-                fontSize: 10,
-                color: 'var(--text-dim)',
-                cursor: 'pointer',
-                textDecoration: 'underline',
-                background: 'transparent',
-                border: 'none',
-                fontFamily: 'inherit',
-              }}
-            >
-              Upload video
-            </button>
-          )}
           {/* Settings button */}
           <button
             type="button"
@@ -864,6 +812,37 @@ export default function App({
                   <p className="font-mono text-sm" style={{ color: 'var(--text-dim)', letterSpacing: '0.05em' }}>NO VIDEO LOADED</p>
                   <p className="font-mono text-xs mt-1" style={{ color: 'var(--text-dim)' }}>Cues will default to 0:00</p>
                 </div>
+              </div>
+            )}
+            {/* Video filename bar */}
+            {videoFile && (
+              <div className="flex items-center justify-between font-mono" style={{ padding: '6px 12px', background: 'var(--bg-raised)', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
+                <span style={{ fontSize: 11, color: 'var(--text-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
+                  {videoFile.name}
+                  {videoFile.size ? <span style={{ color: 'var(--text-dim)', opacity: 0.6, marginLeft: 8 }}>{(videoFile.size / (1024 * 1024)).toFixed(0)}MB</span> : null}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsChangeVideoOpen(true)}
+                  className="font-mono"
+                  style={{ fontSize: 11, color: 'var(--text-dim)', cursor: 'pointer', textDecoration: 'underline', background: 'transparent', border: 'none', fontFamily: 'inherit', whiteSpace: 'nowrap', marginLeft: 12, flexShrink: 0 }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--text)'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-dim)'; }}
+                >
+                  Change video
+                </button>
+              </div>
+            )}
+            {isNoVideoMode && !videoFile && (
+              <div className="flex items-center justify-center font-mono" style={{ padding: '6px 12px', background: 'var(--bg-raised)', borderTop: '1px solid var(--border)' }}>
+                <button
+                  type="button"
+                  onClick={() => setIsNoVideoMode(false)}
+                  className="font-mono"
+                  style={{ fontSize: 11, color: 'var(--text-dim)', cursor: 'pointer', textDecoration: 'underline', background: 'transparent', border: 'none', fontFamily: 'inherit' }}
+                >
+                  Upload video
+                </button>
               </div>
             )}
             {isAnnotating && (
