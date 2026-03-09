@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import { useProject } from './hooks/useProject';
 import { HomeScreen } from './components/HomeScreen';
 import { CreateProjectForm } from './components/CreateProjectForm';
@@ -230,7 +231,7 @@ export function AppShell() {
 
   // ────────────────────────────────────
   // Project switcher
-  // ────────────────────────────────────
+  // ──�������─────────────────���───────────────
 
   const handleOpenSwitcher = useCallback(() => {
     if (unsavedChanges) {
@@ -285,16 +286,20 @@ export function AppShell() {
             onRename={handleImportConflictRename}
           />
         )}
+        <Analytics />
       </>
     );
   }
 
   if (appState.screen === 'create-project') {
     return (
-      <CreateProjectForm
-        onCancel={handleCreateProjectCancel}
-        onCreate={handleCreateProjectSubmit}
-      />
+      <>
+        <CreateProjectForm
+          onCancel={handleCreateProjectCancel}
+          onCreate={handleCreateProjectSubmit}
+        />
+        <Analytics />
+      </>
     );
   }
 
@@ -326,6 +331,7 @@ export function AppShell() {
           onProjectSelected={handleSwitchToProject}
           onClose={() => setSwitcherOpen(false)}
         />
+        <Analytics />
       </>
     );
   }
@@ -333,6 +339,7 @@ export function AppShell() {
   return (
     <div className="flex items-center justify-center h-screen bg-gray-900 text-gray-100">
       <p>Loading...</p>
+      <Analytics />
     </div>
   );
 }
