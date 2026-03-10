@@ -141,6 +141,10 @@ export function useConfiguration() {
     setConfig((prev) => ({ ...prev, distanceView: value }));
   }, []);
 
+  const setCueSheetView = useCallback((view: 'classic' | 'production') => {
+    setConfig((prev) => ({ ...prev, cueSheetView: view }));
+  }, []);
+
   const setShowVideoTimecode = useCallback((show: boolean) => {
     setConfig((prev) => ({ ...prev, showVideoTimecode: show }));
   }, []);
@@ -388,6 +392,7 @@ export function useConfiguration() {
     setShowPastCues,
     setShowSkippedCues,
     setDistanceView,
+    setCueSheetView,
     setShowVideoTimecode,
     setVideoTimecodePosition,
     setCueBackupInterval,

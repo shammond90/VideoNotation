@@ -187,12 +187,15 @@ export const VIRTUAL_COLUMN_LABELS: Record<string, string> = {
   timeInTitle: 'Time in Title',
 };
 
+export type CueSheetView = 'classic' | 'production';
+
 export interface AppConfig {
   cueTypes: string[];
   cueTypeColors: Record<string, string>; // hex colour per cue type
   visibleColumns: ColumnConfig[];
   cueTypeColumns: Record<string, ColumnConfig[]>; // per-cue-type column overrides
   distanceView: boolean;
+  cueSheetView: CueSheetView; // 'classic' (default) or 'production'
   cueTypeAllowStandby: Record<string, boolean>; // DEPRECATED — migrated into cueTypeFields
   cueTypeAllowWarning: Record<string, boolean>; // DEPRECATED — migrated into cueTypeFields
   cueTypeFields: Record<string, string[]>; // per-cue-type visible form fields (keys from EDITABLE_FIELD_KEYS)
@@ -305,6 +308,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   visibleColumns: DEFAULT_VISIBLE_COLUMNS,
   cueTypeColumns: {},
   distanceView: true,
+  cueSheetView: 'classic',
   cueTypeAllowStandby: {},
   cueTypeAllowWarning: {},
   cueTypeFields: {},

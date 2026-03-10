@@ -32,6 +32,7 @@ interface AnnotationPanelProps {
   expandedSearchFilter: boolean;
   onSetExpandedSearchFilter: (expanded: boolean) => void;
   showPastCues: boolean;
+  cueSheetView: 'classic' | 'production';
   cueTypeFields: Record<string, string[]>;
   onSeek: (time: number) => void;
   onEdit: (id: string, cue: CueFields, newTimestamp?: number) => void;
@@ -263,6 +264,7 @@ export function AnnotationPanel({
   expandedSearchFilter,
   onSetExpandedSearchFilter,
   showPastCues,
+  cueSheetView,
   cueTypeFields,
   onSeek,
   onEdit,
@@ -592,6 +594,88 @@ export function AnnotationPanel({
       setContextMenu({ annotation, position: { x: e.clientX, y: e.clientY } });
     };
 
+    // ── Production view title ──
+    if (cueSheetView === 'production') {
+      return (
+        <div
+          key={annotation.id}
+          id={`cue-${annotation.id}`}
+          className="group"
+          style={{
+            position: 'sticky',
+            top: 0,
+            zIndex: 20,
+            background: 'var(--bg-panel)',
+            borderTop: `2px solid ${TITLE_COLOR}`,
+            borderBottom: '1px solid var(--border)',
+            height: TITLE_ROW_HEIGHT,
+            display: 'flex',
+            alignItems: 'center',
+            paddingLeft: 14,
+            paddingRight: 14,
+            cursor: 'pointer',
+            gap: 8,
+          }}
+          onClick={() => toggleCollapse(annotation.id)}
+          onContextMenu={handleTitleContextMenu}
+        >
+          <span style={{ color: 'var(--text-dim)', transition: 'transform 0.2s', transform: titleCollapsed ? 'rotate(0deg)' : 'rotate(90deg)', display: 'inline-flex' }}>
+            <ChevronRight className="w-3.5 h-3.5" />
+          </span>
+          <span
+            className="font-mono text-[8px] font-medium tracking-wide uppercase shrink-0"
+            style={{
+              color: TITLE_COLOR,
+              background: `${TITLE_COLOR}26`,
+              border: `1px solid ${TITLE_COLOR}4d`,
+              padding: '2px 5px',
+              borderRadius: 2,
+            }}
+          >
+            TITLE
+          </span>
+          {isInlineEditing ? (
+            <input
+              ref={inlineEditInputRef}
+              type="text"
+              value={inlineEditValue}
+              onChange={(e) => setInlineEditValue(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commitInlineEdit(); } if (e.key === 'Escape') { e.preventDefault(); cancelInlineEdit(); } }}
+              onBlur={commitInlineEdit}
+              onClick={(e) => e.stopPropagation()}
+              className="font-semibold text-[13px] outline-none bg-transparent px-1 py-0.5 rounded"
+              style={{ color: 'var(--text)', border: `1px solid ${TITLE_COLOR}`, minWidth: 80, letterSpacing: '-0.01em' }}
+              autoFocus
+            />
+          ) : (
+            <span className="font-semibold text-[13px] truncate flex-1" style={{ color: 'var(--text)', letterSpacing: '-0.01em' }}
+              onDoubleClick={(e) => { e.stopPropagation(); startInlineEdit(annotation); }}
+              title="Double-click to rename">
+              {annotation.cue.what || 'Untitled'}
+            </span>
+          )}
+          {flaggedCount > 0 && (
+            <span className="flex items-center gap-0.5 text-[10px] font-mono shrink-0" style={{ color: '#f59e0b' }} title={`${flaggedCount} flagged cue${flaggedCount > 1 ? 's' : ''}`}>
+              <Flag className="w-3 h-3" />{flaggedCount}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onSeek(annotation.timestamp); }}
+            className="font-mono text-[10px] shrink-0 transition-colors cursor-pointer"
+            style={{ color: 'var(--text-dim)' }}
+            onMouseEnter={e => { e.currentTarget.style.color = 'var(--text)'; }}
+            onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-dim)'; }}
+            title="Jump to this time"
+          >
+            {formatTime(annotation.timestamp)}
+          </button>
+          <span style={{ color: 'var(--text-dim)', fontSize: 10, flexShrink: 0 }}>⌄</span>
+        </div>
+      );
+    }
+
+    // ── Classic view title ──
     return (
       <div
         key={annotation.id}
@@ -684,6 +768,87 @@ export function AnnotationPanel({
       setContextMenu({ annotation, position: { x: e.clientX, y: e.clientY } });
     };
 
+    // ── Production view scene ──
+    if (cueSheetView === 'production') {
+      return (
+        <div
+          key={annotation.id}
+          id={`cue-${annotation.id}`}
+          className="group"
+          style={{
+            position: 'sticky',
+            top: stickyTop,
+            zIndex: 10,
+            background: 'var(--bg-raised)',
+            borderBottom: '1px solid var(--border)',
+            height: 34,
+            display: 'flex',
+            alignItems: 'center',
+            paddingLeft: parentTitleId ? 26 : 14,
+            paddingRight: 14,
+            cursor: 'pointer',
+            gap: 8,
+          }}
+          onClick={() => toggleCollapse(annotation.id)}
+          onContextMenu={handleSceneContextMenu}
+        >
+          <span style={{ color: 'var(--text-dim)', transition: 'transform 0.2s', transform: sceneCollapsed ? 'rotate(0deg)' : 'rotate(90deg)', display: 'inline-flex' }}>
+            <ChevronRight className="w-3 h-3" />
+          </span>
+          <span
+            className="font-mono text-[8px] font-medium tracking-wide uppercase shrink-0"
+            style={{
+              color: SCENE_COLOR,
+              background: `${SCENE_COLOR}1a`,
+              border: `1px solid ${SCENE_COLOR}40`,
+              padding: '2px 5px',
+              borderRadius: 2,
+            }}
+          >
+            SCENE
+          </span>
+          {isInlineEditing ? (
+            <input
+              ref={inlineEditInputRef}
+              type="text"
+              value={inlineEditValue}
+              onChange={(e) => setInlineEditValue(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commitInlineEdit(); } if (e.key === 'Escape') { e.preventDefault(); cancelInlineEdit(); } }}
+              onBlur={commitInlineEdit}
+              onClick={(e) => e.stopPropagation()}
+              className="text-[11px] font-medium outline-none bg-transparent px-1 py-0.5 rounded"
+              style={{ color: 'var(--text)', border: `1px solid ${SCENE_COLOR}`, minWidth: 60 }}
+              autoFocus
+            />
+          ) : (
+            <span className="text-[11px] font-medium truncate flex-1" style={{ color: 'var(--text-mid)' }}
+              onDoubleClick={(e) => { e.stopPropagation(); startInlineEdit(annotation); }}
+              title="Double-click to rename">
+              {annotation.cue.what || 'Untitled Scene'}
+            </span>
+          )}
+          {flaggedCount > 0 && (
+            <span className="flex items-center gap-0.5 text-[10px] font-mono shrink-0" style={{ color: '#f59e0b' }} title={`${flaggedCount} flagged cue${flaggedCount > 1 ? 's' : ''}`}>
+              <Flag className="w-3 h-3" />{flaggedCount}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onSeek(annotation.timestamp); }}
+            className="font-mono text-[10px] shrink-0 transition-colors cursor-pointer"
+            style={{ color: 'var(--text-dim)' }}
+            onMouseEnter={e => { e.currentTarget.style.color = 'var(--text)'; }}
+            onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-dim)'; }}
+            title="Jump to this time"
+          >
+            {formatTime(annotation.timestamp)}
+          </button>
+          <span style={{ color: 'var(--text-dim)', fontSize: 10, flexShrink: 0 }}>⌄</span>
+        </div>
+      );
+    }
+
+    // ── Classic view scene ──
     return (
       <div
         key={annotation.id}
@@ -796,6 +961,190 @@ export function AnnotationPanel({
       setContextMenu({ annotation, position: { x: e.clientX, y: e.clientY } });
     };
 
+    // ── Production view ──
+    if (cueSheetView === 'production') {
+      const cueColor = getCueColor(cue.type);
+      // Left bar colour = live status: warning=blue, standby=amber, active=green
+      const leftBarColor = isActive ? '#3d9962' : isStandby ? '#BF5700' : isWarning ? '#2d9cdb' : 'transparent';
+      const prodIndentPx = indent === 'scene' ? 40 : indent === 'title' ? 26 : 14;
+
+      return (
+        <div
+          key={annotation.id}
+          id={`cue-${annotation.id}`}
+          ref={(el) => { if (isFirstActive && el) activeRef.current = el; }}
+          onClick={handleClick}
+          onDoubleClick={handleDoubleClick}
+          onContextMenu={handleContextMenu}
+          className="cursor-pointer relative transition-colors duration-100"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            minHeight: 48,
+            paddingLeft: prodIndentPx,
+            paddingRight: 14,
+            borderBottom: '1px solid var(--border)',
+            background: isActive ? 'var(--bg-panel)' : undefined,
+            opacity: isCut ? 0.3 : isSkipped ? 0.4 : undefined,
+          }}
+          onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = 'var(--bg-hover)'; }}
+          onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = ''; }}
+        >
+          {/* Left bar — live status */}
+          <div
+            style={{
+              position: 'absolute',
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: 3,
+              background: leftBarColor,
+              transition: 'background 0.15s',
+            }}
+          />
+
+          {/* Tie group bracket */}
+          {isTied && (
+            <div
+              style={{
+                position: 'absolute',
+                left: prodIndentPx - 8,
+                top: isFirstInTie ? '50%' : 0,
+                bottom: isLastInTie ? '50%' : 0,
+                width: 2,
+                background: 'var(--text-dim)',
+                borderRadius: 1,
+              }}
+            />
+          )}
+
+          {isEditing ? (
+            <div className="p-3 flex-1">
+              <CueForm
+                mode="edit"
+                timestamp={annotation.timestamp}
+                initialValues={cue}
+                timeInTitle={annotation.timeInTitle}
+                allAnnotations={annotations}
+                cueTypes={cueTypes}
+                cueTypeFields={cueTypeFields}
+                onSave={(updated, newTimestamp) => { onEdit(annotation.id, updated, newTimestamp); setEditingId(null); }}
+                onCancel={() => setEditingId(null)}
+              />
+            </div>
+          ) : (
+            <>
+              {/* Zone 1: Badge */}
+              {cue.type && (
+                <div
+                  className="shrink-0 text-center font-mono mr-3"
+                  style={{
+                    width: 54,
+                    padding: '5px 0',
+                    borderRadius: 3,
+                    border: `1px solid ${cueColor}33`,
+                    background: `${cueColor}14`,
+                    color: cueColor,
+                  }}
+                >
+                  <div className="text-[8px] font-medium tracking-wide uppercase" style={{ opacity: 0.8 }}>
+                    {getCueTypeDisplayName(cue.type)}
+                  </div>
+                  <div className={`text-[13px] font-medium${isCut ? ' line-through' : ''}`}>
+                    {cue.cueNumber || '—'}
+                  </div>
+                </div>
+              )}
+
+              {/* Zone 2: What / When */}
+              {(primaryText || secondaryText) && (
+                <div className="shrink-0 flex flex-col justify-center gap-px min-w-0 mr-3 py-1.5 overflow-hidden" style={{ width: 180 }}>
+                  {primaryText && (
+                    <div className="text-xs font-medium truncate" style={{ color: 'var(--text)', lineHeight: 1.3 }}>
+                      {primaryText}
+                    </div>
+                  )}
+                  {secondaryText && (
+                    <div className="text-[11px] truncate" style={{ color: 'var(--text-dim)', lineHeight: 1.3 }}>
+                      {secondaryText}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Zone 3: Chips */}
+              <div className="flex-1 flex items-center gap-1 flex-wrap min-w-0 overflow-hidden py-1.5">
+                {extraChips.map((chip) => (
+                  <span
+                    key={chip.key}
+                    className="inline-flex items-baseline gap-1 font-mono text-[10px] shrink-0 whitespace-nowrap"
+                    style={{
+                      background: 'var(--bg-panel)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 3,
+                      padding: '2px 6px',
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    <span className="uppercase text-[9px] tracking-wide" style={{ color: 'var(--text-dim)' }}>{chip.label}</span>
+                    <span style={{ color: 'var(--text-mid)' }}>{chip.value}</span>
+                  </span>
+                ))}
+              </div>
+
+              {/* Zone 4: Right meta — status dot · flag · timecode */}
+              <div
+                className="shrink-0 flex items-center gap-1.5 ml-3 pl-3"
+                style={{ borderLeft: '1px solid var(--border)' }}
+              >
+                {statusColor && (
+                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: statusColor }} title={annotation.status} />
+                )}
+                {isFlagged && (
+                  <span title={annotation.flagNote || 'Flagged'} style={{ color: '#f59e0b', fontSize: 10, lineHeight: 1 }}>
+                    <Flag className="w-2.5 h-2.5" />
+                  </span>
+                )}
+                {showTimestamp && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onSeek(annotation.timestamp); }}
+                    className="font-mono text-[10px] tracking-wide shrink-0 whitespace-nowrap transition-colors cursor-pointer"
+                    style={{ color: 'var(--text-dim)' }}
+                    onMouseEnter={e => { e.currentTarget.style.color = 'var(--text)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-dim)'; }}
+                  >
+                    {formatTime(annotation.timestamp)}
+                  </button>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* Delete confirmation */}
+          {isDeleting && (
+            <div className="flex items-center gap-2 text-sm ml-2">
+              <span className="text-red-400 text-xs">Delete?</span>
+              <button type="button" onClick={(e) => { e.stopPropagation(); onDelete(annotation.id); setDeletingId(null); }} className="text-xs px-2 py-0.5 bg-red-600 text-white rounded hover:bg-red-500">Yes</button>
+              <button type="button" onClick={(e) => { e.stopPropagation(); setDeletingId(null); }} className="text-xs px-2 py-0.5 rounded" style={{ background: 'var(--bg-panel)', color: 'var(--text-mid)' }}>No</button>
+            </div>
+          )}
+
+          {/* Expanded detail view */}
+          {isExpanded && !isEditing && (
+            <div style={{ position: 'absolute', left: 0, right: 0, top: '100%', zIndex: 5 }}>
+              <ExpandedCueView
+                annotation={annotation}
+                columns={cols}
+                onEdit={() => setSlideEditId(annotation.id)}
+              />
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ── Classic view ──
     return (
       <div
         key={annotation.id}
@@ -857,7 +1206,7 @@ export function AnnotationPanel({
             {isStandby && <span className="absolute -top-2 right-2 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase z-10 bg-amber-600 text-amber-100 tracking-wider">Standby</span>}
             {isSkipped && <span className="absolute -top-2 right-2 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase z-10 tracking-wider" style={{ background: 'var(--bg-hover)', color: 'var(--text-mid)' }}>Skipped</span>}
 
-            {/* Distance view layout — always used */}
+            {/* Classic view layout */}
             <div className="flex items-center gap-1.5 pr-2 pt-0.5 pb-0.5">
                 {cue.type && (
                   <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-l-lg text-white font-bold text-sm uppercase tracking-wide shrink-0 self-stretch" style={{ backgroundColor: getCueColor(cue.type) }}>
@@ -1122,7 +1471,7 @@ export function AnnotationPanel({
             {!isPastCollapsed && (
               <div
                 ref={pastScrollRef}
-                className="shrink-0 max-h-24 overflow-y-auto annotation-scroll px-3 pb-1 space-y-2"
+                className={`shrink-0 max-h-24 overflow-y-auto annotation-scroll ${cueSheetView === 'production' ? 'pb-0' : 'px-3 pb-1 space-y-2'}`}
               >
                 {/* Chronological: oldest first, newest last (user scrolls up for older) */}
                 {pastCues.map((annotation) => {
@@ -1134,6 +1483,77 @@ export function AnnotationPanel({
                   const isEditing = annotation.id === editingId;
                   const isDeleting = annotation.id === deletingId;
                   const isPastSkipped = skippedIds.has(annotation.id);
+                  const pastStatusColor = annotation.status !== 'provisional' ? CUE_STATUS_COLORS[annotation.status] : null;
+                  const pastIsCut = annotation.status === 'cut';
+                  const pastIsFlagged = annotation.flagged;
+
+                  // ── Production view past cue ──
+                  if (cueSheetView === 'production') {
+                    const cueColor = getCueColor(cue.type);
+                    return (
+                      <div
+                        key={annotation.id}
+                        className={`cursor-pointer relative transition-opacity ${
+                          isPastSkipped ? 'opacity-20 hover:opacity-40' : 'opacity-40 hover:opacity-70'
+                        }`}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          minHeight: 40,
+                          paddingLeft: 14,
+                          paddingRight: 14,
+                          borderBottom: '1px solid var(--border)',
+                          opacity: pastIsCut ? 0.2 : undefined,
+                        }}
+                      >
+                        {/* Badge */}
+                        {cue.type && (
+                          <div
+                            className="shrink-0 text-center font-mono mr-3"
+                            style={{
+                              width: 48,
+                              padding: '3px 0',
+                              borderRadius: 3,
+                              border: `1px solid ${cueColor}33`,
+                              background: `${cueColor}14`,
+                              color: cueColor,
+                            }}
+                          >
+                            <div className="text-[7px] font-medium tracking-wide uppercase" style={{ opacity: 0.8 }}>
+                              {getCueTypeDisplayName(cue.type)}
+                            </div>
+                            <div className={`text-[12px] font-medium${pastIsCut ? ' line-through' : ''}`}>
+                              {cue.cueNumber || '—'}
+                            </div>
+                          </div>
+                        )}
+                        {/* What/When */}
+                        {pastPrimary && (
+                          <div className="shrink-0 flex flex-col justify-center gap-px min-w-0 mr-3 overflow-hidden" style={{ width: 140 }}>
+                            <div className="text-[11px] font-medium truncate" style={{ color: 'var(--text)' }}>{pastPrimary}</div>
+                            {pastSecondary && <div className="text-[10px] truncate" style={{ color: 'var(--text-dim)' }}>{pastSecondary}</div>}
+                          </div>
+                        )}
+                        {/* Chips */}
+                        <div className="flex-1 flex items-center gap-1 flex-wrap min-w-0 overflow-hidden">
+                          {pastChips.slice(0, 2).map((chip) => (
+                            <span key={chip.key} className="inline-flex items-baseline gap-1 font-mono text-[9px] shrink-0 whitespace-nowrap" style={{ background: 'var(--bg-panel)', border: '1px solid var(--border)', borderRadius: 3, padding: '1px 4px' }}>
+                              <span className="uppercase text-[8px]" style={{ color: 'var(--text-dim)' }}>{chip.label}</span>
+                              <span style={{ color: 'var(--text-mid)' }}>{chip.value}</span>
+                            </span>
+                          ))}
+                        </div>
+                        {/* Right meta */}
+                        <div className="shrink-0 flex items-center gap-1.5 ml-2 pl-2" style={{ borderLeft: '1px solid var(--border)' }}>
+                          {pastStatusColor && <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: pastStatusColor }} />}
+                          {pastIsFlagged && <span style={{ color: '#f59e0b', fontSize: 9 }}><Flag className="w-2.5 h-2.5" /></span>}
+                          {showTimestamp && <span className="font-mono text-[9px] shrink-0" style={{ color: 'var(--text-dim)' }}>{formatTime(annotation.timestamp)}</span>}
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  // ── Classic view past cue ──
                   return (
                     <div
                       key={annotation.id}

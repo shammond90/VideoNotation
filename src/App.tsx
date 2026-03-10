@@ -136,6 +136,7 @@ export default function App({
     reloadConfig,
     saveConfigBackup,
     setCueBackupInterval,
+    setCueSheetView,
     clearAllData,
     clearCurrentVideoCues,
     clearAllCues,
@@ -1081,6 +1082,7 @@ export default function App({
               expandedSearchFilter={config.expandedSearchFilter}
               onSetExpandedSearchFilter={setExpandedSearchFilter}
               showPastCues={config.showPastCues}
+              cueSheetView={config.cueSheetView}
               cueTypeFields={config.cueTypeFields}
               onSeek={handleSeek}
               onEdit={updateAnnotation}
@@ -1182,6 +1184,8 @@ export default function App({
         showSkippedCues={config.showSkippedCues}
         onSetShowSkippedCues={setShowSkippedCues}
         showVideoTimecode={config.showVideoTimecode}
+        cueSheetView={config.cueSheetView}
+        onSetCueSheetView={setCueSheetView}
         onSetShowVideoTimecode={setShowVideoTimecode}
         currentVideoName={videoFile?.name}
         currentVideoSize={videoFile?.size}

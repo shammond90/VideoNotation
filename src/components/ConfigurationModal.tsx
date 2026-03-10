@@ -65,6 +65,8 @@ interface ConfigurationModalProps {
   showPastCues: boolean;
   showSkippedCues: boolean;
   showVideoTimecode: boolean;
+  cueSheetView: 'classic' | 'production';
+  onSetCueSheetView: (view: 'classic' | 'production') => void;
   currentVideoName?: string;
   currentVideoSize?: number;
   cueBackupIntervalMinutes: number;
@@ -486,6 +488,8 @@ export function ConfigurationModal({
   showPastCues,
   showSkippedCues,
   showVideoTimecode,
+  cueSheetView,
+  onSetCueSheetView,
   currentVideoName,
   currentVideoSize,
   cueBackupIntervalMinutes,
@@ -1266,6 +1270,38 @@ export function ConfigurationModal({
               <p className="text-xs text-[#8a8680]">
                 Control how cues are displayed in the cue sheet.
               </p>
+
+              {/* Cue Sheet View selector */}
+              <div className="px-3 py-3 bg-[#232329]/50 rounded-md border border-[#3a3a46]/50">
+                <span className="text-sm text-[#ede9e3] font-medium">Cue Sheet View</span>
+                <p className="text-[10px] text-[#4e4a56] mt-0.5 mb-2">
+                  Choose between the classic card-based layout or the production cue sheet layout.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onSetCueSheetView('classic')}
+                    className={`flex-1 px-3 py-2 rounded-md text-xs font-medium border transition-colors ${
+                      cueSheetView === 'classic'
+                        ? 'border-[#BF5700] bg-[rgba(191,87,0,0.15)] text-[#BF5700]'
+                        : 'border-[#3a3a46]/50 text-[#8a8680] hover:bg-[#2e2e38] hover:text-[#ede9e3]'
+                    }`}
+                  >
+                    Classic
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onSetCueSheetView('production')}
+                    className={`flex-1 px-3 py-2 rounded-md text-xs font-medium border transition-colors ${
+                      cueSheetView === 'production'
+                        ? 'border-[#BF5700] bg-[rgba(191,87,0,0.15)] text-[#BF5700]'
+                        : 'border-[#3a3a46]/50 text-[#8a8680] hover:bg-[#2e2e38] hover:text-[#ede9e3]'
+                    }`}
+                  >
+                    Production
+                  </button>
+                </div>
+              </div>
 
               {/* Show short codes toggle */}
               <label className="flex items-center gap-3 px-3 py-3 bg-[#232329]/50 rounded-md border border-[#3a3a46]/50 cursor-pointer select-none hover:bg-[#232329]">
