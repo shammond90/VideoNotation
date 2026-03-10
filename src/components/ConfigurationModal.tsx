@@ -64,7 +64,6 @@ interface ConfigurationModalProps {
   showShortCodes: boolean;
   showPastCues: boolean;
   showSkippedCues: boolean;
-  distanceView: boolean;
   showVideoTimecode: boolean;
   currentVideoName?: string;
   currentVideoSize?: number;
@@ -78,7 +77,6 @@ interface ConfigurationModalProps {
   onSetShowShortCodes: (show: boolean) => void;
   onSetShowPastCues: (show: boolean) => void;
   onSetShowSkippedCues: (show: boolean) => void;
-  onSetDistanceView: (value: boolean) => void;
   onSetShowVideoTimecode: (show: boolean) => void;
   onSetCueTypeFields: (cueType: string, fields: string[]) => void;
   onToggleColumn: (key: string, cueType?: string) => void;
@@ -487,7 +485,6 @@ export function ConfigurationModal({
   showShortCodes,
   showPastCues,
   showSkippedCues,
-  distanceView,
   showVideoTimecode,
   currentVideoName,
   currentVideoSize,
@@ -501,7 +498,6 @@ export function ConfigurationModal({
   onSetShowShortCodes,
   onSetShowPastCues,
   onSetShowSkippedCues,
-  onSetDistanceView,
   onSetShowVideoTimecode,
   onSetCueTypeFields,
   onToggleColumn,
@@ -1270,22 +1266,6 @@ export function ConfigurationModal({
               <p className="text-xs text-[#8a8680]">
                 Control how cues are displayed in the cue sheet.
               </p>
-
-              {/* Distance View toggle */}
-              <label className="flex items-center gap-3 px-3 py-3 bg-[#232329]/50 rounded-md border border-[#3a3a46]/50 cursor-pointer select-none hover:bg-[#232329]">
-                <input
-                  type="checkbox"
-                  checked={distanceView}
-                  onChange={() => onSetDistanceView(!distanceView)}
-                  className="w-4 h-4 rounded border-[#4a4a56] bg-[#2e2e38] text-[#BF5700] focus:ring-[#BF5700] focus:ring-offset-0 cursor-pointer"
-                />
-                <div>
-                  <span className="text-sm text-[#ede9e3] font-medium">Distance View</span>
-                  <p className="text-[10px] text-[#4e4a56] mt-0.5">
-                    Show cue type and number as a large colour-coded badge on the left side of each cue card.
-                  </p>
-                </div>
-              </label>
 
               {/* Show short codes toggle */}
               <label className="flex items-center gap-3 px-3 py-3 bg-[#232329]/50 rounded-md border border-[#3a3a46]/50 cursor-pointer select-none hover:bg-[#232329]">

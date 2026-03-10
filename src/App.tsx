@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState, useEffect, useMemo } from 'react';
 import { VideoDropZone } from './components/VideoDropZone';
 import { VideoPlayer } from './components/VideoPlayer';
+import type { ScrubberTitleMarker, ScrubberSceneMarker, ScrubberSceneBand } from './components/VideoPlayer';
 import { CueForm } from './components/CueForm';
 import { AnnotationPanel } from './components/AnnotationPanel';
 import { ConfigurationModal } from './components/ConfigurationModal';
@@ -9,6 +10,7 @@ import { ExportTemplateBuilder } from './components/ExportTemplateBuilder';
 import { ToastContainer } from './components/ToastContainer';
 import { useVideoPlayer } from './hooks/useVideoPlayer';
 import { useAnnotations } from './hooks/useAnnotations';
+import { SCENE_BAND_COLORS } from './hooks/useCueGrouping';
 import { useConfiguration } from './hooks/useConfiguration';
 import { useToast } from './hooks/useToast';
 import { exportAnnotationsToCSV, importAnnotationsFromCSV } from './utils/csv';
@@ -122,7 +124,6 @@ export default function App({
     setExpandedSearchFilter,
     setShowPastCues,
     setShowSkippedCues,
-    setDistanceView,
     setShowVideoTimecode,
     setVideoTimecodePosition,
     setCueTypeFields,
@@ -153,6 +154,10 @@ export default function App({
     replaceAll,
     updateActiveAnnotation,
     renameCueType: renameAnnotationCueType,
+    setAnnotationStatus,
+    setAnnotationFlag,
+    duplicateAnnotation,
+    reorderInTieGroup,
   } = useAnnotations(annotationScope.fileName, annotationScope.fileSize, playerState.duration);
   const annotationsRef = useRef(annotations);
   const { toasts, addToast, removeToast } = useToast();
@@ -164,6 +169,34 @@ export default function App({
     if (isNaN(targetTs)) return null;
     return { fromTime: loopAnnotation.timestamp, toTime: targetTs };
   }, [loopAnnotation]);
+
+  // ── Scrubber markers for scene/act grouping ──
+  const scrubberMarkers = useMemo(() => {
+    const sorted = [...annotations].sort((a, b) => a.timestamp - b.timestamp);
+    const titleMarkers: ScrubberTitleMarker[] = [];
+    const sceneMarkers: ScrubberSceneMarker[] = [];
+    const sceneBands: ScrubberSceneBand[] = [];
+    const scenes: { timestamp: number; name: string }[] = [];
+
+    for (const ann of sorted) {
+      if (ann.cue.type === 'TITLE') {
+        titleMarkers.push({ timestamp: ann.timestamp, name: ann.cue.what || 'Title' });
+      } else if (ann.cue.type === 'SCENE') {
+        scenes.push({ timestamp: ann.timestamp, name: ann.cue.what || 'Scene' });
+      }
+    }
+    for (let i = 0; i < scenes.length; i++) {
+      const color = SCENE_BAND_COLORS[i % SCENE_BAND_COLORS.length];
+      sceneMarkers.push({ timestamp: scenes[i].timestamp, name: scenes[i].name, color });
+      if (scenes.length >= 2 && i < scenes.length - 1) {
+        sceneBands.push({ startTime: scenes[i].timestamp, endTime: scenes[i + 1].timestamp, color, name: scenes[i].name });
+      }
+      if (scenes.length >= 2 && i === scenes.length - 1) {
+        sceneBands.push({ startTime: scenes[i].timestamp, endTime: Infinity, color, name: scenes[i].name });
+      }
+    }
+    return { titleMarkers, sceneMarkers, sceneBands };
+  }, [annotations]);
 
   useEffect(() => {
     loopRegionRef.current = loopRegion;
@@ -805,6 +838,9 @@ export default function App({
                 showVideoTimecode={config.showVideoTimecode}
                 videoTimecodePosition={config.videoTimecodePosition}
                 onVideoTimecodePositionChange={setVideoTimecodePosition}
+                titleMarkers={scrubberMarkers.titleMarkers}
+                sceneMarkers={scrubberMarkers.sceneMarkers}
+                sceneBands={scrubberMarkers.sceneBands}
               />
             ) : (
               <div className="w-full flex flex-col items-center justify-center min-h-[300px]" style={{ background: 'linear-gradient(135deg, #0f0f12 0%, #141418 100%)' }}>
@@ -1032,6 +1068,7 @@ export default function App({
           {/* Right: Cue Sheet panel — constrained height so it scrolls independently */}
           <div className="h-[calc(100vh-5rem)] overflow-hidden shrink-0" style={{ width: panelWidthPx }}>
             <AnnotationPanel
+              projectId={projectId || ''}
               annotations={annotations}
               activeId={activeId}
               skippedIds={skippedIds}
@@ -1044,7 +1081,6 @@ export default function App({
               expandedSearchFilter={config.expandedSearchFilter}
               onSetExpandedSearchFilter={setExpandedSearchFilter}
               showPastCues={config.showPastCues}
-              distanceView={config.distanceView}
               cueTypeFields={config.cueTypeFields}
               onSeek={handleSeek}
               onEdit={updateAnnotation}
@@ -1055,6 +1091,10 @@ export default function App({
               visibleColumns={config.visibleColumns}
               cueTypeColumns={config.cueTypeColumns}
               cueTypes={config.cueTypes}
+              onSetStatus={setAnnotationStatus}
+              onSetFlag={setAnnotationFlag}
+              onDuplicate={duplicateAnnotation}
+              onReorderTieGroup={reorderInTieGroup}
             />
           </div>
         </main>
@@ -1141,9 +1181,7 @@ export default function App({
         onSetShowPastCues={setShowPastCues}
         showSkippedCues={config.showSkippedCues}
         onSetShowSkippedCues={setShowSkippedCues}
-        distanceView={config.distanceView}
         showVideoTimecode={config.showVideoTimecode}
-        onSetDistanceView={setDistanceView}
         onSetShowVideoTimecode={setShowVideoTimecode}
         currentVideoName={videoFile?.name}
         currentVideoSize={videoFile?.size}

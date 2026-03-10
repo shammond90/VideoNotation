@@ -1,6 +1,6 @@
 import { openDB, type IDBPDatabase } from 'idb';
 import type { Annotation, AppConfig } from '../types';
-import { DEFAULT_CONFIG, DEFAULT_CUE_TYPE_COLORS, RESERVED_CUE_TYPES, EDITABLE_FIELD_KEYS, getDefaultFieldsForType } from '../types';
+import { DEFAULT_CONFIG, DEFAULT_CUE_TYPE_COLORS, RESERVED_CUE_TYPES, EDITABLE_FIELD_KEYS, getDefaultFieldsForType, getDefaultColumnsForTitleScene } from '../types';
 
 // ── IndexedDB Setup ──
 
@@ -303,6 +303,10 @@ function migrateAnnotation(raw: any): Annotation {
     },
     createdAt: raw.createdAt,
     updatedAt: raw.updatedAt,
+    status: raw.status || 'provisional',
+    flagged: raw.flagged ?? false,
+    flagNote: raw.flagNote ?? '',
+    sort_order: raw.sort_order ?? 0,
   };
 }
 
@@ -425,6 +429,12 @@ export async function loadConfig(): Promise<AppConfig> {
       }
     }
     if (!parsed.cueTypeColumns) parsed.cueTypeColumns = {};
+    // Ensure TITLE/SCENE have default columns if not yet set
+    for (const rt of ['TITLE', 'SCENE'] as const) {
+      if (!parsed.cueTypeColumns[rt]) {
+        parsed.cueTypeColumns[rt] = getDefaultColumnsForTitleScene();
+      }
+    }
     if (!parsed.cueTypeColors || typeof parsed.cueTypeColors !== 'object') parsed.cueTypeColors = { ...DEFAULT_CUE_TYPE_COLORS };
     if (typeof parsed.distanceView !== 'boolean') parsed.distanceView = true;
     if (typeof parsed.cueBackupIntervalMinutes !== 'number' || parsed.cueBackupIntervalMinutes <= 0) parsed.cueBackupIntervalMinutes = 5;

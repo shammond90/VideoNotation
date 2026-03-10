@@ -1,6 +1,22 @@
 // Reserved cue types that always exist and cannot be deleted
 export const RESERVED_CUE_TYPES = ['TITLE', 'SCENE', 'LOOP'] as const;
 
+// ── Cue Status ──
+export type CueStatus = 'provisional' | 'confirmed' | 'tbc' | 'cut';
+export const CUE_STATUSES: CueStatus[] = ['provisional', 'confirmed', 'tbc', 'cut'];
+export const CUE_STATUS_LABELS: Record<CueStatus, string> = {
+  provisional: 'Provisional',
+  confirmed: 'Confirmed',
+  tbc: 'TBC',
+  cut: 'Cut',
+};
+export const CUE_STATUS_COLORS: Record<CueStatus, string> = {
+  provisional: 'transparent',
+  confirmed: '#3d9962',
+  tbc: '#c49a2a',
+  cut: '#c84848',
+};
+
 // Special system cue type for loop playback — not user-configurable
 export const LOOP_CUE_TYPE = 'LOOP';
 
@@ -133,6 +149,13 @@ export interface Annotation {
   timeInTitle: number | null; // Computed: current timestamp - previous "Title" cue timestamp
   createdAt: string;
   updatedAt: string;
+  // F2.13 — Cue Status
+  status: CueStatus;
+  // F2.14 — Cue Flagging
+  flagged: boolean;
+  flagNote: string;
+  // F2.7 — Sort order within tie groups (cues sharing the same timecode)
+  sort_order: number;
 }
 
 export interface VideoMeta {
@@ -220,6 +243,14 @@ export const TITLE_SCENE_DEFAULT_FIELDS: string[] = [
   'cueNumber', 'oldCueNumber',
   'what', 'when', 'cueingNotes',
 ];
+
+/** Default visible columns for TITLE / SCENE cue types (only 'what' visible by default). */
+export function getDefaultColumnsForTitleScene(): ColumnConfig[] {
+  return DEFAULT_VISIBLE_COLUMNS.map((c) => ({
+    ...c,
+    visible: c.key === 'type' || c.key === 'what',
+  }));
+}
 
 /** Default field subset for LOOP cue type (minimal — most handled by the LOOP form). */
 export const LOOP_DEFAULT_FIELDS: string[] = [

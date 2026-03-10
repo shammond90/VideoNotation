@@ -13,6 +13,22 @@ import {
 import { formatTime } from '../utils/formatTime';
 import type { VideoPlayerState, VideoPlayerActions, LoopRegion } from '../hooks/useVideoPlayer';
 
+export interface ScrubberTitleMarker {
+  timestamp: number;
+  name: string;
+}
+export interface ScrubberSceneMarker {
+  timestamp: number;
+  name: string;
+  color: string;
+}
+export interface ScrubberSceneBand {
+  startTime: number;
+  endTime: number;
+  color: string;
+  name: string;
+}
+
 interface VideoPlayerProps {
   src: string;
   state: VideoPlayerState;
@@ -22,12 +38,15 @@ interface VideoPlayerProps {
   showVideoTimecode?: boolean;
   videoTimecodePosition?: { x: number; y: number };
   onVideoTimecodePositionChange?: (pos: { x: number; y: number }) => void;
+  titleMarkers?: ScrubberTitleMarker[];
+  sceneMarkers?: ScrubberSceneMarker[];
+  sceneBands?: ScrubberSceneBand[];
 }
 
 const SPEEDS = [1, 1.5, 2, 4, 8];
 
 export const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
-  ({ src, state, actions, onVideoError, loopRegion, showVideoTimecode, videoTimecodePosition, onVideoTimecodePositionChange }, ref) => {
+  ({ src, state, actions, onVideoError, loopRegion, showVideoTimecode, videoTimecodePosition, onVideoTimecodePositionChange, titleMarkers, sceneMarkers, sceneBands }, ref) => {
     const progressRef = useRef<HTMLDivElement>(null);
     const videoContainerRef = useRef<HTMLDivElement>(null);
     const [isDragging, setIsDragging] = useState(false);
@@ -205,9 +224,56 @@ export const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
                 title={`Loop: ${formatTime(loopRegion.toTime)} → ${formatTime(loopRegion.fromTime)}`}
               />
             )}
+            {/* Scene bands */}
+            {sceneBands && state.duration > 0 && sceneBands.map((band, i) => {
+              const start = (band.startTime / state.duration) * 100;
+              const end = Math.min(band.endTime, state.duration);
+              const width = ((end - band.startTime) / state.duration) * 100;
+              return (
+                <div
+                  key={`band-${i}`}
+                  className="absolute top-0 h-full pointer-events-none"
+                  style={{
+                    left: `${start}%`,
+                    width: `${width}%`,
+                    background: `${band.color}30`,
+                    borderLeft: `2px solid ${band.color}90`,
+                  }}
+                  title={band.name}
+                />
+              );
+            })}
+            {/* Title markers */}
+            {titleMarkers && state.duration > 0 && titleMarkers.map((m, i) => (
+              <div
+                key={`title-${i}`}
+                className="absolute top-0 h-full pointer-events-none"
+                style={{
+                  left: `${(m.timestamp / state.duration) * 100}%`,
+                  width: 2,
+                  background: '#5c6bc0',
+                  opacity: 0.8,
+                }}
+                title={m.name}
+              />
+            ))}
+            {/* Scene markers */}
+            {sceneMarkers && state.duration > 0 && sceneMarkers.map((m, i) => (
+              <div
+                key={`scene-${i}`}
+                className="absolute top-0 h-full pointer-events-none"
+                style={{
+                  left: `${(m.timestamp / state.duration) * 100}%`,
+                  width: 1.5,
+                  background: m.color,
+                  opacity: 0.7,
+                }}
+                title={m.name}
+              />
+            ))}
             {/* Progress */}
             <div
-              className="absolute top-0 left-0 h-full rounded-full transition-[width] duration-75"
+              className="absolute top-0 left-0 h-full rounded-full"
               style={{ width: `${state.duration ? (state.currentTime / state.duration) * 100 : 0}%`, background: 'var(--amber)' }}
             />
             {/* Scrubber */}

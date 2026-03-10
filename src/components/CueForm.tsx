@@ -26,7 +26,7 @@ const inputClass =
 const readOnlyClass =
   'w-full bg-[#1f1f24] text-[#8a8680] rounded px-2 py-1.5 text-xs border border-[#2c2c36] outline-none cursor-not-allowed';
 
-const labelClass = 'text-[10px] uppercase tracking-wider text-[#4e4a56] mb-0.5 block font-mono';
+const labelClass = 'text-[10px] uppercase tracking-wider text-[#9a9590] mb-0.5 block font-mono';
 
 /** Map column count to literal Tailwind grid-cols class (needed for JIT scanning) */
 const gridColsClass = (n: number) =>

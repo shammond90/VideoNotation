@@ -108,6 +108,10 @@ export function importAnnotationsFromCSV(file: File): Promise<Annotation[]> {
               timeInTitle: isNaN(timeInTitle as number) ? null : timeInTitle,
               createdAt: row.created_at || new Date().toISOString(),
               updatedAt: row.updated_at || new Date().toISOString(),
+              status: (row.status as any) || 'provisional',
+              flagged: row.flagged === 'true' || row.flagged === '1',
+              flagNote: row.flag_note || '',
+              sort_order: row.sort_order != null ? parseInt(row.sort_order, 10) || 0 : 0,
             };
           });
           resolve(annotations);

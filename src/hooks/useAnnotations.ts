@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import type { Annotation, CueFields } from '../types';
+import type { Annotation, CueFields, CueStatus } from '../types';
 import { LOOP_CUE_TYPE } from '../types';
 import { formatTime } from '../utils/formatTime';
 import { loadAnnotations, saveAnnotations } from '../utils/storage';
@@ -34,6 +34,26 @@ function propagateAutofollow(annotations: Annotation[], parent: Annotation): Ann
   return result;
 }
 
+/** Silent migration: ensure every annotation has the new F2.7/F2.13/F2.14 fields */
+function migrateAnnotation(a: any): Annotation {
+  return {
+    ...a,
+    status: a.status ?? 'provisional',
+    flagged: a.flagged ?? false,
+    flagNote: a.flagNote ?? '',
+    sort_order: a.sort_order ?? 0,
+  };
+}
+
+/** Sort comparator: primary = timestamp, secondary = sort_order (for tie groups) */
+function sortAnnotations(list: Annotation[]): Annotation[] {
+  return [...list].sort((a, b) => {
+    const dt = a.timestamp - b.timestamp;
+    if (dt !== 0) return dt;
+    return a.sort_order - b.sort_order;
+  });
+}
+
 export function useAnnotations(fileName: string, fileSize: number, videoDuration: number) {
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -43,12 +63,13 @@ export function useAnnotations(fileName: string, fileSize: number, videoDuration
   const effectiveFileName = fileName || 'no-video';
   const effectiveFileSize = fileName ? fileSize : 0;
 
-  // Load annotations when file changes
+  // Load annotations when file changes (with silent migration)
   useEffect(() => {
     let cancelled = false;
     loadAnnotations(effectiveFileName, effectiveFileSize).then((loaded) => {
       if (cancelled) return;
-      const recalculated = recalculateAllDurations(loaded, videoDuration);
+      const migrated = loaded.map(migrateAnnotation);
+      const recalculated = recalculateAllDurations(migrated, videoDuration);
       setAnnotations(recalculated);
     });
     return () => { cancelled = true; };
@@ -67,16 +88,24 @@ export function useAnnotations(fileName: string, fileSize: number, videoDuration
 
   const addAnnotation = useCallback(
     (timestamp: number, cue: CueFields) => {
-      const newAnnotation: Annotation = {
-        id: crypto.randomUUID(),
-        timestamp,
-        cue,
-        timeInTitle: null,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
+      let createdAnnotation: Annotation | null = null;
       setAnnotations((prev) => {
-        let withNew = [...prev, newAnnotation].sort((a, b) => a.timestamp - b.timestamp);
+        // Determine sort_order for the new cue (place last in its tie group)
+        const tieCount = prev.filter((a) => a.timestamp === timestamp).length;
+        const newAnnotation: Annotation = {
+          id: crypto.randomUUID(),
+          timestamp,
+          cue,
+          timeInTitle: null,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          status: 'provisional' as CueStatus,
+          flagged: false,
+          flagNote: '',
+          sort_order: tieCount,
+        };
+        createdAnnotation = newAnnotation;
+        let withNew = sortAnnotations([...prev, newAnnotation]);
         // Bidirectional link sync on create
         if (cue.linkCueNumber && cue.cueNumber) {
           withNew = withNew.map((a) =>
@@ -89,7 +118,7 @@ export function useAnnotations(fileName: string, fileSize: number, videoDuration
         debouncedSave(updated);
         return updated;
       });
-      return newAnnotation;
+      return createdAnnotation!;
     },
     [debouncedSave, videoDuration],
   );
@@ -221,7 +250,7 @@ export function useAnnotations(fileName: string, fileSize: number, videoDuration
           }
         }
 
-        const sorted = modified.sort((a, b) => a.timestamp - b.timestamp);
+        const sorted = sortAnnotations(modified);
         const updated = recalculateAllDurations(sorted, videoDuration);
         debouncedSave(updated);
         return updated;
@@ -261,7 +290,8 @@ export function useAnnotations(fileName: string, fileSize: number, videoDuration
 
   const replaceAll = useCallback(
     (newAnnotations: Annotation[]) => {
-      const sorted = [...newAnnotations].sort((a, b) => a.timestamp - b.timestamp);
+      const migrated = newAnnotations.map(migrateAnnotation);
+      const sorted = sortAnnotations(migrated);
       const updated = recalculateAllDurations(sorted, videoDuration);
       setAnnotations(updated);
       debouncedSave(updated);
@@ -273,8 +303,8 @@ export function useAnnotations(fileName: string, fileSize: number, videoDuration
     (incoming: Annotation[]) => {
       setAnnotations((prev) => {
         const existingTimestamps = new Set(prev.map((a) => a.timestamp.toFixed(3)));
-        const newOnes = incoming.filter((a) => !existingTimestamps.has(a.timestamp.toFixed(3)));
-        const merged = [...prev, ...newOnes].sort((a, b) => a.timestamp - b.timestamp);
+        const newOnes = incoming.filter((a) => !existingTimestamps.has(a.timestamp.toFixed(3))).map(migrateAnnotation);
+        const merged = sortAnnotations([...prev, ...newOnes]);
         const updated = recalculateAllDurations(merged, videoDuration);
         debouncedSave(updated);
         return updated;
@@ -381,6 +411,84 @@ export function useAnnotations(fileName: string, fileSize: number, videoDuration
     return annotations.find((a) => a.cue.type === LOOP_CUE_TYPE && a.cue.cueNumber === 'LOOP FROM') ?? null;
   }, [annotations]);
 
+  // ── F2.13 — Set cue status ──
+  const setAnnotationStatus = useCallback(
+    (id: string, status: CueStatus) => {
+      setAnnotations((prev) => {
+        const updated = prev.map((a) =>
+          a.id === id ? { ...a, status, updatedAt: new Date().toISOString() } : a,
+        );
+        debouncedSave(updated);
+        return updated;
+      });
+    },
+    [debouncedSave],
+  );
+
+  // ── F2.14 — Toggle flag / set flag note ──
+  const setAnnotationFlag = useCallback(
+    (id: string, flagged: boolean, flagNote?: string) => {
+      setAnnotations((prev) => {
+        const updated = prev.map((a) =>
+          a.id === id
+            ? { ...a, flagged, flagNote: flagNote ?? (flagged ? a.flagNote : ''), updatedAt: new Date().toISOString() }
+            : a,
+        );
+        debouncedSave(updated);
+        return updated;
+      });
+    },
+    [debouncedSave],
+  );
+
+  // ── F2.7 — Duplicate cue ──
+  const duplicateAnnotation = useCallback(
+    (id: string): Annotation | null => {
+      let duplicated: Annotation | null = null;
+      setAnnotations((prev) => {
+        const source = prev.find((a) => a.id === id);
+        if (!source) return prev;
+        // Determine sort_order: place after source in tie group
+        const tieGroup = prev.filter((a) => a.timestamp === source.timestamp);
+        const maxOrder = Math.max(...tieGroup.map((a) => a.sort_order), 0);
+        duplicated = {
+          ...source,
+          id: crypto.randomUUID(),
+          cue: { ...source.cue, cueNumber: source.cue.cueNumber ? `${source.cue.cueNumber} (copy)` : '' },
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          sort_order: maxOrder + 1,
+          flagged: false,
+          flagNote: '',
+        };
+        const updated = recalculateAllDurations(sortAnnotations([...prev, duplicated]), videoDuration);
+        debouncedSave(updated);
+        return updated;
+      });
+      return duplicated;
+    },
+    [debouncedSave, videoDuration],
+  );
+
+  // ── F2.7 — Reorder within tie group ──
+  const reorderInTieGroup = useCallback(
+    (cueIds: string[]) => {
+      setAnnotations((prev) => {
+        const updated = prev.map((a) => {
+          const idx = cueIds.indexOf(a.id);
+          if (idx !== -1) {
+            return { ...a, sort_order: idx, updatedAt: new Date().toISOString() };
+          }
+          return a;
+        });
+        const sorted = sortAnnotations(updated);
+        debouncedSave(sorted);
+        return sorted;
+      });
+    },
+    [debouncedSave],
+  );
+
   return {
     annotations,
     activeId,
@@ -393,5 +501,9 @@ export function useAnnotations(fileName: string, fileSize: number, videoDuration
     mergeAnnotations,
     updateActiveAnnotation,
     renameCueType,
+    setAnnotationStatus,
+    setAnnotationFlag,
+    duplicateAnnotation,
+    reorderInTieGroup,
   };
 }
