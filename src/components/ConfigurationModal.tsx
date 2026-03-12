@@ -57,6 +57,7 @@ interface ConfigurationModalProps {
   cueTypes: string[];
   cueTypeColors: Record<string, string>;
   cueTypeShortCodes: Record<string, string>;
+  cueTypeFontColors: Record<string, string>;
   cueTypeFields: Record<string, string[]>;
   visibleColumns: ColumnConfig[];
   cueTypeColumns: Record<string, ColumnConfig[]>;
