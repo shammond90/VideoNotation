@@ -1562,7 +1562,7 @@ export function AnnotationPanel({
                         <div className="shrink-0 flex items-center gap-1.5 ml-2 pl-2" style={{ borderLeft: '1px solid var(--border)' }}>
                           {pastStatusColor && <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: pastStatusColor }} />}
                           {pastIsFlagged && <span style={{ color: 'var(--flag)', fontSize: 9 }}><Flag className="w-2.5 h-2.5" /></span>}
-                          {showTimestamp && <span className="font-mono text-[9px] shrink-0" style={{ color: 'var(--text-dim)' }}>{formatTime(annotation.timestamp)}</span>}
+                          {showTimestamp && <button type="button" onClick={(e) => { e.stopPropagation(); onSeek(annotation.timestamp); }} className="font-mono text-[9px] shrink-0 cursor-pointer hover:text-[var(--text-mid)] transition-colors" style={{ color: 'var(--text-dim)', background: 'none', border: 'none', padding: 0 }}>{formatTime(annotation.timestamp)}</button>}
                         </div>
                       </div>
                     );
@@ -1611,7 +1611,7 @@ export function AnnotationPanel({
                               {pastSecondary && <span className="text-[11px] truncate" style={{ color: 'var(--text-mid)' }}>{pastSecondary}</span>}
                             </div>
                           )}
-                          <OverflowChips chips={pastChips} showTimestamp={showTimestamp} timestamp={annotation.timestamp} />
+                          <OverflowChips chips={pastChips} showTimestamp={showTimestamp} timestamp={annotation.timestamp} onSeek={onSeek} />
                           {isDeleting && (
                             <div className="flex items-center gap-2 text-sm">
                               <span className="text-red-400 text-xs">Delete?</span>

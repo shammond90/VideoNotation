@@ -1,6 +1,6 @@
 import React, { useState, useRef, useMemo, useCallback, useEffect } from 'react';
-import { X, Plus, Trash2, GripVertical, Download, Upload, Lock, Pencil, Check, AlertTriangle, ChevronDown, ChevronRight, Save, FileDown, FileUp } from 'lucide-react';
-import type { ColumnConfig, Project } from '../types';
+import { X, Plus, Trash2, GripVertical, Download, Upload, Lock, Pencil, Check, AlertTriangle, ChevronDown, ChevronRight, Save, FileDown, FileUp, Info } from 'lucide-react';
+import type { ColumnConfig, Project, AppConfig } from '../types';
 import { RESERVED_CUE_TYPES, LOOP_CUE_TYPE, EDITABLE_FIELD_KEYS, EDITABLE_FIELD_LABELS, AUTOFOLLOW_COLUMN_KEYS, LINK_COLUMN_KEYS, getDefaultFieldsForType } from '../types';
 import type { ConfigTemplate } from '../utils/configTemplates';
 import { loadConfigTemplates, saveConfigTemplate, deleteConfigTemplate, renameConfigTemplate, exportTemplateToJSON, exportAllTemplatesToJSON, importTemplatesFromJSON } from '../utils/configTemplates';
@@ -17,6 +17,9 @@ import {
   type VideoFileInfo,
 } from '../utils/storage';
 import { exportAnnotationsToCSV } from '../utils/csv';
+import InfoModal from './InfoModal';
+import { featureNotes } from '../content/featureNotes';
+import { userGuide } from '../content/userGuide';
 import {
   DndContext,
   closestCenter,
@@ -54,6 +57,7 @@ function relativeTimeAgo(dateStr: string): string {
 interface ConfigurationModalProps {
   isOpen: boolean;
   onClose: () => void;
+  liveConfig: AppConfig;
   cueTypes: string[];
   cueTypeColors: Record<string, string>;
   cueTypeShortCodes: Record<string, string>;
@@ -231,7 +235,7 @@ function SortableFieldItem({
 
 // ── Project Admin Tab ──
 
-function ProjectAdminTab() {
+function ProjectAdminTab({ liveConfig }: { liveConfig: AppConfig }) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -429,7 +433,7 @@ function ProjectAdminTab() {
                   </button>
                   <button
                     onClick={async () => {
-                      const json = await exportProjectToJSON(project);
+                      const json = await exportProjectToJSON(project, liveConfig);
                       const blob = new Blob([JSON.stringify(json, null, 2)], { type: 'application/json' });
                       const url = URL.createObjectURL(blob);
                       const a = document.createElement('a');
@@ -482,6 +486,7 @@ function ProjectAdminTab() {
 export function ConfigurationModal({
   isOpen,
   onClose,
+  liveConfig,
   cueTypes,
   cueTypeColors,
   cueTypeShortCodes,
@@ -528,7 +533,9 @@ export function ConfigurationModal({
   onApplyColumnsTemplate,
 }: ConfigurationModalProps) {
   const [newTypeName, setNewTypeName] = useState('');
-  const [activeTab, setActiveTab] = useState<'types' | 'columns' | 'view' | 'templates' | 'savefiles' | 'data' | 'projects'>('types');
+  const [activeTab, setActiveTab] = useState<'types' | 'columns' | 'view' | 'templates' | 'savefiles' | 'data' | 'projects' | 'info'>('types');
+  const [showFeatureNotes, setShowFeatureNotes] = useState(false);
+  const [showUserGuide, setShowUserGuide] = useState(false);
   const [editingType, setEditingType] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const [columnView, setColumnView] = useState<string>('default');
@@ -779,6 +786,17 @@ export function ConfigurationModal({
             }`}
           >
             Projects
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('info')}
+            className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors ${
+              activeTab === 'info'
+                ? 'text-[var(--amber-hi)] border-b-2 border-[var(--amber-hi)] bg-[var(--bg-panel)]/30'
+                : 'text-[var(--text-mid)] hover:text-[var(--text)]'
+            }`}
+          >
+            Info
           </button>
         </div>
 
@@ -1893,7 +1911,39 @@ export function ConfigurationModal({
             </div>
           )}
           {activeTab === 'projects' && (
-            <ProjectAdminTab />
+            <ProjectAdminTab liveConfig={liveConfig} />
+          )}
+          {activeTab === 'info' && (
+            <div className="space-y-6">
+              <h3 className="text-base font-semibold" style={{ color: 'var(--text)' }}>Application Info</h3>
+              <p className="text-sm" style={{ color: 'var(--text-mid)' }}>View feature notes and the user guide for Cuetation.</p>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowFeatureNotes(true)}
+                  className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-md transition-colors"
+                  style={{ background: 'var(--bg-panel)', color: 'var(--text-mid)', border: '1px solid var(--border-hi)' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-panel)'; e.currentTarget.style.color = 'var(--text-mid)'; }}
+                >
+                  <Info className="w-4 h-4" />
+                  Feature Notes
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowUserGuide(true)}
+                  className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-md transition-colors"
+                  style={{ background: 'var(--bg-panel)', color: 'var(--text-mid)', border: '1px solid var(--border-hi)' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-panel)'; e.currentTarget.style.color = 'var(--text-mid)'; }}
+                >
+                  <Info className="w-4 h-4" />
+                  User Guide
+                </button>
+              </div>
+              <InfoModal isOpen={showFeatureNotes} onClose={() => setShowFeatureNotes(false)} title="Feature Notes" content={featureNotes} />
+              <InfoModal isOpen={showUserGuide} onClose={() => setShowUserGuide(false)} title="User Guide" content={userGuide} />
+            </div>
           )}
         </div>
 

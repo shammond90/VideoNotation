@@ -1,7 +1,7 @@
 import { openDB } from 'idb';
 import type { Project, AppConfig, ColumnConfig, Annotation } from '../types/index';
 import { DEFAULT_CONFIG, DEFAULT_VISIBLE_COLUMNS } from '../types/index';
-import { loadAnnotations, saveAnnotations } from './storage';
+import { loadAnnotations, saveAnnotations, saveConfig } from './storage';
 
 const DB_NAME = 'CuetationDB';
 const PROJECTS_STORE = 'projects';
@@ -187,12 +187,35 @@ export async function verifyProjectVideo(
   };
 }
 
+/**
+ * Update the config and columns stored on a project record.
+ * This keeps the IndexedDB project in sync with the live in-memory state.
+ */
+export async function updateProjectConfig(
+  projectId: string,
+  config: AppConfig,
+  columns?: ColumnConfig[],
+  exportTemplates?: Project['export_templates']
+): Promise<void> {
+  const project = await loadProject(projectId);
+  if (!project) return;
+  project.config = config;
+  if (columns) project.columns = columns;
+  if (exportTemplates) project.export_templates = exportTemplates;
+  await saveProject(project);
+}
+
 // ── Import / Export ──
 
 /**
  * Export a project to a JSON object suitable for serialization.
+ * Accepts an optional liveConfig to override the stored project.config,
+ * ensuring the export always reflects the current in-memory state.
  */
-export async function exportProjectToJSON(project: Project): Promise<object> {
+export async function exportProjectToJSON(
+  project: Project,
+  liveConfig?: AppConfig,
+): Promise<object> {
   // Collect all annotations for this project
   const annotations: Record<string, Annotation[]> = {};
 
@@ -209,6 +232,9 @@ export async function exportProjectToJSON(project: Project): Promise<object> {
   if (noVideoAnnotations.length > 0) {
     annotations[`${project.id}:0`] = noVideoAnnotations;
   }
+
+  const configToExport = liveConfig || project.config;
+  const columnsToExport = liveConfig ? (liveConfig.visibleColumns || project.columns) : project.columns;
 
   return {
     cuetation_version: 1,
@@ -227,8 +253,8 @@ export async function exportProjectToJSON(project: Project): Promise<object> {
       video_filesize: project.video_filesize,
       video_duration: project.video_duration,
       config_template_id: project.config_template_id,
-      config: project.config,
-      columns: project.columns,
+      config: configToExport,
+      columns: columnsToExport,
       export_templates: project.export_templates,
     },
     annotations,
@@ -309,6 +335,11 @@ export async function importProject(
 
   const db = await getDB();
   await db.put(PROJECTS_STORE, project);
+
+  // Write the imported config to the global config key so useConfiguration picks it up
+  if (data.config) {
+    await saveConfig(data.config);
+  }
 
   // Restore annotations if provided
   if (annotations && typeof annotations === 'object') {

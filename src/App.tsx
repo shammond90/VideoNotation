@@ -16,6 +16,7 @@ import { useToast } from './hooks/useToast';
 import { exportAnnotationsToCSV, importAnnotationsFromCSV } from './utils/csv';
 import { formatTime } from './utils/formatTime';
 import { saveAnnotations, loadAnnotations, backupAnnotations, popRecoveryEvents, migrateNoVideoAnnotations, hasAnnotationData } from './utils/storage';
+import { updateProjectConfig, exportProjectToJSON, loadProjects } from './utils/projectStorage';
 import type { CueFields } from './types';
 import { RESERVED_CUE_TYPES, LOOP_CUE_TYPE } from './types';
 import { Film, Settings, X as XIcon } from 'lucide-react';
@@ -248,6 +249,15 @@ export default function App({
     }, ms);
     return () => clearInterval(id);
   }, [config.cueBackupIntervalMinutes, performCueBackup]);
+
+  // Sync live config back to the project record in IndexedDB so exports are always current
+  useEffect(() => {
+    if (!projectId || !configLoaded) return;
+    const timer = setTimeout(() => {
+      updateProjectConfig(projectId, config);
+    }, 2000); // debounce 2s to avoid excessive writes
+    return () => clearTimeout(timer);
+  }, [projectId, config, configLoaded]);
 
   // Lifecycle cue + config backup (visibility change + beforeunload)
   useEffect(() => {
@@ -516,6 +526,27 @@ export default function App({
     setIsExportDialogOpen(false);
     setIsXlsxBuilderOpen(true);
   }, []);
+
+  // Export full project (.cuetation.json)
+  const handleExportProject = useCallback(async () => {
+    if (!projectId) return;
+    try {
+      const projects = await loadProjects();
+      const project = projects.find((p) => p.id === projectId);
+      if (!project) { addToast('Project not found', 'error'); return; }
+      const json = await exportProjectToJSON(project, config);
+      const blob = new Blob([JSON.stringify(json, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${project.name.replace(/[^a-zA-Z0-9_-]/g, '_')}.cuetation.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      addToast('Project exported', 'success');
+    } catch (err) {
+      addToast(`Export failed: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error');
+    }
+  }, [projectId, config, addToast]);
 
   // Import
   const handleImport = useCallback(() => {
@@ -1175,6 +1206,7 @@ export default function App({
           isConfigOpenRef.current = false;
           setIsConfigOpen(false);
         }}
+        liveConfig={config}
         cueTypes={config.cueTypes}
         cueTypeColors={config.cueTypeColors}
         cueTypeShortCodes={config.cueTypeShortCodes}
@@ -1227,6 +1259,7 @@ export default function App({
         onClose={() => setIsExportDialogOpen(false)}
         onExportCSV={handleExportCSV}
         onExportXLSX={handleExportXLSX}
+        onExportProject={handleExportProject}
         annotationCount={annotations.length}
       />
 
