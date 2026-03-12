@@ -21,12 +21,12 @@ interface CueFormProps {
 }
 
 const inputClass =
-  'w-full bg-[#2a2a32] text-[#ede9e3] rounded px-2 py-1.5 text-xs border border-[#2c2c36] focus:border-[#BF5700] focus:ring-1 focus:ring-[#BF5700] outline-none placeholder-[#4e4a56]';
+  'w-full bg-[var(--bg-input)] text-[var(--text)] rounded px-2 py-1.5 text-xs border border-[var(--border)] focus:border-[var(--amber)] focus:ring-1 focus:ring-[#BF5700] outline-none placeholder-[#4e4a56]';
 
 const readOnlyClass =
-  'w-full bg-[#1f1f24] text-[#8a8680] rounded px-2 py-1.5 text-xs border border-[#2c2c36] outline-none cursor-not-allowed';
+  'w-full bg-[var(--bg-card)] text-[var(--text-mid)] rounded px-2 py-1.5 text-xs border border-[var(--border)] outline-none cursor-not-allowed';
 
-const labelClass = 'text-[10px] uppercase tracking-wider text-[#9a9590] mb-0.5 block font-mono';
+const labelClass = 'text-[10px] uppercase tracking-wider text-[var(--text-mid)] mb-0.5 block font-mono';
 
 /** Map column count to literal Tailwind grid-cols class (needed for JIT scanning) */
 const gridColsClass = (n: number) =>
@@ -724,7 +724,7 @@ export function CueForm({
                   setAutofollowSuffix('');
                 }
               }}
-              className="accent-[#BF5700]"
+              className="accent-[var(--amber)]"
             />
             <span className="text-xs font-medium" style={{ color: 'var(--text-mid)' }}>Auto-Follow</span>
           </label>

@@ -485,6 +485,7 @@ export async function loadConfig(): Promise<AppConfig> {
       }
     }
     if (!parsed.cueTypeShortCodes || typeof parsed.cueTypeShortCodes !== 'object') parsed.cueTypeShortCodes = {};
+    if (!parsed.cueTypeFontColors || typeof parsed.cueTypeFontColors !== 'object') parsed.cueTypeFontColors = {};
     if (typeof parsed.showShortCodes !== 'boolean') parsed.showShortCodes = false;
     if (typeof parsed.expandedSearchFilter !== 'boolean') parsed.expandedSearchFilter = true;
     if (typeof parsed.showPastCues !== 'boolean') parsed.showPastCues = true;

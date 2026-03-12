@@ -67,6 +67,8 @@ interface ConfigurationModalProps {
   showVideoTimecode: boolean;
   cueSheetView: 'classic' | 'production';
   onSetCueSheetView: (view: 'classic' | 'production') => void;
+  theatreMode: boolean;
+  onSetTheatreMode: (enabled: boolean) => void;
   currentVideoName?: string;
   currentVideoSize?: number;
   cueBackupIntervalMinutes: number;
@@ -76,6 +78,7 @@ interface ConfigurationModalProps {
   onRenameCueType: (oldName: string, newName: string) => void;
   onSetCueTypeColor: (cueType: string, color: string) => void;
   onSetCueTypeShortCode: (cueType: string, shortCode: string) => void;
+  onSetCueTypeFontColor: (cueType: string, color: string) => void;
   onSetShowShortCodes: (show: boolean) => void;
   onSetShowPastCues: (show: boolean) => void;
   onSetShowSkippedCues: (show: boolean) => void;
@@ -101,6 +104,7 @@ export interface CueTypesTemplateData {
   cueTypes: string[];
   cueTypeColors: Record<string, string>;
   cueTypeShortCodes: Record<string, string>;
+  cueTypeFontColors?: Record<string, string>;
   cueTypeFields: Record<string, string[]>;
 }
 
@@ -133,11 +137,11 @@ function SortableColumnItem({
     <div
       ref={setNodeRef}
       style={style}
-      className="flex items-center gap-3 px-3 py-2 bg-[#232329]/50 rounded-md border border-[#3a3a46]/50 hover:bg-[#232329]"
+      className="flex items-center gap-3 px-3 py-2 bg-[var(--bg-panel-a50)] rounded-md border border-[var(--border-hi-a50)] hover:bg-[var(--bg-panel)]"
     >
       <button
         type="button"
-        className="cursor-grab active:cursor-grabbing text-[#4e4a56] hover:text-[#8a8680] touch-none"
+        className="cursor-grab active:cursor-grabbing text-[var(--text-dim)] hover:text-[var(--text-mid)] touch-none"
         {...attributes}
         {...listeners}
       >
@@ -148,10 +152,10 @@ function SortableColumnItem({
           type="checkbox"
           checked={column.visible}
           onChange={onToggle}
-          className="w-4 h-4 rounded border-[#4a4a56] bg-[#2e2e38] text-[#BF5700] focus:ring-[#BF5700] focus:ring-offset-0 cursor-pointer"
+          className="w-4 h-4 rounded border-[var(--border-hi)] bg-[var(--bg-hover)] text-[var(--amber)] focus:ring-[#BF5700] focus:ring-offset-0 cursor-pointer"
         />
-        <span className="text-sm text-[#ede9e3]">{column.label}</span>
-        <span className="text-[10px] text-[#4e4a56] font-mono">({column.key})</span>
+        <span className="text-sm text-[var(--text)]">{column.label}</span>
+        <span className="text-[10px] text-[var(--text-dim)] font-mono">({column.key})</span>
       </label>
     </div>
   );
@@ -192,16 +196,16 @@ function SortableFieldItem({
       style={style}
       className={`flex items-center gap-2 px-2 py-1.5 rounded-md border ${
         isLocked
-          ? 'bg-[#232329]/30 border-[#3a3a46]/30'
-          : 'bg-[#232329]/50 border-[#3a3a46]/50 hover:bg-[#232329]'
+          ? 'bg-[var(--bg-panel)]/30 border-[var(--border-hi)]/30'
+          : 'bg-[var(--bg-panel-a50)] border-[var(--border-hi-a50)] hover:bg-[var(--bg-panel)]'
       }`}
     >
       {isLocked ? (
-        <Lock className="w-3.5 h-3.5 text-[#4e4a56] shrink-0" />
+        <Lock className="w-3.5 h-3.5 text-[var(--text-dim)] shrink-0" />
       ) : (
         <button
           type="button"
-          className="cursor-grab active:cursor-grabbing text-[#4e4a56] hover:text-[#8a8680] touch-none shrink-0"
+          className="cursor-grab active:cursor-grabbing text-[var(--text-dim)] hover:text-[var(--text-mid)] touch-none shrink-0"
           {...attributes}
           {...listeners}
         >
@@ -214,9 +218,9 @@ function SortableFieldItem({
           checked={isActive}
           onChange={onToggle}
           disabled={isLocked}
-          className="w-3.5 h-3.5 rounded border-[#4a4a56] bg-[#2e2e38] text-[#BF5700] focus:ring-[#BF5700] focus:ring-offset-0 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-3.5 h-3.5 rounded border-[var(--border-hi)] bg-[var(--bg-hover)] text-[var(--amber)] focus:ring-[#BF5700] focus:ring-offset-0 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         />
-        <span className={`text-[11px] ${isActive ? 'text-[#ede9e3]' : 'text-[#4e4a56]'}`}>
+        <span className={`text-[11px] ${isActive ? 'text-[var(--text)]' : 'text-[var(--text-dim)]'}`}>
           {label}
         </span>
       </label>
@@ -296,84 +300,84 @@ function ProjectAdminTab() {
   }, []);
 
   if (isLoading) {
-    return <p className="text-sm text-[#8a8680]">Loading projects...</p>;
+    return <p className="text-sm text-[var(--text-mid)]">Loading projects...</p>;
   }
 
   if (projects.length === 0) {
-    return <p className="text-sm text-[#8a8680]">No projects found.</p>;
+    return <p className="text-sm text-[var(--text-mid)]">No projects found.</p>;
   }
 
   return (
     <div className="space-y-4">
-      <p className="text-xs text-[#8a8680]">
+      <p className="text-xs text-[var(--text-mid)]">
         Manage all projects. Edit metadata or delete unused projects.
       </p>
       <div className="space-y-3">
         {projects.map((project) => (
           <div
             key={project.id}
-            className="p-4 bg-[#232329]/30 border border-[#3a3a46]/40 rounded-lg"
+            className="p-4 bg-[var(--bg-panel)]/30 border border-[var(--border-hi)]/40 rounded-lg"
           >
             {editingId === project.id ? (
               /* Inline edit form */
               <div className="space-y-2">
                 <div>
-                  <label className="text-xs text-[#8a8680] block mb-0.5">Project Name</label>
+                  <label className="text-xs text-[var(--text-mid)] block mb-0.5">Project Name</label>
                   <input
                     type="text"
                     value={editForm.name}
                     onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
-                    className="w-full bg-[#141416] border border-[#3a3a46] rounded px-2 py-1 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="w-full bg-[var(--bg)] border border-[var(--border-hi)] rounded px-2 py-1 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-[#8a8680] block mb-0.5">Production</label>
+                  <label className="text-xs text-[var(--text-mid)] block mb-0.5">Production</label>
                   <input
                     type="text"
                     value={editForm.production_name}
                     onChange={(e) => setEditForm((f) => ({ ...f, production_name: e.target.value }))}
-                    className="w-full bg-[#141416] border border-[#3a3a46] rounded px-2 py-1 text-sm text-white focus:outline-none focus:ring-1 focus:ring-[#BF5700]"
+                    className="w-full bg-[var(--bg)] border border-[var(--border-hi)] rounded px-2 py-1 text-sm text-white focus:outline-none focus:ring-1 focus:ring-[#BF5700]"
                     placeholder="Production name"
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-[#8a8680] block mb-0.5">Choreographer</label>
+                  <label className="text-xs text-[var(--text-mid)] block mb-0.5">Choreographer</label>
                   <input
                     type="text"
                     value={editForm.choreographer}
                     onChange={(e) => setEditForm((f) => ({ ...f, choreographer: e.target.value }))}
-                    className="w-full bg-[#141416] border border-[#3a3a46] rounded px-2 py-1 text-sm text-white focus:outline-none focus:ring-1 focus:ring-[#BF5700]"
+                    className="w-full bg-[var(--bg)] border border-[var(--border-hi)] rounded px-2 py-1 text-sm text-white focus:outline-none focus:ring-1 focus:ring-[#BF5700]"
                     placeholder="Choreographer"
                   />
                 </div>
                 <div className="flex gap-2">
                   <div className="flex-1">
-                    <label className="text-xs text-[#8a8680] block mb-0.5">Venue</label>
+                    <label className="text-xs text-[var(--text-mid)] block mb-0.5">Venue</label>
                     <input
                       type="text"
                       value={editForm.venue}
                       onChange={(e) => setEditForm((f) => ({ ...f, venue: e.target.value }))}
-                      className="w-full bg-[#141416] border border-[#3a3a46] rounded px-2 py-1 text-sm text-white focus:outline-none focus:ring-1 focus:ring-[#BF5700]"
+                      className="w-full bg-[var(--bg)] border border-[var(--border-hi)] rounded px-2 py-1 text-sm text-white focus:outline-none focus:ring-1 focus:ring-[#BF5700]"
                       placeholder="Venue"
                     />
                   </div>
                   <div className="w-24">
-                    <label className="text-xs text-[#8a8680] block mb-0.5">Year</label>
+                    <label className="text-xs text-[var(--text-mid)] block mb-0.5">Year</label>
                     <input
                       type="text"
                       value={editForm.year}
                       onChange={(e) => setEditForm((f) => ({ ...f, year: e.target.value }))}
-                      className="w-full bg-[#141416] border border-[#3a3a46] rounded px-2 py-1 text-sm text-white focus:outline-none focus:ring-1 focus:ring-[#BF5700]"
+                      className="w-full bg-[var(--bg)] border border-[var(--border-hi)] rounded px-2 py-1 text-sm text-white focus:outline-none focus:ring-1 focus:ring-[#BF5700]"
                       placeholder="Year"
                     />
                   </div>
                 </div>
                 <div>
-                  <label className="text-xs text-[#8a8680] block mb-0.5">Notes</label>
+                  <label className="text-xs text-[var(--text-mid)] block mb-0.5">Notes</label>
                   <textarea
                     value={editForm.notes}
                     onChange={(e) => setEditForm((f) => ({ ...f, notes: e.target.value }))}
-                    className="w-full bg-[#141416] border border-[#3a3a46] rounded px-2 py-1 text-sm text-white focus:outline-none focus:ring-1 focus:ring-[#BF5700] resize-none"
+                    className="w-full bg-[var(--bg)] border border-[var(--border-hi)] rounded px-2 py-1 text-sm text-white focus:outline-none focus:ring-1 focus:ring-[#BF5700] resize-none"
                     rows={2}
                     placeholder="Notes"
                   />
@@ -381,14 +385,14 @@ function ProjectAdminTab() {
                 <div className="flex justify-end gap-2 pt-1">
                   <button
                     onClick={cancelEditing}
-                    className="text-xs text-[#8a8680] hover:text-[#ede9e3] px-3 py-1 rounded transition-colors"
+                    className="text-xs text-[var(--text-mid)] hover:text-[var(--text)] px-3 py-1 rounded transition-colors"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={handleSaveEdit}
                     disabled={!editForm.name.trim()}
-                    className="text-xs bg-[#BF5700] hover:bg-[#9e4600] text-white font-semibold px-3 py-1 rounded transition-colors disabled:opacity-50"
+                    className="text-xs bg-[var(--amber)] hover:bg-[var(--amber)] text-white font-semibold px-3 py-1 rounded transition-colors disabled:opacity-50"
                   >
                     Save
                   </button>
@@ -398,26 +402,26 @@ function ProjectAdminTab() {
               /* Display mode */
               <div className="flex justify-between items-start gap-4">
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-[#ede9e3] text-sm">{project.name}</p>
+                  <p className="font-semibold text-[var(--text)] text-sm">{project.name}</p>
                   {project.production_name && (
-                    <p className="text-xs text-[#8a8680] mt-0.5">{project.production_name}</p>
+                    <p className="text-xs text-[var(--text-mid)] mt-0.5">{project.production_name}</p>
                   )}
                   {project.choreographer && (
-                    <p className="text-xs text-[#4e4a56] mt-0.5">Choreo: {project.choreographer}</p>
+                    <p className="text-xs text-[var(--text-dim)] mt-0.5">Choreo: {project.choreographer}</p>
                   )}
                   {(project.venue || project.year) && (
-                    <p className="text-xs text-[#4e4a56] mt-0.5">
+                    <p className="text-xs text-[var(--text-dim)] mt-0.5">
                       {project.venue}{project.venue && project.year ? ' • ' : ''}{project.year}
                     </p>
                   )}
-                  <p className="text-xs text-[#4e4a56] mt-1">
+                  <p className="text-xs text-[var(--text-dim)] mt-1">
                     {project.video_filename ? `Video: ${project.video_filename}` : 'No video assigned'}
                   </p>
                 </div>
                 <div className="flex gap-2 flex-shrink-0">
                   <button
                     onClick={() => startEditing(project)}
-                    className="flex items-center gap-1 text-xs text-[#8a8680] hover:text-[#ede9e3] hover:bg-[#2e2e38]/40 rounded-md px-2 py-1 transition-colors"
+                    className="flex items-center gap-1 text-xs text-[var(--text-mid)] hover:text-[var(--text)] hover:bg-[var(--bg-hover)]/40 rounded-md px-2 py-1 transition-colors"
                   >
                     <Pencil className="w-3 h-3" />
                     Edit
@@ -433,7 +437,7 @@ function ProjectAdminTab() {
                       a.click();
                       URL.revokeObjectURL(url);
                     }}
-                    className="flex items-center gap-1 text-xs text-[#8a8680] hover:text-[#ede9e3] hover:bg-[#2e2e38]/40 rounded-md px-2 py-1 transition-colors"
+                    className="flex items-center gap-1 text-xs text-[var(--text-mid)] hover:text-[var(--text)] hover:bg-[var(--bg-hover)]/40 rounded-md px-2 py-1 transition-colors"
                   >
                     <Download className="w-3 h-3" />
                     Export
@@ -448,7 +452,7 @@ function ProjectAdminTab() {
                       </button>
                       <button
                         onClick={() => setDeleteConfirmId(null)}
-                        className="text-xs bg-[#2e2e38] hover:bg-[#3a3a46] text-white font-semibold py-1 px-3 rounded transition-colors"
+                        className="text-xs bg-[var(--bg-hover)] hover:bg-[var(--border-hi)] text-white font-semibold py-1 px-3 rounded transition-colors"
                       >
                         Cancel
                       </button>
@@ -480,6 +484,7 @@ export function ConfigurationModal({
   cueTypes,
   cueTypeColors,
   cueTypeShortCodes,
+  cueTypeFontColors,
   cueTypeFields,
   visibleColumns,
   cueTypeColumns,
@@ -490,6 +495,8 @@ export function ConfigurationModal({
   showVideoTimecode,
   cueSheetView,
   onSetCueSheetView,
+  theatreMode,
+  onSetTheatreMode,
   currentVideoName,
   currentVideoSize,
   cueBackupIntervalMinutes,
@@ -499,6 +506,7 @@ export function ConfigurationModal({
   onRenameCueType,
   onSetCueTypeColor,
   onSetCueTypeShortCode,
+  onSetCueTypeFontColor,
   onSetShowShortCodes,
   onSetShowPastCues,
   onSetShowSkippedCues,
@@ -679,28 +687,28 @@ export function ConfigurationModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-[#1f1f24] border border-[#2c2c36] rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
+      <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#2c2c36]">
-          <h2 className="text-lg font-semibold text-[#ede9e3]">Configuration</h2>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)]">
+          <h2 className="text-lg font-semibold text-[var(--text)]">Configuration</h2>
           <button
             type="button"
             onClick={onClose}
-            className="p-1 text-[#8a8680] hover:text-[#ede9e3] hover:bg-[#232329] rounded-md transition-colors"
+            className="p-1 text-[var(--text-mid)] hover:text-[var(--text)] hover:bg-[var(--bg-panel)] rounded-md transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-[#2c2c36]">
+        <div className="flex border-b border-[var(--border)]">
           <button
             type="button"
             onClick={() => setActiveTab('types')}
             className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors ${
               activeTab === 'types'
-                ? 'text-[#d4600a] border-b-2 border-[#d4600a] bg-[#232329]/30'
-                : 'text-[#8a8680] hover:text-[#ede9e3]'
+                ? 'text-[var(--amber-hi)] border-b-2 border-[var(--amber-hi)] bg-[var(--bg-panel)]/30'
+                : 'text-[var(--text-mid)] hover:text-[var(--text)]'
             }`}
           >
             Cue Types
@@ -710,8 +718,8 @@ export function ConfigurationModal({
             onClick={() => setActiveTab('columns')}
             className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors ${
               activeTab === 'columns'
-                ? 'text-[#d4600a] border-b-2 border-[#d4600a] bg-[#232329]/30'
-                : 'text-[#8a8680] hover:text-[#ede9e3]'
+                ? 'text-[var(--amber-hi)] border-b-2 border-[var(--amber-hi)] bg-[var(--bg-panel)]/30'
+                : 'text-[var(--text-mid)] hover:text-[var(--text)]'
             }`}
           >
             Columns
@@ -721,8 +729,8 @@ export function ConfigurationModal({
             onClick={() => setActiveTab('view')}
             className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors ${
               activeTab === 'view'
-                ? 'text-[#d4600a] border-b-2 border-[#d4600a] bg-[#232329]/30'
-                : 'text-[#8a8680] hover:text-[#ede9e3]'
+                ? 'text-[var(--amber-hi)] border-b-2 border-[var(--amber-hi)] bg-[var(--bg-panel)]/30'
+                : 'text-[var(--text-mid)] hover:text-[var(--text)]'
             }`}
           >
             View
@@ -732,8 +740,8 @@ export function ConfigurationModal({
             onClick={() => { refreshTemplates(); setActiveTab('templates'); }}
             className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors ${
               activeTab === 'templates'
-                ? 'text-[#d4600a] border-b-2 border-[#d4600a] bg-[#232329]/30'
-                : 'text-[#8a8680] hover:text-[#ede9e3]'
+                ? 'text-[var(--amber-hi)] border-b-2 border-[var(--amber-hi)] bg-[var(--bg-panel)]/30'
+                : 'text-[var(--text-mid)] hover:text-[var(--text)]'
             }`}
           >
             Templates
@@ -743,8 +751,8 @@ export function ConfigurationModal({
             onClick={() => { setRecoveryTick((prev) => prev + 1); setActiveTab('savefiles'); }}
             className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors ${
               activeTab === 'savefiles'
-                ? 'text-[#d4600a] border-b-2 border-[#d4600a] bg-[#232329]/30'
-                : 'text-[#8a8680] hover:text-[#ede9e3]'
+                ? 'text-[var(--amber-hi)] border-b-2 border-[var(--amber-hi)] bg-[var(--bg-panel)]/30'
+                : 'text-[var(--text-mid)] hover:text-[var(--text)]'
             }`}
           >
             Save Files
@@ -754,8 +762,8 @@ export function ConfigurationModal({
             onClick={() => setActiveTab('data')}
             className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors ${
               activeTab === 'data'
-                ? 'text-[#d4600a] border-b-2 border-[#d4600a] bg-[#232329]/30'
-                : 'text-[#8a8680] hover:text-[#ede9e3]'
+                ? 'text-[var(--amber-hi)] border-b-2 border-[var(--amber-hi)] bg-[var(--bg-panel)]/30'
+                : 'text-[var(--text-mid)] hover:text-[var(--text)]'
             }`}
           >
             Data
@@ -765,8 +773,8 @@ export function ConfigurationModal({
             onClick={() => setActiveTab('projects')}
             className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors ${
               activeTab === 'projects'
-                ? 'text-[#d4600a] border-b-2 border-[#d4600a] bg-[#232329]/30'
-                : 'text-[#8a8680] hover:text-[#ede9e3]'
+                ? 'text-[var(--amber-hi)] border-b-2 border-[var(--amber-hi)] bg-[var(--bg-panel)]/30'
+                : 'text-[var(--text-mid)] hover:text-[var(--text)]'
             }`}
           >
             Projects
@@ -778,8 +786,8 @@ export function ConfigurationModal({
           {activeTab === 'types' && (
             <div className="space-y-4">
               {/* Template selector bar */}
-              <div className="flex items-center gap-2 p-3 bg-[#232329]/30 border border-[#3a3a46]/40 rounded-lg">
-                <label className="text-xs text-[#8a8680] font-medium shrink-0">Template:</label>
+              <div className="flex items-center gap-2 p-3 bg-[var(--bg-panel)]/30 border border-[var(--border-hi)]/40 rounded-lg">
+                <label className="text-xs text-[var(--text-mid)] font-medium shrink-0">Template:</label>
                 <div className="relative flex-1 max-w-[180px]">
                   <select
                     value={typesTemplateId}
@@ -793,21 +801,21 @@ export function ConfigurationModal({
                         setTypesTemplateName('');
                       }
                     }}
-                    className="w-full bg-[#232329] border border-[#3a3a46] rounded-md px-2 py-1.5 text-xs text-[#ede9e3] appearance-none pr-7 focus:border-[#BF5700] focus:outline-none"
+                    className="w-full bg-[var(--bg-panel)] border border-[var(--border-hi)] rounded-md px-2 py-1.5 text-xs text-[var(--text)] appearance-none pr-7 focus:border-[var(--amber)] focus:outline-none"
                   >
                     <option value="">New template…</option>
                     {savedTemplates.filter((t) => t.category === 'cueTypes').map((t) => (
                       <option key={t.id} value={t.id}>{t.name}</option>
                     ))}
                   </select>
-                  <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#8a8680] pointer-events-none" />
+                  <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-mid)] pointer-events-none" />
                 </div>
                 <input
                   type="text"
                   value={typesTemplateName}
                   onChange={(e) => setTypesTemplateName(e.target.value)}
                   placeholder="Template name"
-                  className="flex-1 max-w-[180px] bg-[#232329] border border-[#3a3a46] rounded-md px-2 py-1.5 text-xs text-[#ede9e3] focus:border-[#BF5700] focus:outline-none"
+                  className="flex-1 max-w-[180px] bg-[var(--bg-panel)] border border-[var(--border-hi)] rounded-md px-2 py-1.5 text-xs text-[var(--text)] focus:border-[var(--amber)] focus:outline-none"
                 />
                 <button
                   type="button"
@@ -817,6 +825,7 @@ export function ConfigurationModal({
                       cueTypes: [...cueTypes],
                       cueTypeColors: { ...cueTypeColors },
                       cueTypeShortCodes: { ...cueTypeShortCodes },
+                      cueTypeFontColors: { ...cueTypeFontColors },
                       cueTypeFields: { ...cueTypeFields },
                     };
                     const template: ConfigTemplate = {
@@ -834,7 +843,7 @@ export function ConfigurationModal({
                     setTypesTemplateId(template.id);
                     setTypesTemplateName(template.name);
                   }}
-                  className="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-[#BF5700] text-white rounded-md hover:bg-[#BF5700] transition-colors shrink-0"
+                  className="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-[var(--amber)] text-white rounded-md hover:bg-[var(--amber)] transition-colors shrink-0"
                 >
                   <Save className="w-3 h-3" />
                   Save
@@ -856,7 +865,7 @@ export function ConfigurationModal({
                 )}
               </div>
 
-              <p className="text-xs text-[#8a8680]">
+              <p className="text-xs text-[var(--text-mid)]">
                 Define the cue types available in the dropdown when creating or editing a cue.
                 Types that are in use cannot be deleted. You can rename any type.
               </p>
@@ -874,13 +883,13 @@ export function ConfigurationModal({
                     }
                   }}
                   placeholder="New type name..."
-                  className="flex-1 bg-[#232329] text-[#ede9e3] rounded px-3 py-2 text-sm border border-[#3a3a46] focus:border-[#BF5700] focus:ring-1 focus:ring-[#BF5700] outline-none placeholder-slate-500"
+                  className="flex-1 bg-[var(--bg-panel)] text-[var(--text)] rounded px-3 py-2 text-sm border border-[var(--border-hi)] focus:border-[var(--amber)] focus:ring-1 focus:ring-[#BF5700] outline-none placeholder-slate-500"
                 />
                 <button
                   type="button"
                   onClick={handleAddType}
                   disabled={!newTypeName.trim()}
-                  className="flex items-center gap-1.5 px-4 py-2 text-sm bg-[#BF5700] text-white rounded-md hover:bg-[#BF5700] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm bg-[var(--amber)] text-white rounded-md hover:bg-[var(--amber)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <Plus className="w-4 h-4" />
                   Add
@@ -898,7 +907,7 @@ export function ConfigurationModal({
                   return (
                     <React.Fragment key={type}>
                     <div
-                      className="flex items-center justify-between px-3 py-2 bg-[#232329]/50 rounded-md border border-[#3a3a46]/50"
+                      className="flex items-center justify-between px-3 py-2 bg-[var(--bg-panel-a50)] rounded-md border border-[var(--border-hi-a50)]"
                     >
                       <div className="flex items-center gap-2 flex-1 min-w-0">
                         {isEditing ? (
@@ -918,12 +927,12 @@ export function ConfigurationModal({
                                 }
                               }}
                               autoFocus
-                              className="flex-1 bg-[#2e2e38] text-[#ede9e3] rounded px-2 py-1 text-sm border border-[#BF5700] focus:ring-1 focus:ring-[#BF5700] outline-none"
+                              className="flex-1 bg-[var(--bg-hover)] text-[var(--text)] rounded px-2 py-1 text-sm border border-[var(--amber)] focus:ring-1 focus:ring-[#BF5700] outline-none"
                             />
                             <button
                               type="button"
                               onClick={handleSaveEdit}
-                              className="p-1 text-emerald-400 hover:text-emerald-300 hover:bg-[#2e2e38] rounded transition-colors"
+                              className="p-1 text-emerald-400 hover:text-emerald-300 hover:bg-[var(--bg-hover)] rounded transition-colors"
                               title="Save"
                             >
                               <Check className="w-4 h-4" />
@@ -931,7 +940,7 @@ export function ConfigurationModal({
                             <button
                               type="button"
                               onClick={handleCancelEdit}
-                              className="p-1 text-[#4e4a56] hover:text-[#8a8680] hover:bg-[#2e2e38] rounded transition-colors"
+                              className="p-1 text-[var(--text-dim)] hover:text-[var(--text-mid)] hover:bg-[var(--bg-hover)] rounded transition-colors"
                               title="Cancel"
                             >
                               <X className="w-4 h-4" />
@@ -939,7 +948,7 @@ export function ConfigurationModal({
                           </div>
                         ) : (
                           <>
-                            <span className="text-sm text-[#ede9e3] font-medium">{type}</span>
+                            <span className="text-sm text-[var(--text)] font-medium">{type}</span>
                             {isReserved && (
                               <span className="flex items-center gap-1 text-[10px] text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">
                                 <Lock className="w-3 h-3" />
@@ -961,14 +970,14 @@ export function ConfigurationModal({
                           <button
                             type="button"
                             onClick={() => setExpandedFieldType((prev) => (prev === type ? null : type))}
-                            className="p-1 text-[#8a8680] hover:text-[#d4600a] hover:bg-[#2e2e38] rounded transition-colors"
+                            className="p-1 text-[var(--text-mid)] hover:text-[var(--amber-hi)] hover:bg-[var(--bg-hover)] rounded transition-colors"
                             title="Configure visible fields"
                           >
                             {expandedFieldType === type ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
                           </button>
                           {/* Colour picker */}
                           <label
-                            className="relative w-6 h-6 rounded cursor-pointer border border-[#4a4a56] shrink-0 overflow-hidden"
+                            className="relative w-6 h-6 rounded cursor-pointer border border-[var(--border-hi)] shrink-0 overflow-hidden"
                             style={{ backgroundColor: cueTypeColors[type] || '#6b7280' }}
                             title={`Colour: ${cueTypeColors[type] || '#6b7280'}`}
                           >
@@ -987,12 +996,26 @@ export function ConfigurationModal({
                             placeholder="SC"
                             maxLength={4}
                             title="Short code (max 4 characters)"
-                            className="w-10 h-6 text-center text-xs bg-[#2e2e38] text-[#ede9e3] rounded border border-[#4a4a56] focus:border-[#BF5700] focus:ring-1 focus:ring-[#BF5700] outline-none placeholder-slate-500"
+                            className="w-10 h-6 text-center text-xs bg-[var(--bg-hover)] text-[var(--text)] rounded border border-[var(--border-hi)] focus:border-[var(--amber)] focus:ring-1 focus:ring-[#BF5700] outline-none placeholder-slate-500"
                           />
+                          {/* Font colour picker (Production badge text) */}
+                          <label
+                            className="relative w-6 h-6 rounded cursor-pointer border border-[var(--border-hi)] shrink-0 overflow-hidden flex items-center justify-center"
+                            style={{ backgroundColor: 'var(--bg-hover)' }}
+                            title={`Font colour: ${cueTypeFontColors[type] || '#ffffff'}`}
+                          >
+                            <span className="text-[9px] font-bold pointer-events-none" style={{ color: cueTypeFontColors[type] || '#ffffff' }}>A</span>
+                            <input
+                              type="color"
+                              value={cueTypeFontColors[type] || '#ffffff'}
+                              onChange={(e) => onSetCueTypeFontColor(type, e.target.value)}
+                              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                            />
+                          </label>
                           <button
                             type="button"
                             onClick={() => handleStartEdit(type)}
-                            className={`p-1 text-[#4e4a56] hover:text-[#8a8680] hover:bg-[#2e2e38] rounded transition-colors ${type === LOOP_CUE_TYPE ? 'hidden' : ''}`}
+                            className={`p-1 text-[var(--text-dim)] hover:text-[var(--text-mid)] hover:bg-[var(--bg-hover)] rounded transition-colors ${type === LOOP_CUE_TYPE ? 'hidden' : ''}`}
                             title={`Rename ${type}`}
                           >
                             <Pencil className="w-3.5 h-3.5" />
@@ -1001,7 +1024,7 @@ export function ConfigurationModal({
                             <button
                               type="button"
                               onClick={() => onRemoveCueType(type)}
-                              className="p-1 text-[#4e4a56] hover:text-red-400 hover:bg-[#2e2e38] rounded transition-colors"
+                              className="p-1 text-[var(--text-dim)] hover:text-red-400 hover:bg-[var(--bg-hover)] rounded transition-colors"
                               title={`Remove ${type}`}
                             >
                               <Trash2 className="w-4 h-4" />
@@ -1060,15 +1083,15 @@ export function ConfigurationModal({
                       };
 
                       return (
-                        <div className="mt-1 ml-4 mr-2 mb-1 p-3 bg-[#1f1f24]/60 border border-[#3a3a46]/40 rounded-md space-y-2">
+                        <div className="mt-1 ml-4 mr-2 mb-1 p-3 bg-[var(--bg-card)]/60 border border-[var(--border-hi)]/40 rounded-md space-y-2">
                           <div className="flex items-center justify-between">
-                            <span className="text-[10px] uppercase tracking-wider text-[#4e4a56]">
+                            <span className="text-[10px] uppercase tracking-wider text-[var(--text-dim)]">
                               Fields &amp; order ({selectedCount}/{allCount})
                             </span>
                             <div className="flex items-center gap-2">
-                              <button type="button" onClick={selectAll} className="text-[10px] text-[#d4600a] hover:text-[#BF5700]">All</button>
-                              <button type="button" onClick={selectNone} className="text-[10px] text-[#d4600a] hover:text-[#BF5700]">None</button>
-                              <button type="button" onClick={resetDefaults} className="text-[10px] text-[#d4600a] hover:text-[#BF5700]">Defaults</button>
+                              <button type="button" onClick={selectAll} className="text-[10px] text-[var(--amber-hi)] hover:text-[var(--amber)]">All</button>
+                              <button type="button" onClick={selectNone} className="text-[10px] text-[var(--amber-hi)] hover:text-[var(--amber)]">None</button>
+                              <button type="button" onClick={resetDefaults} className="text-[10px] text-[var(--amber-hi)] hover:text-[var(--amber)]">Defaults</button>
                             </div>
                           </div>
                           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleFieldDragEnd}>
@@ -1103,8 +1126,8 @@ export function ConfigurationModal({
           {activeTab === 'columns' && (
             <div className="space-y-4">
               {/* Template selector bar */}
-              <div className="flex items-center gap-2 p-3 bg-[#232329]/30 border border-[#3a3a46]/40 rounded-lg">
-                <label className="text-xs text-[#8a8680] font-medium shrink-0">Template:</label>
+              <div className="flex items-center gap-2 p-3 bg-[var(--bg-panel)]/30 border border-[var(--border-hi)]/40 rounded-lg">
+                <label className="text-xs text-[var(--text-mid)] font-medium shrink-0">Template:</label>
                 <div className="relative flex-1 max-w-[180px]">
                   <select
                     value={columnsTemplateId}
@@ -1118,21 +1141,21 @@ export function ConfigurationModal({
                         setColumnsTemplateName('');
                       }
                     }}
-                    className="w-full bg-[#232329] border border-[#3a3a46] rounded-md px-2 py-1.5 text-xs text-[#ede9e3] appearance-none pr-7 focus:border-[#BF5700] focus:outline-none"
+                    className="w-full bg-[var(--bg-panel)] border border-[var(--border-hi)] rounded-md px-2 py-1.5 text-xs text-[var(--text)] appearance-none pr-7 focus:border-[var(--amber)] focus:outline-none"
                   >
                     <option value="">New template…</option>
                     {savedTemplates.filter((t) => t.category === 'columns').map((t) => (
                       <option key={t.id} value={t.id}>{t.name}</option>
                     ))}
                   </select>
-                  <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#8a8680] pointer-events-none" />
+                  <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-mid)] pointer-events-none" />
                 </div>
                 <input
                   type="text"
                   value={columnsTemplateName}
                   onChange={(e) => setColumnsTemplateName(e.target.value)}
                   placeholder="Template name"
-                  className="flex-1 max-w-[180px] bg-[#232329] border border-[#3a3a46] rounded-md px-2 py-1.5 text-xs text-[#ede9e3] focus:border-[#BF5700] focus:outline-none"
+                  className="flex-1 max-w-[180px] bg-[var(--bg-panel)] border border-[var(--border-hi)] rounded-md px-2 py-1.5 text-xs text-[var(--text)] focus:border-[var(--amber)] focus:outline-none"
                 />
                 <button
                   type="button"
@@ -1159,7 +1182,7 @@ export function ConfigurationModal({
                     setColumnsTemplateId(template.id);
                     setColumnsTemplateName(template.name);
                   }}
-                  className="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-[#BF5700] text-white rounded-md hover:bg-[#BF5700] transition-colors shrink-0"
+                  className="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-[var(--amber)] text-white rounded-md hover:bg-[var(--amber)] transition-colors shrink-0"
                 >
                   <Save className="w-3 h-3" />
                   Save
@@ -1181,7 +1204,7 @@ export function ConfigurationModal({
                 )}
               </div>
 
-              <p className="text-xs text-[#8a8680]">
+              <p className="text-xs text-[var(--text-mid)]">
                 Choose which fields appear in the abridged cue list.
                 Drag to reorder. Toggle visibility with the checkbox.
                 You can also add cue-type-specific column selections.
@@ -1189,11 +1212,11 @@ export function ConfigurationModal({
 
               {/* Column view selector */}
               <div className="flex items-center gap-2">
-                <label className="text-xs text-[#8a8680]">Viewing columns for:</label>
+                <label className="text-xs text-[var(--text-mid)]">Viewing columns for:</label>
                 <select
                   value={columnView}
                   onChange={(e) => setColumnView(e.target.value)}
-                  className="bg-[#232329] text-[#ede9e3] text-sm rounded px-2 py-1.5 border border-[#3a3a46] focus:border-[#BF5700] focus:ring-1 focus:ring-[#BF5700] outline-none cursor-pointer"
+                  className="bg-[var(--bg-panel)] text-[var(--text)] text-sm rounded px-2 py-1.5 border border-[var(--border-hi)] focus:border-[var(--amber)] focus:ring-1 focus:ring-[#BF5700] outline-none cursor-pointer"
                 >
                   <option value="default">Default (all types)</option>
                   {typesWithOverrides.map((t) => (
@@ -1215,7 +1238,7 @@ export function ConfigurationModal({
                           e.target.value = '';
                         }
                       }}
-                      className="bg-[#232329] text-[#ede9e3] text-xs rounded px-2 py-1.5 border border-[#3a3a46] outline-none cursor-pointer"
+                      className="bg-[var(--bg-panel)] text-[var(--text)] text-xs rounded px-2 py-1.5 border border-[var(--border-hi)] outline-none cursor-pointer"
                     >
                       <option value="" disabled>
                         + Add type override...
@@ -1236,7 +1259,7 @@ export function ConfigurationModal({
                       onRemoveCueTypeColumns(columnView);
                       setColumnView('default');
                     }}
-                    className="ml-auto flex items-center gap-1 px-2 py-1 text-xs text-red-400 hover:text-red-300 hover:bg-[#232329] rounded transition-colors"
+                    className="ml-auto flex items-center gap-1 px-2 py-1 text-xs text-red-400 hover:text-red-300 hover:bg-[var(--bg-panel)] rounded transition-colors"
                   >
                     <Trash2 className="w-3 h-3" />
                     Remove override
@@ -1267,14 +1290,14 @@ export function ConfigurationModal({
 
           {activeTab === 'view' && (
             <div className="space-y-4">
-              <p className="text-xs text-[#8a8680]">
+              <p className="text-xs text-[var(--text-mid)]">
                 Control how cues are displayed in the cue sheet.
               </p>
 
               {/* Cue Sheet View selector */}
-              <div className="px-3 py-3 bg-[#232329]/50 rounded-md border border-[#3a3a46]/50">
-                <span className="text-sm text-[#ede9e3] font-medium">Cue Sheet View</span>
-                <p className="text-[10px] text-[#4e4a56] mt-0.5 mb-2">
+              <div className="px-3 py-3 bg-[var(--bg-panel-a50)] rounded-md border border-[var(--border-hi-a50)]">
+                <span className="text-sm text-[var(--text)] font-medium">Cue Sheet View</span>
+                <p className="text-[10px] text-[var(--text-dim)] mt-0.5 mb-2">
                   Choose between the classic card-based layout or the production cue sheet layout.
                 </p>
                 <div className="flex gap-2">
@@ -1283,8 +1306,8 @@ export function ConfigurationModal({
                     onClick={() => onSetCueSheetView('classic')}
                     className={`flex-1 px-3 py-2 rounded-md text-xs font-medium border transition-colors ${
                       cueSheetView === 'classic'
-                        ? 'border-[#BF5700] bg-[rgba(191,87,0,0.15)] text-[#BF5700]'
-                        : 'border-[#3a3a46]/50 text-[#8a8680] hover:bg-[#2e2e38] hover:text-[#ede9e3]'
+                        ? 'border-[var(--amber)] bg-[var(--amber-dim)] text-[var(--amber)]'
+                        : 'border-[var(--border-hi-a50)] text-[var(--text-mid)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'
                     }`}
                   >
                     Classic
@@ -1294,8 +1317,8 @@ export function ConfigurationModal({
                     onClick={() => onSetCueSheetView('production')}
                     className={`flex-1 px-3 py-2 rounded-md text-xs font-medium border transition-colors ${
                       cueSheetView === 'production'
-                        ? 'border-[#BF5700] bg-[rgba(191,87,0,0.15)] text-[#BF5700]'
-                        : 'border-[#3a3a46]/50 text-[#8a8680] hover:bg-[#2e2e38] hover:text-[#ede9e3]'
+                        ? 'border-[var(--amber)] bg-[var(--amber-dim)] text-[var(--amber)]'
+                        : 'border-[var(--border-hi-a50)] text-[var(--text-mid)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'
                     }`}
                   >
                     Production
@@ -1303,65 +1326,81 @@ export function ConfigurationModal({
                 </div>
               </div>
 
+              {/* Theatre Mode toggle */}
+              <label className="flex items-center gap-3 px-3 py-3 bg-[var(--bg-panel-a50)] rounded-md border border-[var(--border-hi-a50)] cursor-pointer select-none hover:bg-[var(--bg-panel)]">
+                <input
+                  type="checkbox"
+                  checked={theatreMode}
+                  onChange={() => onSetTheatreMode(!theatreMode)}
+                  className="w-4 h-4 rounded border-[var(--border-hi)] bg-[var(--bg-hover)] text-[var(--amber)] focus:ring-[#BF5700] focus:ring-offset-0 cursor-pointer"
+                />
+                <div>
+                  <span className="text-sm text-[var(--text)] font-medium">Theatre Mode</span>
+                  <p className="text-[10px] text-[var(--text-dim)] mt-0.5">
+                    Low-brightness colour scheme with pure black base and boosted contrast for dark environments.
+                  </p>
+                </div>
+              </label>
+
               {/* Show short codes toggle */}
-              <label className="flex items-center gap-3 px-3 py-3 bg-[#232329]/50 rounded-md border border-[#3a3a46]/50 cursor-pointer select-none hover:bg-[#232329]">
+              <label className="flex items-center gap-3 px-3 py-3 bg-[var(--bg-panel-a50)] rounded-md border border-[var(--border-hi-a50)] cursor-pointer select-none hover:bg-[var(--bg-panel)]">
                 <input
                   type="checkbox"
                   checked={showShortCodes}
                   onChange={() => onSetShowShortCodes(!showShortCodes)}
-                  className="w-4 h-4 rounded border-[#4a4a56] bg-[#2e2e38] text-[#BF5700] focus:ring-[#BF5700] focus:ring-offset-0 cursor-pointer"
+                  className="w-4 h-4 rounded border-[var(--border-hi)] bg-[var(--bg-hover)] text-[var(--amber)] focus:ring-[#BF5700] focus:ring-offset-0 cursor-pointer"
                 />
                 <div>
-                  <span className="text-sm text-[#ede9e3] font-medium">Show Short Codes</span>
-                  <p className="text-[10px] text-[#4e4a56] mt-0.5">
+                  <span className="text-sm text-[var(--text)] font-medium">Show Short Codes</span>
+                  <p className="text-[10px] text-[var(--text-dim)] mt-0.5">
                     Display short codes instead of full cue type names in the cue sheet (if defined).
                   </p>
                 </div>
               </label>
 
               {/* Show past cues toggle */}
-              <label className="flex items-center gap-3 px-3 py-3 bg-[#232329]/50 rounded-md border border-[#3a3a46]/50 cursor-pointer select-none hover:bg-[#232329]">
+              <label className="flex items-center gap-3 px-3 py-3 bg-[var(--bg-panel-a50)] rounded-md border border-[var(--border-hi-a50)] cursor-pointer select-none hover:bg-[var(--bg-panel)]">
                 <input
                   type="checkbox"
                   checked={showPastCues}
                   onChange={() => onSetShowPastCues(!showPastCues)}
-                  className="w-4 h-4 rounded border-[#4a4a56] bg-[#2e2e38] text-[#BF5700] focus:ring-[#BF5700] focus:ring-offset-0 cursor-pointer"
+                  className="w-4 h-4 rounded border-[var(--border-hi)] bg-[var(--bg-hover)] text-[var(--amber)] focus:ring-[#BF5700] focus:ring-offset-0 cursor-pointer"
                 />
                 <div>
-                  <span className="text-sm text-[#ede9e3] font-medium">Show Past Cues</span>
-                  <p className="text-[10px] text-[#4e4a56] mt-0.5">
+                  <span className="text-sm text-[var(--text)] font-medium">Show Past Cues</span>
+                  <p className="text-[10px] text-[var(--text-dim)] mt-0.5">
                     Display cues that have already passed, greyed out above the current position.
                   </p>
                 </div>
               </label>
 
               {/* Show skipped cues toggle */}
-              <label className="flex items-center gap-3 px-3 py-3 bg-[#232329]/50 rounded-md border border-[#3a3a46]/50 cursor-pointer select-none hover:bg-[#232329]">
+              <label className="flex items-center gap-3 px-3 py-3 bg-[var(--bg-panel-a50)] rounded-md border border-[var(--border-hi-a50)] cursor-pointer select-none hover:bg-[var(--bg-panel)]">
                 <input
                   type="checkbox"
                   checked={showSkippedCues}
                   onChange={() => onSetShowSkippedCues(!showSkippedCues)}
-                  className="w-4 h-4 rounded border-[#4a4a56] bg-[#2e2e38] text-[#BF5700] focus:ring-[#BF5700] focus:ring-offset-0 cursor-pointer"
+                  className="w-4 h-4 rounded border-[var(--border-hi)] bg-[var(--bg-hover)] text-[var(--amber)] focus:ring-[#BF5700] focus:ring-offset-0 cursor-pointer"
                 />
                 <div>
-                  <span className="text-sm text-[#ede9e3] font-medium">Show Skipped Cues</span>
-                  <p className="text-[10px] text-[#4e4a56] mt-0.5">
+                  <span className="text-sm text-[var(--text)] font-medium">Show Skipped Cues</span>
+                  <p className="text-[10px] text-[var(--text-dim)] mt-0.5">
                     Show cues that fall between two linked cues. When hidden, skipped cues are removed from the cue sheet.
                   </p>
                 </div>
               </label>
 
               {/* Video timecode overlay toggle */}
-              <label className="flex items-center gap-3 px-3 py-3 bg-[#232329]/50 rounded-md border border-[#3a3a46]/50 cursor-pointer select-none hover:bg-[#232329]">
+              <label className="flex items-center gap-3 px-3 py-3 bg-[var(--bg-panel-a50)] rounded-md border border-[var(--border-hi-a50)] cursor-pointer select-none hover:bg-[var(--bg-panel)]">
                 <input
                   type="checkbox"
                   checked={showVideoTimecode}
                   onChange={() => onSetShowVideoTimecode(!showVideoTimecode)}
-                  className="w-4 h-4 rounded border-[#4a4a56] bg-[#2e2e38] text-[#BF5700] focus:ring-[#BF5700] focus:ring-offset-0 cursor-pointer"
+                  className="w-4 h-4 rounded border-[var(--border-hi)] bg-[var(--bg-hover)] text-[var(--amber)] focus:ring-[#BF5700] focus:ring-offset-0 cursor-pointer"
                 />
                 <div>
-                  <span className="text-sm text-[#ede9e3] font-medium">Video Timecode</span>
-                  <p className="text-[10px] text-[#4e4a56] mt-0.5">
+                  <span className="text-sm text-[var(--text)] font-medium">Video Timecode</span>
+                  <p className="text-[10px] text-[var(--text-dim)] mt-0.5">
                     Show a timecode overlay on the video. Drag it to reposition.
                   </p>
                 </div>
@@ -1371,7 +1410,7 @@ export function ConfigurationModal({
 
           {activeTab === 'templates' && (
             <div className="space-y-5">
-              <p className="text-xs text-[#8a8680]">
+              <p className="text-xs text-[var(--text-mid)]">
                 Manage saved templates for Cue Types, Columns, and XLSX Export configurations.
                 You can rename, delete, export, and import templates here.
               </p>
@@ -1384,7 +1423,7 @@ export function ConfigurationModal({
                     await exportAllTemplatesToJSON();
                   }}
                   disabled={savedTemplates.length === 0}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-[#232329] text-[#8a8680] rounded-md hover:bg-[#2e2e38] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-[var(--bg-panel)] text-[var(--text-mid)] rounded-md hover:bg-[var(--bg-hover)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <FileDown className="w-3.5 h-3.5" />
                   Export All Templates
@@ -1392,7 +1431,7 @@ export function ConfigurationModal({
                 <button
                   type="button"
                   onClick={() => templateImportRef.current?.click()}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-[#232329] text-[#8a8680] rounded-md hover:bg-[#2e2e38] transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-[var(--bg-panel)] text-[var(--text-mid)] rounded-md hover:bg-[var(--bg-hover)] transition-colors"
                 >
                   <FileUp className="w-3.5 h-3.5" />
                   Import Templates
@@ -1427,10 +1466,10 @@ export function ConfigurationModal({
                 const categoryTemplates = savedTemplates.filter((t) => t.category === category);
 
                 return (
-                  <div key={category} className="p-4 bg-[#232329]/30 border border-[#3a3a46]/50 rounded-lg space-y-2">
-                    <h3 className="text-sm font-medium text-[#ede9e3]">{categoryLabels[category]} Templates</h3>
+                  <div key={category} className="p-4 bg-[var(--bg-panel)]/30 border border-[var(--border-hi-a50)] rounded-lg space-y-2">
+                    <h3 className="text-sm font-medium text-[var(--text)]">{categoryLabels[category]} Templates</h3>
                     {categoryTemplates.length === 0 ? (
-                      <p className="text-[11px] text-[#4e4a56] italic">No templates saved.</p>
+                      <p className="text-[11px] text-[var(--text-dim)] italic">No templates saved.</p>
                     ) : (
                       <div className="space-y-1.5">
                         {categoryTemplates.map((tpl) => {
@@ -1440,7 +1479,7 @@ export function ConfigurationModal({
                           return (
                             <div
                               key={tpl.id}
-                              className="flex items-center gap-2 px-3 py-2 bg-[#1f1f24]/50 border border-[#3a3a46]/40 rounded-md"
+                              className="flex items-center gap-2 px-3 py-2 bg-[var(--bg-card)]/50 border border-[var(--border-hi)]/40 rounded-md"
                             >
                               {isEditingThis ? (
                                 <div className="flex items-center gap-1.5 flex-1 min-w-0">
@@ -1457,7 +1496,7 @@ export function ConfigurationModal({
                                       if (e.key === 'Escape') setEditingTemplateId(null);
                                     }}
                                     autoFocus
-                                    className="flex-1 bg-[#2e2e38] text-[#ede9e3] rounded px-2 py-1 text-xs border border-[#BF5700] focus:ring-1 focus:ring-[#BF5700] outline-none"
+                                    className="flex-1 bg-[var(--bg-hover)] text-[var(--text)] rounded px-2 py-1 text-xs border border-[var(--amber)] focus:ring-1 focus:ring-[#BF5700] outline-none"
                                   />
                                   <button
                                     type="button"
@@ -1473,7 +1512,7 @@ export function ConfigurationModal({
                                   <button
                                     type="button"
                                     onClick={() => setEditingTemplateId(null)}
-                                    className="p-1 text-[#4e4a56] hover:text-[#8a8680] rounded"
+                                    className="p-1 text-[var(--text-dim)] hover:text-[var(--text-mid)] rounded"
                                   >
                                     <X className="w-3.5 h-3.5" />
                                   </button>
@@ -1481,8 +1520,8 @@ export function ConfigurationModal({
                               ) : (
                                 <>
                                   <div className="flex-1 min-w-0">
-                                    <p className="text-xs text-[#ede9e3] truncate">{tpl.name}</p>
-                                    <p className="text-[10px] text-[#4e4a56] truncate">
+                                    <p className="text-xs text-[var(--text)] truncate">{tpl.name}</p>
+                                    <p className="text-[10px] text-[var(--text-dim)] truncate">
                                       Updated {relativeTimeAgo(tpl.updatedAt)}
                                     </p>
                                   </div>
@@ -1490,7 +1529,7 @@ export function ConfigurationModal({
                                     <button
                                       type="button"
                                       onClick={() => { setEditingTemplateId(tpl.id); setEditingTemplateName(tpl.name); }}
-                                      className="p-1 text-[#4e4a56] hover:text-[#8a8680] hover:bg-[#2e2e38] rounded transition-colors"
+                                      className="p-1 text-[var(--text-dim)] hover:text-[var(--text-mid)] hover:bg-[var(--bg-hover)] rounded transition-colors"
                                       title="Rename"
                                     >
                                       <Pencil className="w-3 h-3" />
@@ -1498,7 +1537,7 @@ export function ConfigurationModal({
                                     <button
                                       type="button"
                                       onClick={() => exportTemplateToJSON(tpl)}
-                                      className="p-1 text-[#4e4a56] hover:text-[#8a8680] hover:bg-[#2e2e38] rounded transition-colors"
+                                      className="p-1 text-[var(--text-dim)] hover:text-[var(--text-mid)] hover:bg-[var(--bg-hover)] rounded transition-colors"
                                       title="Export as JSON"
                                     >
                                       <Download className="w-3 h-3" />
@@ -1521,7 +1560,7 @@ export function ConfigurationModal({
                                         <button
                                           type="button"
                                           onClick={() => setDeletingTemplateId(null)}
-                                          className="text-[10px] text-[#8a8680] hover:text-[#8a8680] px-1"
+                                          className="text-[10px] text-[var(--text-mid)] hover:text-[var(--text-mid)] px-1"
                                         >
                                           No
                                         </button>
@@ -1530,7 +1569,7 @@ export function ConfigurationModal({
                                       <button
                                         type="button"
                                         onClick={() => setDeletingTemplateId(tpl.id)}
-                                        className="p-1 text-[#4e4a56] hover:text-red-400 hover:bg-[#2e2e38] rounded transition-colors"
+                                        className="p-1 text-[var(--text-dim)] hover:text-red-400 hover:bg-[var(--bg-hover)] rounded transition-colors"
                                         title="Delete template"
                                       >
                                         <Trash2 className="w-3 h-3" />
@@ -1552,16 +1591,16 @@ export function ConfigurationModal({
 
           {activeTab === 'savefiles' && (
             <div className="space-y-5">
-              <p className="text-xs text-[#8a8680]">
+              <p className="text-xs text-[var(--text-mid)]">
                 Manage backup snapshots. Cue backups are created automatically at the configured interval
                 while you are active, and when the tab is backgrounded or the page is closed. Configuration is
                 backed up when you close this modal.
               </p>
 
               {/* Backup interval setting */}
-              <div className="p-4 bg-[#232329]/30 border border-[#3a3a46]/50 rounded-lg space-y-2">
-                <h3 className="text-sm font-medium text-[#ede9e3]">Cue Backup Interval</h3>
-                <p className="text-[10px] text-[#4e4a56]">
+              <div className="p-4 bg-[var(--bg-panel)]/30 border border-[var(--border-hi-a50)] rounded-lg space-y-2">
+                <h3 className="text-sm font-medium text-[var(--text)]">Cue Backup Interval</h3>
+                <p className="text-[10px] text-[var(--text-dim)]">
                   How often (in minutes) to create a rolling backup of your cues while you are actively working.
                 </p>
                 <div className="flex items-center gap-3">
@@ -1574,36 +1613,36 @@ export function ConfigurationModal({
                       const v = parseInt(e.target.value, 10);
                       if (!isNaN(v) && v >= 1) onSetCueBackupInterval(v);
                     }}
-                    className="w-20 bg-[#232329] text-[#ede9e3] rounded px-3 py-1.5 text-sm border border-[#3a3a46] focus:border-[#BF5700] focus:ring-1 focus:ring-[#BF5700] outline-none"
+                    className="w-20 bg-[var(--bg-panel)] text-[var(--text)] rounded px-3 py-1.5 text-sm border border-[var(--border-hi)] focus:border-[var(--amber)] focus:ring-1 focus:ring-[#BF5700] outline-none"
                   />
-                  <span className="text-xs text-[#8a8680]">minutes</span>
+                  <span className="text-xs text-[var(--text-mid)]">minutes</span>
                 </div>
               </div>
 
               {/* Per-video recovery section */}
-              <div className="p-4 bg-[#232329]/30 border border-[#3a3a46]/50 rounded-lg space-y-3">
+              <div className="p-4 bg-[var(--bg-panel)]/30 border border-[var(--border-hi-a50)] rounded-lg space-y-3">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-medium text-[#ede9e3]">Video File Backups</h3>
+                  <h3 className="text-sm font-medium text-[var(--text)]">Video File Backups</h3>
                   <button
                     type="button"
                     onClick={() => setRecoveryTick((prev) => prev + 1)}
-                    className="text-xs px-2 py-1 rounded bg-[#232329] text-[#8a8680] hover:bg-[#2e2e38] transition-colors"
+                    className="text-xs px-2 py-1 rounded bg-[var(--bg-panel)] text-[var(--text-mid)] hover:bg-[var(--bg-hover)] transition-colors"
                   >
                     Refresh
                   </button>
                 </div>
 
                 {videoFiles.length === 0 ? (
-                  <p className="text-[11px] text-[#4e4a56]">No video files with backups found.</p>
+                  <p className="text-[11px] text-[var(--text-dim)]">No video files with backups found.</p>
                 ) : (
                   <>
                     {/* Video file dropdown */}
                     <div className="flex items-center gap-2 min-w-0">
-                      <label className="text-xs text-[#8a8680] shrink-0">Select video:</label>
+                      <label className="text-xs text-[var(--text-mid)] shrink-0">Select video:</label>
                       <select
                         value={effectiveSelectedKey}
                         onChange={(e) => { setSelectedVideoKey(e.target.value); setRecoveryTick((prev) => prev + 1); }}
-                        className="min-w-0 flex-1 bg-[#232329] text-[#ede9e3] text-sm rounded px-2 py-1.5 border border-[#3a3a46] focus:border-[#BF5700] focus:ring-1 focus:ring-[#BF5700] outline-none cursor-pointer"
+                        className="min-w-0 flex-1 bg-[var(--bg-panel)] text-[var(--text)] text-sm rounded px-2 py-1.5 border border-[var(--border-hi)] focus:border-[var(--amber)] focus:ring-1 focus:ring-[#BF5700] outline-none cursor-pointer"
                       >
                         {videoFiles.map((vf) => {
                           const displayName = vf.fileName === 'no-video' ? 'No Video' : vf.fileName;
@@ -1624,24 +1663,24 @@ export function ConfigurationModal({
                       return (
                       <div className="space-y-2">
                         {selectedVideoBackups.length === 0 ? (
-                          <p className="text-[11px] text-[#4e4a56]">No backups for this video.</p>
+                          <p className="text-[11px] text-[var(--text-dim)]">No backups for this video.</p>
                         ) : (
                           <div className="space-y-1.5">
                             {selectedVideoBackups.map((snapshot) => (
                               <div
                                 key={`video-backup-${snapshot.slot}`}
-                                className="flex items-center justify-between gap-3 px-3 py-2 rounded border border-[#3a3a46]/50 bg-[#1f1f24]/40"
+                                className="flex items-center justify-between gap-3 px-3 py-2 rounded border border-[var(--border-hi-a50)] bg-[var(--bg-card)]/40"
                               >
                                 <div className="min-w-0 flex-1">
                                   <div className="flex items-center gap-2">
-                                    <p className="text-xs text-[#ede9e3] truncate">
+                                    <p className="text-xs text-[var(--text)] truncate">
                                       {new Date(snapshot.savedAt).toLocaleString()}
                                     </p>
-                                    <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full bg-[#232329] text-[#8a8680]">
+                                    <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--bg-panel)] text-[var(--text-mid)]">
                                       {relativeTimeAgo(snapshot.savedAt)}
                                     </span>
                                   </div>
-                                  <p className="text-[10px] text-[#4e4a56]">
+                                  <p className="text-[10px] text-[var(--text-dim)]">
                                     {snapshot.itemCount ?? 0} cues · {snapshot.bytes} bytes
                                   </p>
                                 </div>
@@ -1663,7 +1702,7 @@ export function ConfigurationModal({
                                         /* ignore */
                                       }
                                     }}
-                                    className="text-xs px-2 py-1 rounded bg-[#232329] text-[#8a8680] hover:bg-[#2e2e38] transition-colors"
+                                    className="text-xs px-2 py-1 rounded bg-[var(--bg-panel)] text-[var(--text-mid)] hover:bg-[var(--bg-hover)] transition-colors"
                                     title="Export this backup as CSV"
                                   >
                                     <Download className="w-3.5 h-3.5" />
@@ -1688,7 +1727,7 @@ export function ConfigurationModal({
                                         }
                                       }
                                     }}
-                                    className="text-xs px-2 py-1 rounded bg-[#BF5700] text-white hover:bg-[#BF5700] transition-colors"
+                                    className="text-xs px-2 py-1 rounded bg-[var(--amber)] text-white hover:bg-[var(--amber)] transition-colors"
                                   >
                                     Restore
                                   </button>
@@ -1725,27 +1764,27 @@ export function ConfigurationModal({
               </div>
 
               {/* Config backups section */}
-              <div className="p-4 bg-[#232329]/30 border border-[#3a3a46]/50 rounded-lg space-y-3">
-                <h3 className="text-sm font-medium text-[#ede9e3]">Configuration Backups</h3>
+              <div className="p-4 bg-[var(--bg-panel)]/30 border border-[var(--border-hi-a50)] rounded-lg space-y-3">
+                <h3 className="text-sm font-medium text-[var(--text)]">Configuration Backups</h3>
                 {configBackups.length === 0 ? (
-                  <p className="text-[11px] text-[#4e4a56]">No configuration backups yet.</p>
+                  <p className="text-[11px] text-[var(--text-dim)]">No configuration backups yet.</p>
                 ) : (
                   <div className="space-y-1.5">
                     {configBackups.map((snapshot) => (
                       <div
                         key={`config-backup-${snapshot.slot}`}
-                        className="flex items-center justify-between gap-3 px-3 py-2 rounded border border-[#3a3a46]/50 bg-[#1f1f24]/40"
+                        className="flex items-center justify-between gap-3 px-3 py-2 rounded border border-[var(--border-hi-a50)] bg-[var(--bg-card)]/40"
                       >
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
-                            <p className="text-xs text-[#ede9e3] truncate">
+                            <p className="text-xs text-[var(--text)] truncate">
                               {new Date(snapshot.savedAt).toLocaleString()}
                             </p>
-                            <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full bg-[#232329] text-[#8a8680]">
+                            <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--bg-panel)] text-[var(--text-mid)]">
                               {relativeTimeAgo(snapshot.savedAt)}
                             </span>
                           </div>
-                          <p className="text-[10px] text-[#4e4a56]">{snapshot.bytes} bytes</p>
+                          <p className="text-[10px] text-[var(--text-dim)]">{snapshot.bytes} bytes</p>
                         </div>
                         <button
                           type="button"
@@ -1762,7 +1801,7 @@ export function ConfigurationModal({
                               }
                             }
                           }}
-                          className="shrink-0 text-xs px-2 py-1 rounded bg-[#BF5700] text-white hover:bg-[#BF5700] transition-colors"
+                          className="shrink-0 text-xs px-2 py-1 rounded bg-[var(--amber)] text-white hover:bg-[var(--amber)] transition-colors"
                         >
                           Restore
                         </button>
@@ -1776,7 +1815,7 @@ export function ConfigurationModal({
 
           {activeTab === 'data' && (
             <div className="space-y-4">
-              <p className="text-xs text-[#8a8680]">
+              <p className="text-xs text-[var(--text-mid)]">
                 Manage stored data. These actions are permanent and cannot be undone.
               </p>
 
@@ -1858,12 +1897,12 @@ export function ConfigurationModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-[#2c2c36]">
+        <div className="flex items-center justify-between px-6 py-4 border-t border-[var(--border)]">
           <div className="flex gap-2">
             <button
               type="button"
               onClick={onExportConfig}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-[#232329] text-[#8a8680] rounded-md hover:bg-[#2e2e38] transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-[var(--bg-panel)] text-[var(--text-mid)] rounded-md hover:bg-[var(--bg-hover)] transition-colors"
             >
               <Download className="w-3.5 h-3.5" />
               Export Config
@@ -1871,7 +1910,7 @@ export function ConfigurationModal({
             <button
               type="button"
               onClick={() => importRef.current?.click()}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-[#232329] text-[#8a8680] rounded-md hover:bg-[#2e2e38] transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-[var(--bg-panel)] text-[var(--text-mid)] rounded-md hover:bg-[var(--bg-hover)] transition-colors"
             >
               <Upload className="w-3.5 h-3.5" />
               Import Config
@@ -1887,7 +1926,7 @@ export function ConfigurationModal({
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-1.5 text-sm bg-[#BF5700] text-white rounded-md hover:bg-[#BF5700] transition-colors"
+            className="px-4 py-1.5 text-sm bg-[var(--amber)] text-white rounded-md hover:bg-[var(--amber)] transition-colors"
           >
             Done
           </button>

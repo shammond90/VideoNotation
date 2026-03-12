@@ -28,11 +28,13 @@ interface AnnotationPanelProps {
   isPlaying: boolean;
   cueTypeColors: Record<string, string>;
   cueTypeShortCodes: Record<string, string>;
+  cueTypeFontColors: Record<string, string>;
   showShortCodes: boolean;
   expandedSearchFilter: boolean;
   onSetExpandedSearchFilter: (expanded: boolean) => void;
   showPastCues: boolean;
   cueSheetView: 'classic' | 'production';
+  theatreMode: boolean;
   cueTypeFields: Record<string, string[]>;
   onSeek: (time: number) => void;
   onEdit: (id: string, cue: CueFields, newTimestamp?: number) => void;
@@ -191,7 +193,7 @@ function OverflowChips({ chips, showTimestamp, timestamp, onSeek, isActive, isSt
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onSeek(timestamp); }}
-              className={`text-[10px] font-mono px-1.5 py-0.5 rounded transition-colors cursor-pointer shrink-0 ${isActive ? 'bg-emerald-500/30 text-emerald-300' : isStandby ? 'bg-amber-500/30 text-amber-300' : isWarning ? 'bg-blue-500/30 text-blue-300' : 'bg-[#232329] text-[#8a8680] hover:bg-[#2e2e38] hover:text-[#ede9e3]'}`}
+              className={`text-[10px] font-mono px-1.5 py-0.5 rounded transition-colors cursor-pointer shrink-0 ${isActive ? 'bg-emerald-500/30 text-emerald-300' : isStandby ? 'bg-amber-500/30 text-amber-300' : isWarning ? 'bg-blue-500/30 text-blue-300' : 'bg-[var(--bg-panel)] text-[var(--text-mid)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'}`}
             >
               {formatTime(timestamp)}
             </button>
@@ -260,11 +262,13 @@ export function AnnotationPanel({
   isPlaying,
   cueTypeColors,
   cueTypeShortCodes,
+  cueTypeFontColors,
   showShortCodes,
   expandedSearchFilter,
   onSetExpandedSearchFilter,
   showPastCues,
   cueSheetView,
+  theatreMode,
   cueTypeFields,
   onSeek,
   onEdit,
@@ -655,7 +659,7 @@ export function AnnotationPanel({
             </span>
           )}
           {flaggedCount > 0 && (
-            <span className="flex items-center gap-0.5 text-[10px] font-mono shrink-0" style={{ color: '#f59e0b' }} title={`${flaggedCount} flagged cue${flaggedCount > 1 ? 's' : ''}`}>
+            <span className="flex items-center gap-0.5 text-[10px] font-mono shrink-0" style={{ color: 'var(--flag)' }} title={`${flaggedCount} flagged cue${flaggedCount > 1 ? 's' : ''}`}>
               <Flag className="w-3 h-3" />{flaggedCount}
             </span>
           )}
@@ -724,7 +728,7 @@ export function AnnotationPanel({
           </span>
         )}
         {flaggedCount > 0 && (
-          <span className="flex items-center gap-0.5 text-[10px] font-mono ml-2 shrink-0" style={{ color: '#f59e0b' }} title={`${flaggedCount} flagged cue${flaggedCount > 1 ? 's' : ''}`}>
+          <span className="flex items-center gap-0.5 text-[10px] font-mono ml-2 shrink-0" style={{ color: 'var(--flag)' }} title={`${flaggedCount} flagged cue${flaggedCount > 1 ? 's' : ''}`}>
             <Flag className="w-3 h-3" />{flaggedCount}
           </span>
         )}
@@ -828,7 +832,7 @@ export function AnnotationPanel({
             </span>
           )}
           {flaggedCount > 0 && (
-            <span className="flex items-center gap-0.5 text-[10px] font-mono shrink-0" style={{ color: '#f59e0b' }} title={`${flaggedCount} flagged cue${flaggedCount > 1 ? 's' : ''}`}>
+            <span className="flex items-center gap-0.5 text-[10px] font-mono shrink-0" style={{ color: 'var(--flag)' }} title={`${flaggedCount} flagged cue${flaggedCount > 1 ? 's' : ''}`}>
               <Flag className="w-3 h-3" />{flaggedCount}
             </span>
           )}
@@ -895,7 +899,7 @@ export function AnnotationPanel({
           </span>
         )}
         {flaggedCount > 0 && (
-          <span className="flex items-center gap-0.5 text-[10px] font-mono ml-2 shrink-0" style={{ color: '#f59e0b' }} title={`${flaggedCount} flagged cue${flaggedCount > 1 ? 's' : ''}`}>
+          <span className="flex items-center gap-0.5 text-[10px] font-mono ml-2 shrink-0" style={{ color: 'var(--flag)' }} title={`${flaggedCount} flagged cue${flaggedCount > 1 ? 's' : ''}`}>
             <Flag className="w-3 h-3" />{flaggedCount}
           </span>
         )}
@@ -965,7 +969,13 @@ export function AnnotationPanel({
     if (cueSheetView === 'production') {
       const cueColor = getCueColor(cue.type);
       // Left bar colour = live status: warning=blue, standby=amber, active=green
-      const leftBarColor = isActive ? '#3d9962' : isStandby ? '#BF5700' : isWarning ? '#2d9cdb' : 'transparent';
+      const leftBarColor = isActive
+        ? (theatreMode ? '#009966' : 'var(--green)')
+        : isStandby
+        ? (theatreMode ? '#ff9900' : 'var(--amber)')
+        : isWarning
+        ? (theatreMode ? '#0066ff' : 'var(--blue)')
+        : 'transparent';
       const prodIndentPx = indent === 'scene' ? 40 : indent === 'title' ? 26 : 14;
 
       return (
@@ -973,6 +983,9 @@ export function AnnotationPanel({
           key={annotation.id}
           id={`cue-${annotation.id}`}
           ref={(el) => { if (isFirstActive && el) activeRef.current = el; }}
+          style={{ borderBottom: '1px solid var(--border)' }}
+        >
+        <div
           onClick={handleClick}
           onDoubleClick={handleDoubleClick}
           onContextMenu={handleContextMenu}
@@ -983,7 +996,6 @@ export function AnnotationPanel({
             minHeight: 48,
             paddingLeft: prodIndentPx,
             paddingRight: 14,
-            borderBottom: '1px solid var(--border)',
             background: isActive ? 'var(--bg-panel)' : undefined,
             opacity: isCut ? 0.3 : isSkipped ? 0.4 : undefined,
           }}
@@ -997,7 +1009,7 @@ export function AnnotationPanel({
               left: 0,
               top: 0,
               bottom: 0,
-              width: 3,
+              width: theatreMode ? 4 : 3,
               background: leftBarColor,
               transition: 'background 0.15s',
             }}
@@ -1035,7 +1047,10 @@ export function AnnotationPanel({
           ) : (
             <>
               {/* Zone 1: Badge */}
-              {cue.type && (
+              {cue.type && (() => {
+                const fontColor = cueTypeFontColors[cue.type] || cueColor;
+                const isShortCode = showShortCodes && !!cueTypeShortCodes[cue.type];
+                return (
                 <div
                   className="shrink-0 text-center font-mono mr-3"
                   style={{
@@ -1044,17 +1059,18 @@ export function AnnotationPanel({
                     borderRadius: 3,
                     border: `1px solid ${cueColor}33`,
                     background: `${cueColor}14`,
-                    color: cueColor,
+                    color: fontColor,
                   }}
                 >
-                  <div className="text-[8px] font-medium tracking-wide uppercase" style={{ opacity: 0.8 }}>
+                  <div className={`${isShortCode ? (theatreMode ? 'text-[13px] font-semibold' : 'text-[11px] font-semibold') : 'text-[8px] font-medium'} tracking-wide uppercase`} style={{ opacity: isShortCode ? 1 : 0.8 }}>
                     {getCueTypeDisplayName(cue.type)}
                   </div>
-                  <div className={`text-[13px] font-medium${isCut ? ' line-through' : ''}`}>
+                  <div className={`${theatreMode ? 'text-[15px] font-semibold' : 'text-[13px] font-medium'}${isCut ? ' line-through' : ''}`}>
                     {cue.cueNumber || '—'}
                   </div>
                 </div>
-              )}
+                );
+              })()}
 
               {/* Zone 2: What / When */}
               {(primaryText || secondaryText) && (
@@ -1077,16 +1093,16 @@ export function AnnotationPanel({
                 {extraChips.map((chip) => (
                   <span
                     key={chip.key}
-                    className="inline-flex items-baseline gap-1 font-mono text-[10px] shrink-0 whitespace-nowrap"
+                    className={`inline-flex items-baseline gap-1 font-mono ${theatreMode ? 'text-[11px]' : 'text-[10px]'} shrink-0 whitespace-nowrap`}
                     style={{
                       background: 'var(--bg-panel)',
-                      border: '1px solid var(--border)',
+                      border: `1px solid ${theatreMode ? 'var(--border-hi)' : 'var(--border)'}`,
                       borderRadius: 3,
                       padding: '2px 6px',
                       lineHeight: 1.4,
                     }}
                   >
-                    <span className="uppercase text-[9px] tracking-wide" style={{ color: 'var(--text-dim)' }}>{chip.label}</span>
+                    <span className="uppercase text-[9px] tracking-wide" style={{ color: theatreMode ? 'var(--text-mid)' : 'var(--text-dim)' }}>{chip.label}</span>
                     <span style={{ color: 'var(--text-mid)' }}>{chip.value}</span>
                   </span>
                 ))}
@@ -1098,21 +1114,21 @@ export function AnnotationPanel({
                 style={{ borderLeft: '1px solid var(--border)' }}
               >
                 {statusColor && (
-                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: statusColor }} title={annotation.status} />
+                  <span className={`${theatreMode ? 'w-2 h-2' : 'w-1.5 h-1.5'} rounded-full shrink-0`} style={{ background: statusColor }} title={annotation.status} />
                 )}
                 {isFlagged && (
-                  <span title={annotation.flagNote || 'Flagged'} style={{ color: '#f59e0b', fontSize: 10, lineHeight: 1 }}>
-                    <Flag className="w-2.5 h-2.5" />
+                  <span title={annotation.flagNote || 'Flagged'} style={{ color: 'var(--flag)', fontSize: theatreMode ? 12 : 10, lineHeight: 1 }}>
+                    <Flag className={theatreMode ? 'w-3 h-3' : 'w-2.5 h-2.5'} />
                   </span>
                 )}
                 {showTimestamp && (
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); onSeek(annotation.timestamp); }}
-                    className="font-mono text-[10px] tracking-wide shrink-0 whitespace-nowrap transition-colors cursor-pointer"
-                    style={{ color: 'var(--text-dim)' }}
+                    className={`font-mono ${theatreMode ? 'text-[11px]' : 'text-[10px]'} tracking-wide shrink-0 whitespace-nowrap transition-colors cursor-pointer`}
+                    style={{ color: theatreMode ? 'var(--text-mid)' : 'var(--text-dim)', fontWeight: theatreMode ? 500 : undefined, letterSpacing: theatreMode ? '0.06em' : undefined }}
                     onMouseEnter={e => { e.currentTarget.style.color = 'var(--text)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-dim)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.color = theatreMode ? 'var(--text-mid)' : 'var(--text-dim)'; }}
                   >
                     {formatTime(annotation.timestamp)}
                   </button>
@@ -1129,16 +1145,15 @@ export function AnnotationPanel({
               <button type="button" onClick={(e) => { e.stopPropagation(); setDeletingId(null); }} className="text-xs px-2 py-0.5 rounded" style={{ background: 'var(--bg-panel)', color: 'var(--text-mid)' }}>No</button>
             </div>
           )}
+        </div>
 
           {/* Expanded detail view */}
           {isExpanded && !isEditing && (
-            <div style={{ position: 'absolute', left: 0, right: 0, top: '100%', zIndex: 5 }}>
               <ExpandedCueView
                 annotation={annotation}
                 columns={cols}
                 onEdit={() => setSlideEditId(annotation.id)}
               />
-            </div>
           )}
         </div>
       );
@@ -1158,7 +1173,7 @@ export function AnnotationPanel({
             : isActive ? 'bg-emerald-900/30 border-emerald-500/60 shadow-sm shadow-emerald-500/10'
             : isStandby ? 'bg-amber-900/20 border-amber-500/50 shadow-sm shadow-amber-500/10'
             : isWarning ? 'bg-blue-900/20 border-blue-500/50 shadow-sm shadow-blue-500/10'
-            : 'hover:border-[#3a3a46]'
+            : 'hover:border-[var(--border-hi)]'
         }`}
         style={{
           background: (isActive || isStandby || isWarning) ? undefined : 'var(--bg-card)',
@@ -1231,7 +1246,7 @@ export function AnnotationPanel({
                   flagContent={(isFlagged || statusColor) ? (
                     <>
                       {isFlagged && (
-                        <span title={annotation.flagNote || 'Flagged'} style={{ color: '#f59e0b' }}>
+                        <span title={annotation.flagNote || 'Flagged'} style={{ color: 'var(--flag)' }}>
                           <Flag className="w-3 h-3" />
                         </span>
                       )}
@@ -1335,8 +1350,8 @@ export function AnnotationPanel({
                   onClick={() => setIsFilterOpen((prev) => !prev)}
                   className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded-md transition-colors ${
                     typeFilter.size < cueTypes.length
-                      ? 'bg-[rgba(191,87,0,0.15)] text-[#BF5700]'
-                      : 'text-[#8a8680] hover:text-[#ede9e3] hover:bg-[#2e2e38]'
+                      ? 'bg-[var(--amber-dim)] text-[var(--amber)]'
+                      : 'text-[var(--text-mid)] hover:text-[var(--text)] hover:bg-[var(--bg-hover)]'
                   }`}
                 >
                   <Filter className="w-3.5 h-3.5" />
@@ -1352,8 +1367,8 @@ export function AnnotationPanel({
                   onClick={() => setFlaggedOnly((p) => !p)}
                   className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded-md transition-colors ${
                     flaggedOnly
-                      ? 'bg-[rgba(239,68,68,0.15)] text-red-400'
-                      : 'text-[#8a8680] hover:text-[#ede9e3] hover:bg-[#2e2e38]'
+                      ? 'bg-[var(--red-dim)] text-red-400'
+                      : 'text-[var(--text-mid)] hover:text-[var(--text)] hover:bg-[var(--bg-hover)]'
                   }`}
                 >
                   <Flag className="w-3.5 h-3.5" />
@@ -1373,7 +1388,7 @@ export function AnnotationPanel({
                         className={`text-[10px] font-bold px-2 py-1 rounded-md border transition-colors ${
                           isActive
                             ? ''
-                            : 'bg-[#232329]/50 border-[#2c2c36]/50 text-[#4e4a56] line-through hover:text-[#ede9e3] hover:border-[#3a3a46]'
+                            : 'bg-[var(--bg-panel)] border-[var(--border)] text-[var(--text-dim)] line-through hover:text-[var(--text)] hover:border-[var(--border-hi)]'
                         }`}
                         style={isActive ? { background: `${color}33`, borderColor: `${color}80`, color } : undefined}
                       >
@@ -1546,7 +1561,7 @@ export function AnnotationPanel({
                         {/* Right meta */}
                         <div className="shrink-0 flex items-center gap-1.5 ml-2 pl-2" style={{ borderLeft: '1px solid var(--border)' }}>
                           {pastStatusColor && <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: pastStatusColor }} />}
-                          {pastIsFlagged && <span style={{ color: '#f59e0b', fontSize: 9 }}><Flag className="w-2.5 h-2.5" /></span>}
+                          {pastIsFlagged && <span style={{ color: 'var(--flag)', fontSize: 9 }}><Flag className="w-2.5 h-2.5" /></span>}
                           {showTimestamp && <span className="font-mono text-[9px] shrink-0" style={{ color: 'var(--text-dim)' }}>{formatTime(annotation.timestamp)}</span>}
                         </div>
                       </div>

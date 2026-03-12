@@ -120,6 +120,7 @@ export default function App({
     renameCueType,
     setCueTypeColor,
     setCueTypeShortCode,
+    setCueTypeFontColor,
     setShowShortCodes,
     setExpandedSearchFilter,
     setShowPastCues,
@@ -137,6 +138,7 @@ export default function App({
     saveConfigBackup,
     setCueBackupInterval,
     setCueSheetView,
+    setTheatreMode,
     clearAllData,
     clearCurrentVideoCues,
     clearAllCues,
@@ -663,7 +665,7 @@ export default function App({
   }
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden" style={{ background: 'var(--bg)', color: 'var(--text)' }}>
+    <div className={`h-screen flex flex-col overflow-hidden${config.theatreMode ? ' theatre-mode' : ''}`} style={{ background: 'var(--bg)', color: 'var(--text)' }}>
       {/* Header */}
       <header style={{
         height: 44,
@@ -1078,11 +1080,13 @@ export default function App({
               isPlaying={playerState.isPlaying}
               cueTypeColors={config.cueTypeColors}
               cueTypeShortCodes={config.cueTypeShortCodes}
+              cueTypeFontColors={config.cueTypeFontColors}
               showShortCodes={config.showShortCodes}
               expandedSearchFilter={config.expandedSearchFilter}
               onSetExpandedSearchFilter={setExpandedSearchFilter}
               showPastCues={config.showPastCues}
               cueSheetView={config.cueSheetView}
+              theatreMode={config.theatreMode}
               cueTypeFields={config.cueTypeFields}
               onSeek={handleSeek}
               onEdit={updateAnnotation}
@@ -1174,6 +1178,7 @@ export default function App({
         cueTypes={config.cueTypes}
         cueTypeColors={config.cueTypeColors}
         cueTypeShortCodes={config.cueTypeShortCodes}
+        cueTypeFontColors={config.cueTypeFontColors}
         cueTypeFields={config.cueTypeFields}
         visibleColumns={config.visibleColumns}
         cueTypeColumns={config.cueTypeColumns}
@@ -1186,6 +1191,8 @@ export default function App({
         showVideoTimecode={config.showVideoTimecode}
         cueSheetView={config.cueSheetView}
         onSetCueSheetView={setCueSheetView}
+        theatreMode={config.theatreMode}
+        onSetTheatreMode={setTheatreMode}
         onSetShowVideoTimecode={setShowVideoTimecode}
         currentVideoName={videoFile?.name}
         currentVideoSize={videoFile?.size}
@@ -1196,6 +1203,7 @@ export default function App({
         onRenameCueType={handleRenameCueType}
         onSetCueTypeColor={setCueTypeColor}
         onSetCueTypeShortCode={setCueTypeShortCode}
+        onSetCueTypeFontColor={setCueTypeFontColor}
         onSetShowShortCodes={setShowShortCodes}
         onSetCueTypeFields={setCueTypeFields}
         onToggleColumn={toggleColumnVisibility}

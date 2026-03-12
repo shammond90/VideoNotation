@@ -57,6 +57,7 @@ export function useConfiguration() {
       const { [name]: ___, ...restAllowStandby } = prev.cueTypeAllowStandby;
       const { [name]: ____, ...restAllowWarning } = prev.cueTypeAllowWarning;
       const { [name]: _____, ...restTypeFields } = prev.cueTypeFields;
+      const { [name]: ______, ...restFontColors } = prev.cueTypeFontColors;
       return {
         ...prev,
         cueTypes: prev.cueTypes.filter((t) => t !== name),
@@ -65,6 +66,7 @@ export function useConfiguration() {
         cueTypeAllowStandby: restAllowStandby,
         cueTypeAllowWarning: restAllowWarning,
         cueTypeFields: restTypeFields,
+        cueTypeFontColors: restFontColors,
       };
     });
   }, []);
@@ -103,7 +105,13 @@ export function useConfiguration() {
         newTypeFields[trimmed] = newTypeFields[oldName];
         delete newTypeFields[oldName];
       }
-      return { ...prev, cueTypes: newTypes, cueTypeColumns: newTypeColumns, cueTypeColors: newColors, cueTypeAllowStandby: newAllowStandby, cueTypeAllowWarning: newAllowWarning, cueTypeFields: newTypeFields };
+      // Rename key in cueTypeFontColors if present
+      const newFontColors = { ...prev.cueTypeFontColors };
+      if (newFontColors[oldName] !== undefined) {
+        newFontColors[trimmed] = newFontColors[oldName];
+        delete newFontColors[oldName];
+      }
+      return { ...prev, cueTypes: newTypes, cueTypeColumns: newTypeColumns, cueTypeColors: newColors, cueTypeAllowStandby: newAllowStandby, cueTypeAllowWarning: newAllowWarning, cueTypeFields: newTypeFields, cueTypeFontColors: newFontColors };
     });
   }, []);
 
@@ -118,6 +126,13 @@ export function useConfiguration() {
     setConfig((prev) => ({
       ...prev,
       cueTypeShortCodes: { ...prev.cueTypeShortCodes, [cueType]: shortCode },
+    }));
+  }, []);
+
+  const setCueTypeFontColor = useCallback((cueType: string, color: string) => {
+    setConfig((prev) => ({
+      ...prev,
+      cueTypeFontColors: { ...prev.cueTypeFontColors, [cueType]: color },
     }));
   }, []);
 
@@ -143,6 +158,10 @@ export function useConfiguration() {
 
   const setCueSheetView = useCallback((view: 'classic' | 'production') => {
     setConfig((prev) => ({ ...prev, cueSheetView: view }));
+  }, []);
+
+  const setTheatreMode = useCallback((enabled: boolean) => {
+    setConfig((prev) => ({ ...prev, theatreMode: enabled }));
   }, []);
 
   const setShowVideoTimecode = useCallback((show: boolean) => {
@@ -325,6 +344,7 @@ export function useConfiguration() {
       const newColors = { ...prev.cueTypeColors };
       const newShortCodes = { ...prev.cueTypeShortCodes };
       const newFields = { ...prev.cueTypeFields };
+      const newFontColors = { ...prev.cueTypeFontColors };
 
       // Remove config for types that were dropped
       for (const t of prev.cueTypes) {
@@ -332,6 +352,7 @@ export function useConfiguration() {
           delete newColors[t];
           delete newShortCodes[t];
           delete newFields[t];
+          delete newFontColors[t];
         }
       }
 
@@ -340,6 +361,7 @@ export function useConfiguration() {
         if (data.cueTypeColors[t]) newColors[t] = data.cueTypeColors[t];
         if (data.cueTypeShortCodes[t]) newShortCodes[t] = data.cueTypeShortCodes[t];
         if (data.cueTypeFields[t]) newFields[t] = [...data.cueTypeFields[t]];
+        if (data.cueTypeFontColors?.[t]) newFontColors[t] = data.cueTypeFontColors[t];
       }
 
       return {
@@ -348,6 +370,7 @@ export function useConfiguration() {
         cueTypeColors: newColors,
         cueTypeShortCodes: newShortCodes,
         cueTypeFields: newFields,
+        cueTypeFontColors: newFontColors,
       };
     });
   }, []);
@@ -387,12 +410,14 @@ export function useConfiguration() {
     renameCueType,
     setCueTypeColor,
     setCueTypeShortCode,
+    setCueTypeFontColor,
     setShowShortCodes,
     setExpandedSearchFilter,
     setShowPastCues,
     setShowSkippedCues,
     setDistanceView,
     setCueSheetView,
+    setTheatreMode,
     setShowVideoTimecode,
     setVideoTimecodePosition,
     setCueBackupInterval,

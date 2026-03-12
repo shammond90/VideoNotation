@@ -61,12 +61,56 @@
   --red-dim:      rgba(200,72,72,0.15);
   --yellow:       #c49a2a;
   --yellow-dim:   rgba(196,154,42,0.15);
+  --blue:         #2d9cdb;
+  --blue-dim:     rgba(45,156,219,0.15);
+  --flag:         #f59e0b;
   --r-sm:         3px;
   --r-md:         6px;
   --r-lg:         10px;
   --shadow-sm:    0 1px 3px rgba(0,0,0,0.4);
   --shadow-md:    0 4px 16px rgba(0,0,0,0.5);
   --shadow-lg:    0 8px 40px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.03);
+
+  /* Alpha variants for Tailwind arbitrary-value classes (can't use /50 with var()) */
+  --bg-panel-a50:    rgba(35,35,41,0.5);
+  --border-hi-a50:   rgba(58,58,70,0.5);
+}
+
+/* ─── THEATRE MODE (low-brightness override) ─────────────────── */
+.theatre-mode {
+  --bg:           #000000;
+  --bg-raised:    #0a0a0a;
+  --bg-card:      #0f0f0f;
+  --bg-panel:     #141414;
+  --bg-input:     #1a1a1a;
+  --bg-hover:     #1e1e1e;
+  --border:       #2a2a2a;
+  --border-hi:    #3d3d3d;
+  --border-focus: #ff7a00;
+  --text:         #ffffff;
+  --text-mid:     #c8c4be;
+  --text-dim:     #787470;
+  --text-inv:     #000000;
+  --amber:        #ff9020;
+  --amber-hi:     #ffab45;
+  --amber-dim:    rgba(255,122,0,0.20);
+  --amber-glow:   rgba(255,122,0,0.28);
+  --green:        #5de890;
+  --green-dim:    rgba(93,232,144,0.18);
+  --red:          #f05555;
+  --red-dim:      rgba(240,85,85,0.18);
+  --yellow:       #f0bf35;
+  --yellow-dim:   rgba(240,191,53,0.18);
+  --blue:         #5ccfff;
+  --blue-dim:     rgba(92,207,255,0.18);
+  --flag:         #ffc040;
+  --shadow-sm:    0 1px 3px rgba(0,0,0,0.6);
+  --shadow-md:    0 4px 16px rgba(0,0,0,0.7);
+  --shadow-lg:    0 8px 40px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.02);
+
+  /* Alpha variants */
+  --bg-panel-a50:    rgba(20,20,20,0.5);
+  --border-hi-a50:   rgba(61,61,61,0.5);
 }
 
 /* ─── BASE ──────────────────────────────────────────────────── */

@@ -7,6 +7,7 @@ import { ProjectSwitcherModal } from './components/ProjectSwitcherModal';
 import { parseImportedProject, importProject, deleteProject as deleteProjectFromStorage } from './utils/projectStorage';
 import App from './App';
 import { SavePromptModal } from './components/SavePromptModal';
+import AppFooter from './components/AppFooter';
 import type { Project } from './types/index';
 
 type Screen = 'home' | 'create-project' | 'cue-sheet';
@@ -285,16 +286,20 @@ export function AppShell() {
             onRename={handleImportConflictRename}
           />
         )}
+        <AppFooter />
       </>
     );
   }
 
   if (appState.screen === 'create-project') {
     return (
-      <CreateProjectForm
-        onCancel={handleCreateProjectCancel}
-        onCreate={handleCreateProjectSubmit}
-      />
+      <>
+        <CreateProjectForm
+          onCancel={handleCreateProjectCancel}
+          onCreate={handleCreateProjectSubmit}
+        />
+        <AppFooter />
+      </>
     );
   }
 
@@ -326,6 +331,7 @@ export function AppShell() {
           onProjectSelected={handleSwitchToProject}
           onClose={() => setSwitcherOpen(false)}
         />
+        <AppFooter />
       </>
     );
   }
@@ -333,6 +339,7 @@ export function AppShell() {
   return (
     <div className="flex items-center justify-center h-screen bg-gray-900 text-gray-100">
       <p>Loading...</p>
+      <AppFooter />
     </div>
   );
 }

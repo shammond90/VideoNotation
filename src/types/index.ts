@@ -12,9 +12,9 @@ export const CUE_STATUS_LABELS: Record<CueStatus, string> = {
 };
 export const CUE_STATUS_COLORS: Record<CueStatus, string> = {
   provisional: 'transparent',
-  confirmed: '#3d9962',
-  tbc: '#c49a2a',
-  cut: '#c84848',
+  confirmed: 'var(--green)',
+  tbc: 'var(--yellow)',
+  cut: 'var(--red)',
 };
 
 // Special system cue type for loop playback — not user-configurable
@@ -196,10 +196,12 @@ export interface AppConfig {
   cueTypeColumns: Record<string, ColumnConfig[]>; // per-cue-type column overrides
   distanceView: boolean;
   cueSheetView: CueSheetView; // 'classic' (default) or 'production'
+  theatreMode: boolean; // low-brightness colour scheme for dark environments
   cueTypeAllowStandby: Record<string, boolean>; // DEPRECATED — migrated into cueTypeFields
   cueTypeAllowWarning: Record<string, boolean>; // DEPRECATED — migrated into cueTypeFields
   cueTypeFields: Record<string, string[]>; // per-cue-type visible form fields (keys from EDITABLE_FIELD_KEYS)
   cueTypeShortCodes: Record<string, string>; // short code for each cue type (e.g., "LX" for Lighting)
+  cueTypeFontColors: Record<string, string>; // font colour override for cue type badge in Production view
   showShortCodes: boolean; // whether to display short codes in cue sheets
   expandedSearchFilter: boolean; // whether search/filter section is expanded in cue sheet
   showPastCues: boolean; // whether to show passed cues greyed out above the current position
@@ -309,10 +311,12 @@ export const DEFAULT_CONFIG: AppConfig = {
   cueTypeColumns: {},
   distanceView: true,
   cueSheetView: 'classic',
+  theatreMode: false,
   cueTypeAllowStandby: {},
   cueTypeAllowWarning: {},
   cueTypeFields: {},
   cueTypeShortCodes: {},
+  cueTypeFontColors: {},
   showShortCodes: false,
   expandedSearchFilter: true,
   showPastCues: true,
