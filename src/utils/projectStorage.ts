@@ -1,6 +1,7 @@
 import { openDB } from 'idb';
-import type { Project, AppConfig, ColumnConfig } from '../types/index';
+import type { Project, AppConfig, ColumnConfig, Annotation } from '../types/index';
 import { DEFAULT_CONFIG, DEFAULT_VISIBLE_COLUMNS } from '../types/index';
+import { loadAnnotations, saveAnnotations } from './storage';
 
 const DB_NAME = 'CuetationDB';
 const PROJECTS_STORE = 'projects';
@@ -191,7 +192,24 @@ export async function verifyProjectVideo(
 /**
  * Export a project to a JSON object suitable for serialization.
  */
-export function exportProjectToJSON(project: Project): object {
+export async function exportProjectToJSON(project: Project): Promise<object> {
+  // Collect all annotations for this project
+  const annotations: Record<string, Annotation[]> = {};
+
+  // Load video-linked annotations (if project has a video reference)
+  if (project.video_filename && project.video_filesize != null) {
+    const videoAnnotations = await loadAnnotations(project.video_filename, project.video_filesize);
+    if (videoAnnotations.length > 0) {
+      annotations[`${project.video_filename}:${project.video_filesize}`] = videoAnnotations;
+    }
+  }
+
+  // Load no-video annotations (stored under the project ID)
+  const noVideoAnnotations = await loadAnnotations(project.id, 0);
+  if (noVideoAnnotations.length > 0) {
+    annotations[`${project.id}:0`] = noVideoAnnotations;
+  }
+
   return {
     cuetation_version: 1,
     exported_at: new Date().toISOString(),
@@ -213,6 +231,7 @@ export function exportProjectToJSON(project: Project): object {
       columns: project.columns,
       export_templates: project.export_templates,
     },
+    annotations,
   };
 }
 
@@ -220,7 +239,7 @@ export function exportProjectToJSON(project: Project): object {
  * Validate and parse an imported JSON file into project data.
  * Returns the parsed project data or throws with a descriptive error.
  */
-export function parseImportedProject(json: unknown): Omit<Project, 'id'> {
+export function parseImportedProject(json: unknown): ImportedProjectData {
   if (!json || typeof json !== 'object') {
     throw new Error('Invalid file: not a JSON object');
   }
@@ -240,7 +259,7 @@ export function parseImportedProject(json: unknown): Omit<Project, 'id'> {
     throw new Error('Invalid file: project name is missing');
   }
 
-  return {
+  const project: Omit<Project, 'id'> = {
     name: proj.name as string,
     created_at: typeof proj.created_at === 'number' ? proj.created_at : Date.now(),
     updated_at: typeof proj.updated_at === 'number' ? proj.updated_at : Date.now(),
@@ -258,15 +277,28 @@ export function parseImportedProject(json: unknown): Omit<Project, 'id'> {
     columns: (Array.isArray(proj.columns) ? proj.columns : [...DEFAULT_VISIBLE_COLUMNS]) as ColumnConfig[],
     export_templates: (Array.isArray(proj.export_templates) ? proj.export_templates : []) as Project['export_templates'],
   };
+
+  // Extract annotations if present
+  const annotations = (data.annotations && typeof data.annotations === 'object' && !Array.isArray(data.annotations))
+    ? data.annotations as Record<string, Annotation[]>
+    : undefined;
+
+  return { project, annotations };
 }
 
 /**
  * Import a project, assigning a new ID and saving to IndexedDB.
  * The name can be overridden (e.g., for conflict resolution with rename).
  */
+export interface ImportedProjectData {
+  project: Omit<Project, 'id'>;
+  annotations?: Record<string, Annotation[]>;
+}
+
 export async function importProject(
   data: Omit<Project, 'id'>,
-  nameOverride?: string
+  nameOverride?: string,
+  annotations?: Record<string, Annotation[]>
 ): Promise<Project> {
   const project: Project = {
     ...data,
@@ -277,5 +309,26 @@ export async function importProject(
 
   const db = await getDB();
   await db.put(PROJECTS_STORE, project);
+
+  // Restore annotations if provided
+  if (annotations && typeof annotations === 'object') {
+    for (const [scopeKey, cues] of Object.entries(annotations)) {
+      if (!Array.isArray(cues) || cues.length === 0) continue;
+      // scopeKey format: "fileName:fileSize" or "oldProjectId:0" (no-video)
+      const lastColonIdx = scopeKey.lastIndexOf(':');
+      if (lastColonIdx === -1) continue;
+      const fileName = scopeKey.substring(0, lastColonIdx);
+      const fileSize = parseInt(scopeKey.substring(lastColonIdx + 1), 10);
+      if (isNaN(fileSize)) continue;
+
+      // For no-video annotations (fileSize === 0 and fileName looks like an old project ID),
+      // re-key them under the new project ID so they're found by the new project
+      const isNoVideoScope = fileSize === 0 && fileName !== project.video_filename;
+      const targetFileName = isNoVideoScope ? project.id : fileName;
+
+      await saveAnnotations(targetFileName, fileSize, cues);
+    }
+  }
+
   return project;
 }

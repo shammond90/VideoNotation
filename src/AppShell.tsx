@@ -5,6 +5,7 @@ import { CreateProjectForm } from './components/CreateProjectForm';
 import { ImportConflictModal } from './components/ImportConflictModal';
 import { ProjectSwitcherModal } from './components/ProjectSwitcherModal';
 import { parseImportedProject, importProject, deleteProject as deleteProjectFromStorage } from './utils/projectStorage';
+import type { ImportedProjectData } from './utils/projectStorage';
 import App from './App';
 import { SavePromptModal } from './components/SavePromptModal';
 import AppFooter from './components/AppFooter';
@@ -39,7 +40,7 @@ export function AppShell() {
   // Import flow state
   const importInputRef = useRef<HTMLInputElement>(null);
   const [importConflict, setImportConflict] = useState<{
-    parsed: Omit<Project, 'id'>;
+    parsed: ImportedProjectData;
     existingProject: Project;
   } | null>(null);
 
@@ -148,14 +149,14 @@ export function AppShell() {
 
         // Check for name conflict
         const existing = projects.find(
-          (p) => p.name.toLowerCase() === parsed.name.toLowerCase()
+          (p) => p.name.toLowerCase() === parsed.project.name.toLowerCase()
         );
 
         if (existing) {
           setImportConflict({ parsed, existingProject: existing });
         } else {
           // No conflict — import directly
-          const imported = await importProject(parsed);
+          const imported = await importProject(parsed.project, undefined, parsed.annotations);
           await loadAllProjects();
           await openProject(imported.id);
           setAppState({ screen: 'cue-sheet' });
@@ -179,7 +180,7 @@ export function AppShell() {
     try {
       // Delete old project, import with same name
       await deleteProjectFromStorage(importConflict.existingProject.id);
-      const imported = await importProject(importConflict.parsed);
+      const imported = await importProject(importConflict.parsed.project, undefined, importConflict.parsed.annotations);
       setImportConflict(null);
       await loadAllProjects();
       await openProject(imported.id);
@@ -195,7 +196,7 @@ export function AppShell() {
     async (newName: string) => {
       if (!importConflict) return;
       try {
-        const imported = await importProject(importConflict.parsed, newName);
+        const imported = await importProject(importConflict.parsed.project, newName, importConflict.parsed.annotations);
         setImportConflict(null);
         await loadAllProjects();
         await openProject(imported.id);
@@ -280,7 +281,7 @@ export function AppShell() {
         />
         {importConflict && (
           <ImportConflictModal
-            existingName={importConflict.parsed.name}
+            existingName={importConflict.parsed.project.name}
             onCancel={handleImportConflictCancel}
             onOverwrite={handleImportConflictOverwrite}
             onRename={handleImportConflictRename}

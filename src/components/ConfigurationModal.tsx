@@ -428,8 +428,8 @@ function ProjectAdminTab() {
                     Edit
                   </button>
                   <button
-                    onClick={() => {
-                      const json = exportProjectToJSON(project);
+                    onClick={async () => {
+                      const json = await exportProjectToJSON(project);
                       const blob = new Blob([JSON.stringify(json, null, 2)], { type: 'application/json' });
                       const url = URL.createObjectURL(blob);
                       const a = document.createElement('a');
