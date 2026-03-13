@@ -317,7 +317,8 @@ export interface ConfigTemplate {
   id: string;
   name: string;
   category?: string;
-  data: TemplateData;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  data: TemplateData | Record<string, any>;
   createdAt: string;
   updatedAt: string;
 }
