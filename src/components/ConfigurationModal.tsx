@@ -1,5 +1,5 @@
 import React, { useState, useRef, useMemo, useCallback, useEffect } from 'react';
-import { X, Plus, Trash2, GripVertical, Download, Upload, Lock, Pencil, Check, AlertTriangle, ChevronDown, ChevronRight, Save, FileDown, FileUp, Info, Shield, UserCircle, RotateCcw, Archive } from 'lucide-react';
+import { X, Plus, Trash2, GripVertical, Download, Upload, Lock, Pencil, Check, AlertTriangle, ChevronDown, ChevronRight, Save, FileUp, Info, UserCircle, RotateCcw, Archive } from 'lucide-react';
 import type { ColumnConfig, Project, AppConfig, FieldDefinition, ConfigTemplate, TemplateData, Toast } from '../types';
 import { RESERVED_CUE_TYPES, LOOP_CUE_TYPE, EDITABLE_FIELD_KEYS, AUTOFOLLOW_COLUMN_KEYS, LINK_COLUMN_KEYS, getDefaultFieldsForType, getFieldLabel, extractTemplateData, FACTORY_DEFAULT_TEMPLATE } from '../types';
 import { loadConfigTemplates, saveConfigTemplate, deleteConfigTemplate, renameConfigTemplate, exportTemplateToJSON, importTemplateFromJSON } from '../utils/configTemplates';

@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import type { ConfigTemplate, TemplateData } from '../types';
-import { FACTORY_DEFAULT_TEMPLATE } from '../types';
 import { loadConfigTemplates } from '../utils/configTemplates';
 
 interface CreateProjectFormProps {

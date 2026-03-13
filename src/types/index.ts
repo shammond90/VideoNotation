@@ -316,6 +316,7 @@ export interface TemplateData {
 export interface ConfigTemplate {
   id: string;
   name: string;
+  category?: string;
   data: TemplateData;
   createdAt: string;
   updatedAt: string;

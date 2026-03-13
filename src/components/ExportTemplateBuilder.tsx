@@ -39,7 +39,7 @@ import {
   CUE_FIELD_LABELS,
   VIRTUAL_COLUMN_LABELS,
 } from '../types';
-import type { ConfigTemplate } from '../utils/configTemplates';
+import type { ConfigTemplate } from '../types';
 import {
   loadConfigTemplates,
   saveConfigTemplate,

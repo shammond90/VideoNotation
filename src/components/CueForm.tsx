@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo, useCallback, type MutableRefObject } from 'react';
 import type { CueFields, Annotation, FieldDefinition } from '../types';
-import { EMPTY_CUE_FIELDS, CUE_FIELD_LABELS, LOOP_CUE_TYPE, getDefaultFieldsForType, getFieldLabel, getFieldDef } from '../types';
+import { EMPTY_CUE_FIELDS, LOOP_CUE_TYPE, getDefaultFieldsForType, getFieldLabel, getFieldDef } from '../types';
 import { formatTime, parseTime } from '../utils/formatTime';
 import { SearchableDropdown } from './SearchableDropdown';
 
@@ -560,7 +560,7 @@ export function CueForm({
 
     // ── Mandatory field validation ──
     if (mandatoryKeys.size > 0) {
-      const fieldsRecord = fields as Record<string, string>;
+      const fieldsRecord = fields as unknown as Record<string, string>;
       const emptyMandatory = [...mandatoryKeys].filter((k) => {
         const val = fieldsRecord[k] ?? '';
         return !val.trim();
@@ -922,7 +922,7 @@ export function CueForm({
         };
 
         // Access field value safely (supports custom field keys not in CueFields interface)
-        const getVal = (key: string): string => (fields as Record<string, string>)[key] ?? '';
+        const getVal = (key: string): string => (fields as unknown as Record<string, string>)[key] ?? '';
 
         // Render fields in order, grouping consecutive small fields into rows of 2
         const elements: React.ReactNode[] = [];
