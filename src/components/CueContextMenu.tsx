@@ -37,6 +37,8 @@ export function CueContextMenu({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const statusTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const submenuRef = useRef<HTMLDivElement>(null);
+  const [submenuFlip, setSubmenuFlip] = useState(false);
 
   // Position the menu within viewport
   const [pos, setPos] = useState(position);
@@ -76,6 +78,15 @@ export function CueContextMenu({
       statusTimeoutRef.current = setTimeout(() => setStatusSubmenuOpen(false), 150);
     }
   }, []);
+
+  // Auto-flip submenu when it would overflow the right edge
+  useEffect(() => {
+    if (!statusSubmenuOpen || !menuRef.current) return;
+    const menuRect = menuRef.current.getBoundingClientRect();
+    const submenuWidth = 150; // approximate minWidth + margin
+    const wouldOverflow = menuRect.right + submenuWidth > window.innerWidth - 8;
+    setSubmenuFlip(wouldOverflow);
+  }, [statusSubmenuOpen]);
 
   const menuItem = (
     label: string,
@@ -147,7 +158,8 @@ export function CueContextMenu({
 
         {statusSubmenuOpen && (
           <div
-            className="absolute left-full top-0 ml-1 rounded-lg border shadow-xl py-1.5"
+            ref={submenuRef}
+            className={`absolute top-0 rounded-lg border shadow-xl py-1.5 ${submenuFlip ? 'right-full mr-1' : 'left-full ml-1'}`}
             style={{ background: 'var(--bg-card)', borderColor: 'var(--border)', minWidth: 140, zIndex: 1001 }}
             onMouseEnter={() => handleStatusHover(true)}
             onMouseLeave={() => handleStatusHover(false)}

@@ -143,8 +143,13 @@ export default function App({
     clearAllData,
     clearCurrentVideoCues,
     clearAllCues,
-    applyCueTypesTemplate,
-    applyColumnsTemplate,
+    applyTemplate,
+    addFieldDefinition,
+    updateFieldDefinition,
+    archiveFieldDefinition,
+    restoreFieldDefinition,
+    setMandatoryField,
+    unsetMandatoryField,
   } = useConfiguration();
 
   const {
@@ -296,6 +301,17 @@ export default function App({
     const types = new Set<string>();
     annotations.forEach((a) => { if (a.cue.type) types.add(a.cue.type); });
     return types;
+  }, [annotations]);
+
+  // Compute which field keys have data in any annotation (current project)
+  const usedFieldKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const ann of annotations) {
+      for (const [k, v] of Object.entries(ann.cue)) {
+        if (v && typeof v === 'string' && v.trim()) keys.add(k);
+      }
+    }
+    return keys;
   }, [annotations]);
 
   // Combined rename handler: updates config + annotations
@@ -944,6 +960,8 @@ export default function App({
                   allAnnotations={annotations}
                   cueTypes={loopAnnotation ? config.cueTypes : [...config.cueTypes, LOOP_CUE_TYPE]}
                   cueTypeFields={config.cueTypeFields}
+                  fieldDefinitions={config.fieldDefinitions}
+                  mandatoryFields={config.mandatoryFields}
                   onSave={handleSaveCue}
                   onCancel={handleCancelNote}
                   saveRef={cueFormSaveRef}
@@ -1119,6 +1137,8 @@ export default function App({
               cueSheetView={config.cueSheetView}
               theatreMode={config.theatreMode}
               cueTypeFields={config.cueTypeFields}
+              fieldDefinitions={config.fieldDefinitions}
+              mandatoryFields={config.mandatoryFields}
               onSeek={handleSeek}
               onEdit={updateAnnotation}
               onDelete={deleteAnnotation}
@@ -1249,8 +1269,15 @@ export default function App({
         onClearAllData={handleClearAllData}
         onClearCurrentVideoCues={handleClearCurrentVideoCues}
         onClearAllCues={handleClearAllCues}
-        onApplyCueTypesTemplate={(data) => applyCueTypesTemplate(data, usedCueTypes)}
-        onApplyColumnsTemplate={applyColumnsTemplate}
+        onApplyTemplate={applyTemplate}
+        onAddField={addFieldDefinition}
+        onUpdateField={updateFieldDefinition}
+        onArchiveField={archiveFieldDefinition}
+        onRestoreField={restoreFieldDefinition}
+        usedFieldKeys={usedFieldKeys}
+        mandatoryFields={config.mandatoryFields}
+        onSetMandatoryField={setMandatoryField}
+        onUnsetMandatoryField={unsetMandatoryField}
       />
 
       {/* Export Dialog — CSV vs XLSX chooser */}

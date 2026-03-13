@@ -6,8 +6,8 @@ import { CueContextMenu } from './CueContextMenu';
 import { SlideEditPanel } from './SlideEditPanel';
 import { ExpandedCueView } from './ExpandedCueView';
 import { FlagNotePopover } from './FlagNotePopover';
-import type { Annotation, CueFields, ColumnConfig, CueStatus } from '../types';
-import { RESERVED_CUE_TYPES, LOOP_CUE_TYPE, CUE_STATUS_COLORS } from '../types';
+import type { Annotation, CueFields, ColumnConfig, CueStatus, FieldDefinition } from '../types';
+import { RESERVED_CUE_TYPES, LOOP_CUE_TYPE, CUE_STATUS_COLORS, CUE_STATUSES, CUE_STATUS_LABELS } from '../types';
 import { useCueGrouping, type GroupedItem } from '../hooks/useCueGrouping';
 
 /** Default colour for LOOP cue type (amber). */
@@ -36,6 +36,8 @@ interface AnnotationPanelProps {
   cueSheetView: 'classic' | 'production';
   theatreMode: boolean;
   cueTypeFields: Record<string, string[]>;
+  fieldDefinitions?: FieldDefinition[];
+  mandatoryFields?: Record<string, string[]>;
   onSeek: (time: number) => void;
   onEdit: (id: string, cue: CueFields, newTimestamp?: number) => void;
   onDelete: (id: string) => void;
@@ -270,6 +272,8 @@ export function AnnotationPanel({
   cueSheetView,
   theatreMode,
   cueTypeFields,
+  fieldDefinitions: fieldDefs,
+  mandatoryFields,
   onSeek,
   onEdit,
   onDelete,
@@ -292,6 +296,8 @@ export function AnnotationPanel({
   const [typeFilter, setTypeFilter] = useState<Set<string>>(() => new Set(cueTypes));
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [flaggedOnly, setFlaggedOnly] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<Set<string>>(() => new Set(CUE_STATUSES));
+  const [isStatusFilterOpen, setIsStatusFilterOpen] = useState(false);
   const [isSearchCollapsed, setIsSearchCollapsed] = useState(!expandedSearchFilter);
   const [isPastCollapsed, setIsPastCollapsed] = useState(false);
   const [inlineEditId, setInlineEditId] = useState<string | null>(null);
@@ -393,6 +399,11 @@ export function AnnotationPanel({
       anns = anns.filter((a) => a.cue.type === LOOP_CUE_TYPE || a.cue.type === 'TITLE' || a.cue.type === 'SCENE' || typeFilter.has(a.cue.type));
     }
 
+    // Apply status filter
+    if (statusFilter.size < CUE_STATUSES.length) {
+      anns = anns.filter((a) => statusFilter.has(a.status));
+    }
+
     // Apply flagged-only filter
     if (flaggedOnly) {
       anns = anns.filter((a) => a.flagged);
@@ -415,7 +426,7 @@ export function AnnotationPanel({
     }
 
     return anns;
-  }, [annotations, searchQuery, typeFilter, flaggedOnly, showSkippedCues, skippedIds]);
+  }, [annotations, searchQuery, typeFilter, statusFilter, flaggedOnly, showSkippedCues, skippedIds]);
 
   // Split into past / active / upcoming
   const { activeCues, upcomingCues: _upcomingCues, pastCues } = useMemo(() => {
@@ -1040,6 +1051,8 @@ export function AnnotationPanel({
                 allAnnotations={annotations}
                 cueTypes={cueTypes}
                 cueTypeFields={cueTypeFields}
+                fieldDefinitions={fieldDefs}
+                mandatoryFields={mandatoryFields}
                 onSave={(updated, newTimestamp) => { onEdit(annotation.id, updated, newTimestamp); setEditingId(null); }}
                 onCancel={() => setEditingId(null)}
               />
@@ -1210,6 +1223,8 @@ export function AnnotationPanel({
               allAnnotations={annotations}
               cueTypes={cueTypes}
               cueTypeFields={cueTypeFields}
+              fieldDefinitions={fieldDefs}
+              mandatoryFields={mandatoryFields}
               onSave={(updated, newTimestamp) => { onEdit(annotation.id, updated, newTimestamp); setEditingId(null); }}
               onCancel={() => setEditingId(null)}
             />
@@ -1364,6 +1379,23 @@ export function AnnotationPanel({
                 </button>
                 <button
                   type="button"
+                  onClick={() => setIsStatusFilterOpen((prev) => !prev)}
+                  className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded-md transition-colors ${
+                    statusFilter.size < CUE_STATUSES.length
+                      ? 'bg-violet-500/20 text-violet-400'
+                      : 'text-[var(--text-mid)] hover:text-[var(--text)] hover:bg-[var(--bg-hover)]'
+                  }`}
+                >
+                  <Filter className="w-3.5 h-3.5" />
+                  Status
+                  {statusFilter.size < CUE_STATUSES.length && (
+                    <span className="text-white text-[10px] font-bold px-1.5 py-0 rounded-full bg-violet-500">
+                      {CUE_STATUSES.length - statusFilter.size} hidden
+                    </span>
+                  )}
+                </button>
+                <button
+                  type="button"
                   onClick={() => setFlaggedOnly((p) => !p)}
                   className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded-md transition-colors ${
                     flaggedOnly
@@ -1412,6 +1444,46 @@ export function AnnotationPanel({
                       className="text-[10px] px-2 py-1 rounded-md transition-colors" style={{ color: "var(--text-dim)" }} onMouseEnter={e=>{e.currentTarget.style.background="var(--bg-hover)";e.currentTarget.style.color="var(--text)"}} onMouseLeave={e=>{e.currentTarget.style.background="";e.currentTarget.style.color="var(--text-dim)"}}
                     >
                       Clear all
+                    </button>
+                  )}
+                </div>
+              )}
+              {/* Status filter dropdown */}
+              {isStatusFilterOpen && (
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {CUE_STATUSES.map((s) => {
+                    const isActive = statusFilter.has(s);
+                    const color = s === 'provisional' ? 'var(--text-dim)' : CUE_STATUS_COLORS[s];
+                    return (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => {
+                          setStatusFilter((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(s)) next.delete(s); else next.add(s);
+                            return next;
+                          });
+                        }}
+                        className={`text-[10px] font-bold px-2 py-1 rounded-md border transition-colors ${
+                          isActive
+                            ? ''
+                            : 'bg-[var(--bg-panel)] border-[var(--border)] text-[var(--text-dim)] line-through hover:text-[var(--text)] hover:border-[var(--border-hi)]'
+                        }`}
+                        style={isActive ? { background: `${color}22`, borderColor: `${color}80`, color } : undefined}
+                      >
+                        {s === 'provisional' ? '●' : <span className="inline-block w-1.5 h-1.5 rounded-full mr-1" style={{ background: CUE_STATUS_COLORS[s] }} />}
+                        {CUE_STATUS_LABELS[s]}
+                      </button>
+                    );
+                  })}
+                  {statusFilter.size < CUE_STATUSES.length && (
+                    <button
+                      type="button"
+                      onClick={() => setStatusFilter(new Set(CUE_STATUSES))}
+                      className="text-[10px] px-2 py-1 rounded-md transition-colors" style={{ color: "var(--text-dim)" }} onMouseEnter={e=>{e.currentTarget.style.background="var(--bg-hover)";e.currentTarget.style.color="var(--text)"}} onMouseLeave={e=>{e.currentTarget.style.background="";e.currentTarget.style.color="var(--text-dim)"}}
+                    >
+                      Select all
                     </button>
                   )}
                 </div>
@@ -1590,6 +1662,8 @@ export function AnnotationPanel({
                             allAnnotations={annotations}
                             cueTypes={cueTypes}
                             cueTypeFields={cueTypeFields}
+                            fieldDefinitions={fieldDefs}
+                            mandatoryFields={mandatoryFields}
                             onSave={(updated, newTimestamp) => { onEdit(annotation.id, updated, newTimestamp); setEditingId(null); }}
                             onCancel={() => setEditingId(null)}
                           />
@@ -1784,6 +1858,8 @@ export function AnnotationPanel({
             allAnnotations={annotations}
             cueTypes={cueTypes}
             cueTypeFields={cueTypeFields}
+            fieldDefinitions={fieldDefs}
+            mandatoryFields={mandatoryFields}
             onSave={(id, cue, newTimestamp) => { onEdit(id, cue, newTimestamp); setSlideEditId(null); }}
             onClose={() => setSlideEditId(null)}
           />

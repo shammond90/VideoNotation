@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo, useCallback, type MutableRefObject } from 'react';
-import type { CueFields, Annotation } from '../types';
-import { EMPTY_CUE_FIELDS, CUE_FIELD_LABELS, LOOP_CUE_TYPE, getDefaultFieldsForType } from '../types';
+import type { CueFields, Annotation, FieldDefinition } from '../types';
+import { EMPTY_CUE_FIELDS, CUE_FIELD_LABELS, LOOP_CUE_TYPE, getDefaultFieldsForType, getFieldLabel, getFieldDef } from '../types';
 import { formatTime, parseTime } from '../utils/formatTime';
 import { SearchableDropdown } from './SearchableDropdown';
 
@@ -14,6 +14,8 @@ interface CueFormProps {
   allAnnotations?: Annotation[]; // needed for Time in Title calc in edit mode
   cueTypes: string[];           // from config
   cueTypeFields?: Record<string, string[]>; // per-type visible field overrides
+  fieldDefinitions?: FieldDefinition[];
+  mandatoryFields?: Record<string, string[]>; // per-type mandatory field keys
   onSave: (cue: CueFields, newTimestamp?: number) => void;
   onCancel: () => void;
   /** Optional ref that will be populated with a function to trigger save from outside */
@@ -22,6 +24,9 @@ interface CueFormProps {
 
 const inputClass =
   'w-full bg-[var(--bg-input)] text-[var(--text)] rounded px-2 py-1.5 text-xs border border-[var(--border)] focus:border-[var(--amber)] focus:ring-1 focus:ring-[#BF5700] outline-none placeholder-[#4e4a56]';
+
+const inputErrorClass =
+  'w-full bg-[var(--bg-input)] text-[var(--text)] rounded px-2 py-1.5 text-xs border border-red-500 focus:border-red-400 focus:ring-1 focus:ring-red-500/50 outline-none placeholder-[#4e4a56]';
 
 const readOnlyClass =
   'w-full bg-[var(--bg-card)] text-[var(--text-mid)] rounded px-2 py-1.5 text-xs border border-[var(--border)] outline-none cursor-not-allowed';
@@ -40,24 +45,34 @@ function Field({
   placeholder,
   className,
   readOnly,
+  inputMode,
+  mandatory,
+  hasError,
 }: {
   label: string;
-  name: keyof CueFields;
+  name: string;
   value: string;
-  onChange: (name: keyof CueFields, value: string) => void;
+  onChange: (name: string, value: string) => void;
   placeholder?: string;
   className?: string;
   readOnly?: boolean;
+  inputMode?: 'text' | 'numeric' | 'decimal';
+  mandatory?: boolean;
+  hasError?: boolean;
 }) {
   return (
     <div className={className}>
-      <label className={labelClass}>{label}</label>
+      <label className={labelClass}>
+        {label}
+        {mandatory && <span className="text-red-400 ml-0.5">*</span>}
+      </label>
       <input
         type="text"
+        inputMode={inputMode}
         value={value}
         onChange={(e) => onChange(name, e.target.value)}
         placeholder={placeholder}
-        className={readOnly ? readOnlyClass : inputClass}
+        className={readOnly ? readOnlyClass : hasError ? inputErrorClass : inputClass}
         readOnly={readOnly}
         tabIndex={readOnly ? -1 : undefined}
       />
@@ -73,25 +88,66 @@ function TextAreaField({
   placeholder,
   rows,
   className,
+  mandatory,
+  hasError,
 }: {
   label: string;
-  name: keyof CueFields;
+  name: string;
   value: string;
-  onChange: (name: keyof CueFields, value: string) => void;
+  onChange: (name: string, value: string) => void;
   placeholder?: string;
   rows?: number;
   className?: string;
+  mandatory?: boolean;
+  hasError?: boolean;
 }) {
   return (
     <div className={className}>
-      <label className={labelClass}>{label}</label>
+      <label className={labelClass}>
+        {label}
+        {mandatory && <span className="text-red-400 ml-0.5">*</span>}
+      </label>
       <textarea
         value={value}
         onChange={(e) => onChange(name, e.target.value)}
         placeholder={placeholder}
         rows={rows ?? 2}
-        className={`${inputClass} resize-none`}
+        className={`${hasError ? inputErrorClass : inputClass} resize-none`}
       />
+    </div>
+  );
+}
+
+function CheckboxField({
+  label,
+  name,
+  value,
+  onChange,
+  className,
+  mandatory,
+}: {
+  label: string;
+  name: string;
+  value: string;
+  onChange: (name: string, value: string) => void;
+  className?: string;
+  mandatory?: boolean;
+}) {
+  const checked = value === 'true';
+  return (
+    <div className={className}>
+      <label className={`flex items-center gap-2 cursor-pointer select-none py-1.5`}>
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(e) => onChange(name, e.target.checked ? 'true' : 'false')}
+          className="w-3.5 h-3.5 rounded border-[var(--border)] bg-[var(--bg-input)] text-[var(--amber)] focus:ring-[#BF5700] focus:ring-offset-0 cursor-pointer"
+        />
+        <span className={labelClass} style={{ marginBottom: 0, display: 'inline' }}>
+          {label}
+          {mandatory && <span className="text-red-400 ml-0.5">*</span>}
+        </span>
+      </label>
     </div>
   );
 }
@@ -207,6 +263,8 @@ export function CueForm({
   allAnnotations,
   cueTypes,
   cueTypeFields,
+  fieldDefinitions: fieldDefs,
+  mandatoryFields,
   onSave,
   onCancel,
   saveRef,
@@ -214,6 +272,8 @@ export function CueForm({
   const [fields, setFields] = useState<CueFields>(initialValues ?? { ...EMPTY_CUE_FIELDS });
   const [timestampStr, setTimestampStr] = useState(() => secondsToTimecodeStr(timestamp));
   const [editedTimestamp, setEditedTimestamp] = useState(timestamp);
+  const [validationErrors, setValidationErrors] = useState<Set<string>>(new Set());
+  const [validationMessage, setValidationMessage] = useState<string | null>(null);
 
   const firstInputRef = useRef<HTMLDivElement>(null);
   const isCreate = mode === 'create';
@@ -244,6 +304,11 @@ export function CueForm({
     // Fall back to default order from EDITABLE_FIELD_KEYS
     return getDefaultFieldsForType(fields.type).filter((k) => !excludedFromBody.has(k));
   }, [cueTypeFields, fields.type]);
+
+  // Mandatory field keys for the current type
+  const mandatoryKeys = useMemo(() => {
+    return new Set(mandatoryFields?.[fields.type] ?? []);
+  }, [mandatoryFields, fields.type]);
 
   // ── Autofollow state ──
   const autofollowEnabled = showField('addAutofollow');
@@ -400,7 +465,7 @@ export function CueForm({
     return () => clearTimeout(timer);
   }, [isCreate]);
 
-  const handleChange = (name: keyof CueFields, value: string) => {
+  const handleChange = (name: string, value: string) => {
     setFields((prev) => ({ ...prev, [name]: value }));
   };
 
@@ -492,6 +557,23 @@ export function CueForm({
       }
       return;
     }
+
+    // ── Mandatory field validation ──
+    if (mandatoryKeys.size > 0) {
+      const fieldsRecord = fields as Record<string, string>;
+      const emptyMandatory = [...mandatoryKeys].filter((k) => {
+        const val = fieldsRecord[k] ?? '';
+        return !val.trim();
+      });
+      if (emptyMandatory.length > 0) {
+        setValidationErrors(new Set(emptyMandatory));
+        const labels = emptyMandatory.map((k) => getFieldLabel(k, fieldDefs));
+        setValidationMessage(`Required: ${labels.join(', ')}`);
+        return;
+      }
+    }
+    setValidationErrors(new Set());
+    setValidationMessage(null);
 
     // Build final cue fields with autofollow data merged in
     const finalFields = { ...fields };
@@ -610,7 +692,7 @@ export function CueForm({
         return (
           <div className={`grid ${gridColsClass(cols)} gap-2 mb-2`}>
             <div ref={firstInputRef}>
-              <label className={labelClass}>{CUE_FIELD_LABELS.type}</label>
+              <label className={labelClass}>{getFieldLabel('type', fieldDefs)}</label>
               <SearchableDropdown
                 options={cueTypes}
                 value={fields.type}
@@ -620,10 +702,10 @@ export function CueForm({
               />
             </div>
             {showCueNumHere && (
-              <Field label={CUE_FIELD_LABELS.cueNumber} name="cueNumber" value={fields.cueNumber} onChange={handleChange} placeholder="e.g. 101" />
+              <Field label={getFieldLabel('cueNumber', fieldDefs)} name="cueNumber" value={fields.cueNumber} onChange={handleChange} placeholder="e.g. 101" />
             )}
             {showOldCueNum && (
-              <Field label={CUE_FIELD_LABELS.oldCueNumber} name="oldCueNumber" value={fields.oldCueNumber} onChange={handleChange} />
+              <Field label={getFieldLabel('oldCueNumber', fieldDefs)} name="oldCueNumber" value={fields.oldCueNumber} onChange={handleChange} />
             )}
           </div>
         );
@@ -798,14 +880,13 @@ export function CueForm({
       {/* ── Ordered body fields ── */}
       {(() => {
         // Labels with suffixes for certain fields
-        const labelOverrides: Record<string, string> = {
-          cueTime: CUE_FIELD_LABELS.cueTime + ' (seconds)',
-          duration: CUE_FIELD_LABELS.duration + ' (auto, seconds)',
-          standbyTime: CUE_FIELD_LABELS.standbyTime + ' (secs)',
-          warningTime: CUE_FIELD_LABELS.warningTime + ' (secs)',
+        const labelSuffixes: Record<string, string> = {
+          cueTime: ' (seconds)',
+          duration: ' (auto, seconds)',
+          standbyTime: ' (secs)',
+          warningTime: ' (secs)',
         };
         const readOnlyFields = new Set(['duration']);
-        const textAreaFields = new Set(['cueSheetNotes', 'cueingNotes']);
         const placeholders: Record<string, string> = {
           cueTime: 'Time in seconds',
           standbyTime: 'e.g. 30',
@@ -814,46 +895,146 @@ export function CueForm({
           what: 'Action description',
         };
 
-        // Render fields in order, grouping consecutive non-textarea fields into rows of 2
+        // Determine field size from fieldDefinitions sizeHint, falling back to hardcoded
+        const getSize = (key: string): 'small' | 'medium' | 'large' => {
+          const def = getFieldDef(key, fieldDefs);
+          if (def) return def.sizeHint;
+          // Legacy fallback
+          if (key === 'cueSheetNotes' || key === 'cueingNotes') return 'large';
+          if (key === 'when' || key === 'what') return 'medium';
+          return 'small';
+        };
+
+        const getInputMode = (key: string): 'text' | 'numeric' | 'decimal' | undefined => {
+          const def = getFieldDef(key, fieldDefs);
+          if (!def || def.inputType !== 'number') return undefined;
+          return def.numberPrecision === 'decimal' ? 'decimal' : 'numeric';
+        };
+
+        const isCheckbox = (key: string): boolean => {
+          const def = getFieldDef(key, fieldDefs);
+          return def?.inputType === 'checkbox';
+        };
+
+        const getLabel = (key: string): string => {
+          const base = getFieldLabel(key, fieldDefs);
+          return base + (labelSuffixes[key] || '');
+        };
+
+        // Access field value safely (supports custom field keys not in CueFields interface)
+        const getVal = (key: string): string => (fields as Record<string, string>)[key] ?? '';
+
+        // Render fields in order, grouping consecutive small fields into rows of 2
         const elements: React.ReactNode[] = [];
         let i = 0;
         while (i < orderedBodyFields.length) {
-          const key = orderedBodyFields[i] as keyof CueFields;
+          const key = orderedBodyFields[i];
+          const isMand = mandatoryKeys.has(key);
+          const hasErr = validationErrors.has(key);
 
-          if (textAreaFields.has(key)) {
+          // Checkbox fields always render as a small toggle
+          if (isCheckbox(key)) {
+            // Try to pair with next checkbox or small field
+            const rowKeys: string[] = [key];
+            if (
+              i + 1 < orderedBodyFields.length &&
+              (isCheckbox(orderedBodyFields[i + 1]) || getSize(orderedBodyFields[i + 1]) === 'small')
+            ) {
+              rowKeys.push(orderedBodyFields[i + 1]);
+            }
+            elements.push(
+              <div key={rowKeys.join('-')} className={`grid ${gridColsClass(rowKeys.length)} gap-2 mb-2`}>
+                {rowKeys.map((rk) =>
+                  isCheckbox(rk) ? (
+                    <CheckboxField
+                      key={rk}
+                      label={getLabel(rk)}
+                      name={rk}
+                      value={getVal(rk)}
+                      onChange={handleChange}
+                      mandatory={mandatoryKeys.has(rk)}
+                    />
+                  ) : (
+                    <Field
+                      key={rk}
+                      label={getLabel(rk)}
+                      name={rk}
+                      value={getVal(rk)}
+                      onChange={handleChange}
+                      readOnly={readOnlyFields.has(rk)}
+                      placeholder={placeholders[rk]}
+                      inputMode={getInputMode(rk)}
+                      mandatory={mandatoryKeys.has(rk)}
+                      hasError={validationErrors.has(rk)}
+                    />
+                  )
+                )}
+              </div>,
+            );
+            i += rowKeys.length;
+            continue;
+          }
+
+          const size = getSize(key);
+
+          if (size === 'large') {
             // Textarea fields get their own full-width row
             elements.push(
               <div key={key} className="mb-2">
                 <TextAreaField
-                  label={labelOverrides[key] || CUE_FIELD_LABELS[key] || key}
+                  label={getLabel(key)}
                   name={key}
-                  value={fields[key]}
+                  value={getVal(key)}
                   onChange={handleChange}
                   rows={2}
+                  mandatory={isMand}
+                  hasError={hasErr}
+                />
+              </div>,
+            );
+            i++;
+          } else if (size === 'medium') {
+            // Medium fields get their own full-width row (single-line input)
+            elements.push(
+              <div key={key} className="mb-2">
+                <Field
+                  label={getLabel(key)}
+                  name={key}
+                  value={getVal(key)}
+                  onChange={handleChange}
+                  readOnly={readOnlyFields.has(key)}
+                  placeholder={placeholders[key]}
+                  inputMode={getInputMode(key)}
+                  mandatory={isMand}
+                  hasError={hasErr}
                 />
               </div>,
             );
             i++;
           } else {
-            // Collect up to 2 consecutive non-textarea fields for a grid row
-            const rowKeys: (keyof CueFields)[] = [key];
+            // Collect up to 2 consecutive small fields for a grid row
+            const rowKeys: string[] = [key];
             if (
               i + 1 < orderedBodyFields.length &&
-              !textAreaFields.has(orderedBodyFields[i + 1])
+              getSize(orderedBodyFields[i + 1]) === 'small' &&
+              !isCheckbox(orderedBodyFields[i + 1])
             ) {
-              rowKeys.push(orderedBodyFields[i + 1] as keyof CueFields);
+              rowKeys.push(orderedBodyFields[i + 1]);
             }
             elements.push(
               <div key={rowKeys.join('-')} className={`grid ${gridColsClass(rowKeys.length)} gap-2 mb-2`}>
                 {rowKeys.map((rk) => (
                   <Field
                     key={rk}
-                    label={labelOverrides[rk] || CUE_FIELD_LABELS[rk] || rk}
+                    label={getLabel(rk)}
                     name={rk}
-                    value={fields[rk]}
+                    value={getVal(rk)}
                     onChange={handleChange}
                     readOnly={readOnlyFields.has(rk)}
                     placeholder={placeholders[rk]}
+                    inputMode={getInputMode(rk)}
+                    mandatory={mandatoryKeys.has(rk)}
+                    hasError={validationErrors.has(rk)}
                   />
                 ))}
               </div>,
@@ -864,6 +1045,13 @@ export function CueForm({
         return elements;
       })()}
       </>)}{/* end !isLoopType */}
+
+      {/* Mandatory field validation error */}
+      {validationMessage && (
+        <div className="mb-2 px-2 py-1.5 bg-red-900/40 border border-red-500/50 rounded text-red-300 text-xs">
+          {validationMessage}
+        </div>
+      )}
 
       {/* Actions */}
       <div className="flex justify-end gap-2 pt-2 border-t" style={{ borderColor: 'var(--border)' }}>

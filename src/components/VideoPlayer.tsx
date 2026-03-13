@@ -247,29 +247,61 @@ export const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
             {titleMarkers && state.duration > 0 && titleMarkers.map((m, i) => (
               <div
                 key={`title-${i}`}
-                className="absolute top-0 h-full pointer-events-none"
+                className="absolute top-0 h-full group/marker"
                 style={{
                   left: `${(m.timestamp / state.duration) * 100}%`,
-                  width: 2,
-                  background: '#5c6bc0',
-                  opacity: 0.8,
+                  width: 8,
+                  marginLeft: -3,
+                  zIndex: 2,
+                  pointerEvents: 'auto',
                 }}
-                title={m.name}
-              />
+              >
+                <div
+                  className="absolute top-0 h-full"
+                  style={{
+                    left: 3,
+                    width: 2,
+                    background: '#5c6bc0',
+                    opacity: 0.8,
+                    pointerEvents: 'none',
+                  }}
+                />
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 rounded text-[10px] whitespace-nowrap opacity-0 group-hover/marker:opacity-100 transition-opacity pointer-events-none"
+                  style={{ background: 'var(--bg-card)', color: 'var(--text)', border: '1px solid var(--border)', zIndex: 10 }}
+                >
+                  {m.name}
+                </div>
+              </div>
             ))}
             {/* Scene markers */}
             {sceneMarkers && state.duration > 0 && sceneMarkers.map((m, i) => (
               <div
                 key={`scene-${i}`}
-                className="absolute top-0 h-full pointer-events-none"
+                className="absolute top-0 h-full group/marker"
                 style={{
                   left: `${(m.timestamp / state.duration) * 100}%`,
-                  width: 1.5,
-                  background: m.color,
-                  opacity: 0.7,
+                  width: 8,
+                  marginLeft: -3,
+                  zIndex: 2,
+                  pointerEvents: 'auto',
                 }}
-                title={m.name}
-              />
+              >
+                <div
+                  className="absolute top-0 h-full"
+                  style={{
+                    left: 3,
+                    width: 1.5,
+                    background: m.color,
+                    opacity: 0.7,
+                    pointerEvents: 'none',
+                  }}
+                />
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 rounded text-[10px] whitespace-nowrap opacity-0 group-hover/marker:opacity-100 transition-opacity pointer-events-none"
+                  style={{ background: 'var(--bg-card)', color: m.color, border: `1px solid ${m.color}40`, zIndex: 10 }}
+                >
+                  {m.name}
+                </div>
+              </div>
             ))}
             {/* Progress */}
             <div

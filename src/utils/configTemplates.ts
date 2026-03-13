@@ -1,17 +1,5 @@
 import { openDB } from 'idb';
-import type { CueTypesTemplateData, ColumnsTemplateData } from '../components/ConfigurationModal';
-
-export type ConfigTemplateCategory = 'cueTypes' | 'columns' | 'xlsxExport';
-
-/** A generic config template that can hold data for any category. */
-export interface ConfigTemplate {
-  id: string;
-  name: string;
-  category: ConfigTemplateCategory;
-  data: CueTypesTemplateData | ColumnsTemplateData | unknown;
-  createdAt: string;
-  updatedAt: string;
-}
+import type { ConfigTemplate, TemplateData } from '../types';
 
 const DB_NAME = 'cuetation-db';
 const DB_VERSION = 1;
@@ -45,7 +33,13 @@ export async function loadConfigTemplates(): Promise<ConfigTemplate[]> {
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed as ConfigTemplate[];
+    // Filter to only valid unified templates (ignore legacy category-based templates)
+    return parsed.filter(
+      (t: unknown): t is ConfigTemplate =>
+        typeof t === 'object' && t !== null &&
+        'id' in t && 'name' in t && 'data' in t &&
+        !('category' in t) // exclude old category-based templates
+    );
   } catch {
     return [];
   }
@@ -85,68 +79,67 @@ export async function renameConfigTemplate(id: string, newName: string): Promise
   }
 }
 
-/** Get templates filtered by category. */
-export async function getTemplatesByCategory(category: ConfigTemplateCategory): Promise<ConfigTemplate[]> {
-  return (await loadConfigTemplates()).filter((t) => t.category === category);
-}
-
-/** Export a single template as a JSON download. */
+/** Export a single template as a JSON download (.cuetation-template.json). */
 export function exportTemplateToJSON(template: ConfigTemplate): void {
   const blob = new Blob([JSON.stringify(template, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `template-${template.name.replace(/[^a-z0-9]/gi, '_')}.json`;
+  const safeName = template.name.replace(/[^a-z0-9]/gi, '_');
+  a.download = `${safeName}.cuetation-template.json`;
   a.click();
   URL.revokeObjectURL(url);
 }
 
-/** Export all templates as a JSON download. */
-export async function exportAllTemplatesToJSON(): Promise<void> {
-  const templates = await loadConfigTemplates();
-  const blob = new Blob([JSON.stringify(templates, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'all_templates.json';
-  a.click();
-  URL.revokeObjectURL(url);
+/**
+ * Validate that a parsed object looks like a valid TemplateData.
+ * Returns true if the essential fields are present.
+ */
+function isValidTemplateData(data: unknown): data is TemplateData {
+  if (!data || typeof data !== 'object') return false;
+  const d = data as Record<string, unknown>;
+  return (
+    Array.isArray(d.cueTypes) &&
+    typeof d.cueTypeColors === 'object' &&
+    Array.isArray(d.visibleColumns)
+  );
 }
 
-/** Import templates from a JSON file. Returns the count of imported templates. */
-export async function importTemplatesFromJSON(file: File): Promise<{ imported: number; skipped: number }> {
+/**
+ * Import a template from a .cuetation-template.json file.
+ * Returns the imported template (already saved to storage).
+ * If a template with the same name exists, appends a counter.
+ */
+export async function importTemplateFromJSON(file: File): Promise<ConfigTemplate> {
   const text = await file.text();
   const parsed = JSON.parse(text);
 
-  const incoming: ConfigTemplate[] = Array.isArray(parsed) ? parsed : [parsed];
+  if (!parsed || typeof parsed !== 'object' || !parsed.data || !parsed.name) {
+    throw new Error('Invalid template file: missing required fields.');
+  }
+  if (!isValidTemplateData(parsed.data)) {
+    throw new Error('Invalid template file: data does not contain expected template fields.');
+  }
+
   const existing = await loadConfigTemplates();
   const existingNames = new Set(existing.map((t) => t.name));
 
-  let imported = 0;
-  let skipped = 0;
-
-  for (const tpl of incoming) {
-    if (!tpl.id || !tpl.name || !tpl.category || !tpl.data) {
-      skipped++;
-      continue;
-    }
-    const existingIdx = existing.findIndex((e) => e.id === tpl.id);
-    if (existingIdx >= 0) {
-      existing[existingIdx] = { ...tpl, updatedAt: new Date().toISOString() };
-      imported++;
-    } else {
-      let name = tpl.name;
-      if (existingNames.has(name)) {
-        let counter = 2;
-        while (existingNames.has(`${name} (${counter})`)) counter++;
-        name = `${name} (${counter})`;
-      }
-      existingNames.add(name);
-      existing.push({ ...tpl, id: crypto.randomUUID(), name, updatedAt: new Date().toISOString() });
-      imported++;
-    }
+  let name: string = (parsed.name as string).trim();
+  if (existingNames.has(name)) {
+    let counter = 2;
+    while (existingNames.has(`${name} (${counter})`)) counter++;
+    name = `${name} (${counter})`;
   }
 
+  const template: ConfigTemplate = {
+    id: crypto.randomUUID(),
+    name,
+    data: parsed.data as TemplateData,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  existing.push(template);
   await saveConfigTemplates(existing);
-  return { imported, skipped };
+  return template;
 }

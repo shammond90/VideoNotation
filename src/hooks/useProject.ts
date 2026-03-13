@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import type { Project } from '../types/index';
+import type { Project, AppConfig } from '../types/index';
 import {
   createProject,
   loadProjects,
@@ -28,6 +28,7 @@ export interface UseProjectReturn {
       year?: string;
       notes?: string;
       config_template_id?: string;
+      config?: AppConfig;
     }
   ) => Promise<Project>;
   updateCurrentProject: (updates: Partial<Project>) => Promise<void>;
@@ -105,6 +106,7 @@ export function useProject(): UseProjectReturn {
         year?: string;
         notes?: string;
         config_template_id?: string;
+        config?: AppConfig;
       }
     ) => {
       try {

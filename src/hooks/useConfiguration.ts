@@ -1,9 +1,28 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import type { AppConfig, ColumnConfig } from '../types';
-import { DEFAULT_CONFIG, DEFAULT_VISIBLE_COLUMNS, RESERVED_CUE_TYPES, getDefaultFieldsForType } from '../types';
-import type { CueTypesTemplateData, ColumnsTemplateData } from '../components/ConfigurationModal';
+import type { AppConfig, ColumnConfig, FieldDefinition, TemplateData } from '../types';
+import { DEFAULT_CONFIG, DEFAULT_VISIBLE_COLUMNS, RESERVED_CUE_TYPES, getDefaultFieldsForType, DEFAULT_FIELD_DEFINITIONS, labelToFieldKey, ensureUniqueFieldKey } from '../types';
 import { openDB } from 'idb';
 import { loadConfig, saveConfig, backupConfig, exportConfigToJSON, importConfigFromJSON, clearPrimaryData, clearAllIDBData } from '../utils/storage';
+
+/** Migrate a loaded config: ensure fieldDefinitions is populated with at least all Tier 1/2 fields. */
+function migrateFieldDefinitions(cfg: AppConfig): AppConfig {
+  let result = cfg;
+  if (!result.fieldDefinitions || result.fieldDefinitions.length === 0) {
+    result = { ...result, fieldDefinitions: [...DEFAULT_FIELD_DEFINITIONS] };
+  } else {
+    // Ensure all Tier 1/2 defaults exist (may have been added in a newer version)
+    const existingKeys = new Set(result.fieldDefinitions.map((f) => f.key));
+    const missing = DEFAULT_FIELD_DEFINITIONS.filter((d) => !existingKeys.has(d.key));
+    if (missing.length > 0) {
+      result = { ...result, fieldDefinitions: [...result.fieldDefinitions, ...missing] };
+    }
+  }
+  // Ensure mandatoryFields exists
+  if (!result.mandatoryFields) {
+    result = { ...result, mandatoryFields: {} };
+  }
+  return result;
+}
 
 export function useConfiguration() {
   const [config, setConfig] = useState<AppConfig>(DEFAULT_CONFIG);
@@ -13,7 +32,8 @@ export function useConfiguration() {
   // Load config from IndexedDB on mount
   useEffect(() => {
     loadConfig().then((loaded) => {
-      setConfig(loaded);
+      const migrated = migrateFieldDefinitions(loaded);
+      setConfig(migrated);
       setConfigLoaded(true);
       initialLoadDone.current = true;
     });
@@ -322,82 +342,172 @@ export function useConfiguration() {
   }, [config]);
 
   /**
-   * Apply a Cue Types template.
-   * - Reserved or in-use types are never removed.
-   * - Types from the template are created if missing.
-   * - Existing types that match are updated (colors, shortcodes, fields).
-   * - Non-reserved, non-in-use types not in the template are removed.
+   * Apply a unified config template.
+   * Replaces cue types, fields, columns, and view settings from the template.
+   * Non-template fields (e.g. cueBackupIntervalMinutes, deprecated maps) are preserved.
    */
-  const applyCueTypesTemplate = useCallback((data: CueTypesTemplateData, usedCueTypes?: Set<string>) => {
+  const applyTemplate = useCallback((data: TemplateData) => {
+    setConfig((prev) => ({
+      ...prev,
+      cueTypes: [...data.cueTypes],
+      cueTypeColors: { ...data.cueTypeColors },
+      cueTypeShortCodes: { ...data.cueTypeShortCodes },
+      cueTypeFontColors: { ...data.cueTypeFontColors },
+      cueTypeFields: Object.fromEntries(
+        Object.entries(data.cueTypeFields).map(([k, v]) => [k, [...v]])
+      ),
+      mandatoryFields: Object.fromEntries(
+        Object.entries(data.mandatoryFields ?? {}).map(([k, v]) => [k, [...v]])
+      ),
+      fieldDefinitions: data.fieldDefinitions.map((f) => ({ ...f })),
+      visibleColumns: data.visibleColumns.map((c) => ({ ...c })),
+      cueTypeColumns: Object.fromEntries(
+        Object.entries(data.cueTypeColumns).map(([k, v]) => [k, v.map((c) => ({ ...c }))])
+      ),
+      cueSheetView: data.cueSheetView,
+      theatreMode: data.theatreMode,
+      showShortCodes: data.showShortCodes,
+      showPastCues: data.showPastCues,
+      showSkippedCues: data.showSkippedCues,
+      distanceView: data.distanceView,
+      expandedSearchFilter: data.expandedSearchFilter,
+      showVideoTimecode: data.showVideoTimecode,
+      videoTimecodePosition: { ...data.videoTimecodePosition },
+    }));
+  }, []);
+
+  // ── Field Definition CRUD ──
+
+  /** Add a new custom field (Tier 3). Returns the generated key, or null if label is empty. */
+  const addFieldDefinition = useCallback((def: Omit<FieldDefinition, 'key' | 'tier' | 'archived'>): string | null => {
+    const label = def.label.trim();
+    if (!label) return null;
+    let generatedKey = '';
     setConfig((prev) => {
-      const used = usedCueTypes ?? new Set<string>();
-      const reservedSet = new Set(RESERVED_CUE_TYPES as readonly string[]);
-
-      // Start with types that are protected (reserved or in use), in their current order
-      const protectedTypes = prev.cueTypes.filter((t) => reservedSet.has(t) || used.has(t));
-
-      // Add template types that aren't already protected
-      const newTypes = data.cueTypes.filter((t) => !protectedTypes.includes(t));
-      const finalTypes = [...protectedTypes, ...newTypes];
-
-      // Build merged maps
-      const newColors = { ...prev.cueTypeColors };
-      const newShortCodes = { ...prev.cueTypeShortCodes };
-      const newFields = { ...prev.cueTypeFields };
-      const newFontColors = { ...prev.cueTypeFontColors };
-
-      // Remove config for types that were dropped
-      for (const t of prev.cueTypes) {
-        if (!finalTypes.includes(t)) {
-          delete newColors[t];
-          delete newShortCodes[t];
-          delete newFields[t];
-          delete newFontColors[t];
+      const existingKeys = new Set(prev.fieldDefinitions.map((f) => f.key));
+      const baseKey = labelToFieldKey(label);
+      generatedKey = ensureUniqueFieldKey(baseKey, existingKeys);
+      const newDef: FieldDefinition = {
+        key: generatedKey,
+        label,
+        tier: 3,
+        inputType: def.inputType,
+        numberPrecision: def.numberPrecision,
+        sizeHint: def.sizeHint,
+        archived: false,
+      };
+      // Add field to definitions
+      const newDefs = [...prev.fieldDefinitions, newDef];
+      // Add field key to all cue types' field lists (global scope by default)
+      const newCueTypeFields = { ...prev.cueTypeFields };
+      for (const cueType of prev.cueTypes) {
+        const current = newCueTypeFields[cueType] ?? getDefaultFieldsForType(cueType);
+        if (!current.includes(generatedKey)) {
+          newCueTypeFields[cueType] = [...current, generatedKey];
         }
       }
-
-      // Apply template data to all types in template
-      for (const t of data.cueTypes) {
-        if (data.cueTypeColors[t]) newColors[t] = data.cueTypeColors[t];
-        if (data.cueTypeShortCodes[t]) newShortCodes[t] = data.cueTypeShortCodes[t];
-        if (data.cueTypeFields[t]) newFields[t] = [...data.cueTypeFields[t]];
-        if (data.cueTypeFontColors?.[t]) newFontColors[t] = data.cueTypeFontColors[t];
+      // Add to visibleColumns (hidden by default)
+      const newVisibleCols: ColumnConfig[] = [
+        ...prev.visibleColumns,
+        { key: generatedKey as ColumnConfig['key'], label, visible: false },
+      ];
+      // Add to per-type column overrides
+      const newCueTypeCols = { ...prev.cueTypeColumns };
+      for (const [ct, cols] of Object.entries(newCueTypeCols)) {
+        if (!cols.some((c) => c.key === generatedKey)) {
+          newCueTypeCols[ct] = [...cols, { key: generatedKey as ColumnConfig['key'], label, visible: false }];
+        }
       }
-
       return {
         ...prev,
-        cueTypes: finalTypes,
-        cueTypeColors: newColors,
-        cueTypeShortCodes: newShortCodes,
-        cueTypeFields: newFields,
-        cueTypeFontColors: newFontColors,
+        fieldDefinitions: newDefs,
+        cueTypeFields: newCueTypeFields,
+        visibleColumns: newVisibleCols,
+        cueTypeColumns: newCueTypeCols,
       };
+    });
+    return generatedKey;
+  }, []);
+
+  /** Update an existing field definition (label, sizeHint, etc.). Tier and key cannot change. */
+  const updateFieldDefinition = useCallback((key: string, updates: Partial<Pick<FieldDefinition, 'label' | 'sizeHint'>>) => {
+    setConfig((prev) => {
+      const idx = prev.fieldDefinitions.findIndex((f) => f.key === key);
+      if (idx === -1) return prev;
+      const field = prev.fieldDefinitions[idx];
+      const updatedDef = { ...field, ...updates };
+      const newDefs = [...prev.fieldDefinitions];
+      newDefs[idx] = updatedDef;
+      // Also update column labels if label changed
+      let newVisibleCols = prev.visibleColumns;
+      let newCueTypeCols = prev.cueTypeColumns;
+      if (updates.label && updates.label !== field.label) {
+        newVisibleCols = prev.visibleColumns.map((c) =>
+          c.key === key ? { ...c, label: updates.label! } : c
+        );
+        newCueTypeCols = { ...prev.cueTypeColumns };
+        for (const [ct, cols] of Object.entries(newCueTypeCols)) {
+          newCueTypeCols[ct] = cols.map((c) =>
+            c.key === key ? { ...c, label: updates.label! } : c
+          );
+        }
+      }
+      return { ...prev, fieldDefinitions: newDefs, visibleColumns: newVisibleCols, cueTypeColumns: newCueTypeCols };
     });
   }, []);
 
-  /**
-   * Apply a Columns template.
-   * - Default columns are replaced from the template.
-   * - All existing overrides are removed.
-   * - Overrides from the template are added only for cue types that exist in config.
-   */
-  const applyColumnsTemplate = useCallback((data: ColumnsTemplateData) => {
+  /** Soft-delete (archive) a field. Tier 1 fields cannot be archived. */
+  const archiveFieldDefinition = useCallback((key: string) => {
     setConfig((prev) => {
-      const currentTypeSet = new Set(prev.cueTypes);
-      const newCueTypeColumns: Record<string, ColumnConfig[]> = {};
+      const field = prev.fieldDefinitions.find((f) => f.key === key);
+      if (!field || field.tier === 1) return prev;
+      const newDefs = prev.fieldDefinitions.map((f) =>
+        f.key === key ? { ...f, archived: true } : f
+      );
+      // Remove from all cueTypeFields
+      const newCueTypeFields = { ...prev.cueTypeFields };
+      for (const [ct, fields] of Object.entries(newCueTypeFields)) {
+        newCueTypeFields[ct] = fields.filter((f) => f !== key);
+      }
+      return { ...prev, fieldDefinitions: newDefs, cueTypeFields: newCueTypeFields };
+    });
+  }, []);
 
-      // Only apply overrides for types that exist in the current config
-      for (const [typeName, cols] of Object.entries(data.cueTypeColumns ?? {})) {
-        if (currentTypeSet.has(typeName)) {
-          newCueTypeColumns[typeName] = cols.map((c) => ({ ...c }));
+  /** Restore a soft-deleted field. Re-adds it to all cue type field lists. */
+  const restoreFieldDefinition = useCallback((key: string) => {
+    setConfig((prev) => {
+      const field = prev.fieldDefinitions.find((f) => f.key === key);
+      if (!field || !field.archived) return prev;
+      const newDefs = prev.fieldDefinitions.map((f) =>
+        f.key === key ? { ...f, archived: false } : f
+      );
+      // Re-add to all cue type field lists
+      const newCueTypeFields = { ...prev.cueTypeFields };
+      for (const cueType of prev.cueTypes) {
+        const current = newCueTypeFields[cueType] ?? getDefaultFieldsForType(cueType);
+        if (!current.includes(key)) {
+          newCueTypeFields[cueType] = [...current, key];
         }
       }
+      return { ...prev, fieldDefinitions: newDefs, cueTypeFields: newCueTypeFields };
+    });
+  }, []);
 
-      return {
-        ...prev,
-        visibleColumns: (data.visibleColumns ?? prev.visibleColumns).map((c) => ({ ...c })),
-        cueTypeColumns: newCueTypeColumns,
-      };
+  /** Set a field as mandatory for a specific cue type. */
+  const setMandatoryField = useCallback((cueType: string, fieldKey: string) => {
+    setConfig((prev) => {
+      const current = prev.mandatoryFields?.[cueType] ?? [];
+      if (current.includes(fieldKey)) return prev;
+      return { ...prev, mandatoryFields: { ...prev.mandatoryFields, [cueType]: [...current, fieldKey] } };
+    });
+  }, []);
+
+  /** Unset a field as mandatory for a specific cue type. */
+  const unsetMandatoryField = useCallback((cueType: string, fieldKey: string) => {
+    setConfig((prev) => {
+      const current = prev.mandatoryFields?.[cueType] ?? [];
+      if (!current.includes(fieldKey)) return prev;
+      return { ...prev, mandatoryFields: { ...prev.mandatoryFields, [cueType]: current.filter((k) => k !== fieldKey) } };
     });
   }, []);
 
@@ -437,7 +547,12 @@ export function useConfiguration() {
     clearAllData,
     clearCurrentVideoCues,
     clearAllCues,
-    applyCueTypesTemplate,
-    applyColumnsTemplate,
+    applyTemplate,
+    addFieldDefinition,
+    updateFieldDefinition,
+    archiveFieldDefinition,
+    restoreFieldDefinition,
+    setMandatoryField,
+    unsetMandatoryField,
   };
 }

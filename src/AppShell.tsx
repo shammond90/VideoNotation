@@ -6,6 +6,8 @@ import { ImportConflictModal } from './components/ImportConflictModal';
 import { ProjectSwitcherModal } from './components/ProjectSwitcherModal';
 import { parseImportedProject, importProject, deleteProject as deleteProjectFromStorage } from './utils/projectStorage';
 import type { ImportedProjectData } from './utils/projectStorage';
+import type { TemplateData } from './types';
+import { DEFAULT_CONFIG } from './types';
 import App from './App';
 import { SavePromptModal } from './components/SavePromptModal';
 import type { Project } from './types/index';
@@ -80,9 +82,15 @@ export function AppShell() {
       year?: string;
       notes?: string;
       config_template_id?: string;
+      templateData?: TemplateData;
     }) => {
       try {
-        await createNewProject(data.name, data);
+        // Build project config from template data if a template was selected
+        let config: import('./types').AppConfig | undefined;
+        if (data.templateData) {
+          config = { ...DEFAULT_CONFIG, ...data.templateData };
+        }
+        await createNewProject(data.name, { ...data, config });
         setAppState({ screen: 'cue-sheet' });
       } catch (err) {
         console.error('Failed to create project:', err);

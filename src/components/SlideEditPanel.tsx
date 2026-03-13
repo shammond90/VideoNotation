@@ -1,13 +1,15 @@
 import { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 import { CueForm } from './CueForm';
-import type { Annotation, CueFields } from '../types';
+import type { Annotation, CueFields, FieldDefinition } from '../types';
 
 interface SlideEditPanelProps {
   annotation: Annotation;
   allAnnotations: Annotation[];
   cueTypes: string[];
   cueTypeFields: Record<string, string[]>;
+  fieldDefinitions?: FieldDefinition[];
+  mandatoryFields?: Record<string, string[]>;
   onSave: (id: string, cue: CueFields, newTimestamp?: number) => void;
   onClose: () => void;
 }
@@ -17,6 +19,8 @@ export function SlideEditPanel({
   allAnnotations,
   cueTypes,
   cueTypeFields,
+  fieldDefinitions: fieldDefs,
+  mandatoryFields,
   onSave,
   onClose,
 }: SlideEditPanelProps) {
@@ -95,6 +99,8 @@ export function SlideEditPanel({
             allAnnotations={allAnnotations}
             cueTypes={cueTypes}
             cueTypeFields={cueTypeFields}
+            fieldDefinitions={fieldDefs}
+            mandatoryFields={mandatoryFields}
             onSave={(cue, newTimestamp) => {
               onSave(annotation.id, cue, newTimestamp);
               onClose();

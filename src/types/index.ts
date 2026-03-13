@@ -110,6 +110,99 @@ export const CUE_FIELD_LABELS: Record<keyof CueFields, string> = {
   loopTargetCueNumber: 'Loop Target Cue#',
 };
 
+// ── Field Definition System ──
+
+export type FieldTier = 1 | 2 | 3;
+export type FieldInputType = 'text' | 'number' | 'checkbox';
+export type NumberPrecision = 'integer' | 'decimal';
+export type FieldSizeHint = 'small' | 'medium' | 'large';
+
+export interface FieldDefinition {
+  key: string;                          // Internal key (camelCase), immutable after creation
+  label: string;                        // Display label, user-editable for all tiers
+  tier: FieldTier;                      // 1 = system-logic, 2 = default, 3 = custom
+  inputType: FieldInputType;            // 'text' or 'number', immutable after creation
+  numberPrecision?: NumberPrecision;    // 'integer' or 'decimal' (number fields only)
+  sizeHint: FieldSizeHint;             // 'small' | 'medium' | 'large'
+  archived: boolean;                    // Soft-deleted (hidden from UI, data preserved)
+  defaultLabel?: string;                // Original label for Tier 1/2 (allows reset)
+}
+
+/** Tier 1 — System-Logic Fields. Cannot be deleted; type/key immutable; label can be renamed. */
+export const TIER1_FIELD_DEFINITIONS: FieldDefinition[] = [
+  { key: 'type', label: 'Type', tier: 1, inputType: 'text', sizeHint: 'small', archived: false, defaultLabel: 'Type' },
+  { key: 'cueNumber', label: 'Cue #', tier: 1, inputType: 'text', sizeHint: 'small', archived: false, defaultLabel: 'Cue #' },
+  { key: 'autofollow', label: 'Auto-Follow', tier: 1, inputType: 'text', sizeHint: 'small', archived: false, defaultLabel: 'Auto-Follow' },
+  { key: 'followCueNumber', label: 'Follow Cue#', tier: 1, inputType: 'text', sizeHint: 'small', archived: false, defaultLabel: 'Follow Cue#' },
+  { key: 'linkCueNumber', label: 'Link Cue#', tier: 1, inputType: 'text', sizeHint: 'small', archived: false, defaultLabel: 'Link Cue#' },
+  { key: 'loopTargetTimestamp', label: 'Loop Target Time', tier: 1, inputType: 'text', sizeHint: 'small', archived: false, defaultLabel: 'Loop Target Time' },
+  { key: 'loopTargetCueNumber', label: 'Loop Target Cue#', tier: 1, inputType: 'text', sizeHint: 'small', archived: false, defaultLabel: 'Loop Target Cue#' },
+  { key: 'standbyTime', label: 'Standby Time', tier: 1, inputType: 'text', sizeHint: 'small', archived: false, defaultLabel: 'Standby Time' },
+  { key: 'warningTime', label: 'Warning Time', tier: 1, inputType: 'text', sizeHint: 'small', archived: false, defaultLabel: 'Warning Time' },
+];
+
+/** Tier 2 — Default Fields. Can be soft-deleted, renamed, reordered, and toggled per type. */
+export const TIER2_FIELD_DEFINITIONS: FieldDefinition[] = [
+  { key: 'oldCueNumber', label: 'Old Cue #', tier: 2, inputType: 'text', sizeHint: 'small', archived: false, defaultLabel: 'Old Cue #' },
+  { key: 'cueTime', label: 'Cue Time', tier: 2, inputType: 'text', sizeHint: 'small', archived: false, defaultLabel: 'Cue Time' },
+  { key: 'duration', label: 'Duration', tier: 2, inputType: 'text', sizeHint: 'small', archived: false, defaultLabel: 'Duration' },
+  { key: 'delay', label: 'Delay', tier: 2, inputType: 'text', sizeHint: 'small', archived: false, defaultLabel: 'Delay' },
+  { key: 'follow', label: 'Follow', tier: 2, inputType: 'text', sizeHint: 'small', archived: false, defaultLabel: 'Follow' },
+  { key: 'hang', label: 'Hang', tier: 2, inputType: 'text', sizeHint: 'small', archived: false, defaultLabel: 'Hang' },
+  { key: 'block', label: 'Block', tier: 2, inputType: 'text', sizeHint: 'small', archived: false, defaultLabel: 'Block' },
+  { key: 'assert', label: 'Assert', tier: 2, inputType: 'text', sizeHint: 'small', archived: false, defaultLabel: 'Assert' },
+  { key: 'when', label: 'When', tier: 2, inputType: 'text', sizeHint: 'medium', archived: false, defaultLabel: 'When' },
+  { key: 'what', label: 'What', tier: 2, inputType: 'text', sizeHint: 'medium', archived: false, defaultLabel: 'What' },
+  { key: 'presets', label: 'Presets', tier: 2, inputType: 'text', sizeHint: 'small', archived: false, defaultLabel: 'Presets' },
+  { key: 'colourPalette', label: 'Colour Palette', tier: 2, inputType: 'text', sizeHint: 'small', archived: false, defaultLabel: 'Colour Palette' },
+  { key: 'spotFrame', label: 'Spot Frame', tier: 2, inputType: 'text', sizeHint: 'small', archived: false, defaultLabel: 'Spot Frame' },
+  { key: 'spotIntensity', label: 'Spot Intensity', tier: 2, inputType: 'text', sizeHint: 'small', archived: false, defaultLabel: 'Spot Intensity' },
+  { key: 'spotTime', label: 'Spot Time', tier: 2, inputType: 'text', sizeHint: 'small', archived: false, defaultLabel: 'Spot Time' },
+  { key: 'cueSheetNotes', label: 'Notes from Previous Cue Sheet', tier: 2, inputType: 'text', sizeHint: 'large', archived: false, defaultLabel: 'Notes from Previous Cue Sheet' },
+  { key: 'final', label: 'Final', tier: 2, inputType: 'text', sizeHint: 'small', archived: false, defaultLabel: 'Final' },
+  { key: 'dress', label: 'Dress', tier: 2, inputType: 'text', sizeHint: 'small', archived: false, defaultLabel: 'Dress' },
+  { key: 'tech', label: 'Tech', tier: 2, inputType: 'text', sizeHint: 'small', archived: false, defaultLabel: 'Tech' },
+  { key: 'cueingNotes', label: 'Cueing Notes', tier: 2, inputType: 'text', sizeHint: 'large', archived: false, defaultLabel: 'Cueing Notes' },
+];
+
+/** Complete default field definitions (Tier 1 + Tier 2). */
+export const DEFAULT_FIELD_DEFINITIONS: FieldDefinition[] = [
+  ...TIER1_FIELD_DEFINITIONS,
+  ...TIER2_FIELD_DEFINITIONS,
+];
+
+/** Look up a field label by key, using fieldDefinitions first, falling back to static labels. */
+export function getFieldLabel(key: string, fieldDefs?: FieldDefinition[]): string {
+  if (fieldDefs) {
+    const def = fieldDefs.find((f) => f.key === key);
+    if (def) return def.label;
+  }
+  return CUE_FIELD_LABELS[key as keyof CueFields] ?? VIRTUAL_COLUMN_LABELS[key] ?? key;
+}
+
+/** Look up a FieldDefinition by key. */
+export function getFieldDef(key: string, fieldDefs?: FieldDefinition[]): FieldDefinition | undefined {
+  return fieldDefs?.find((f) => f.key === key);
+}
+
+/** Generate a camelCase internal key from a display label. */
+export function labelToFieldKey(label: string): string {
+  return label
+    .trim()
+    .replace(/[^a-zA-Z0-9\s]/g, '')
+    .replace(/\s+(.)/g, (_, c: string) => c.toUpperCase())
+    .replace(/\s+/g, '')
+    .replace(/^(.)/, (_, c: string) => c.toLowerCase());
+}
+
+/** Ensure a key is unique among existing definitions by appending a numeric suffix if needed. */
+export function ensureUniqueFieldKey(baseKey: string, existingKeys: Set<string>): string {
+  if (!existingKeys.has(baseKey)) return baseKey;
+  let i = 2;
+  while (existingKeys.has(`${baseKey}${i}`)) i++;
+  return `${baseKey}${i}`;
+}
+
 export const EMPTY_CUE_FIELDS: CueFields = {
   type: '',
   cueNumber: '',
@@ -189,6 +282,73 @@ export const VIRTUAL_COLUMN_LABELS: Record<string, string> = {
 
 export type CueSheetView = 'classic' | 'production';
 
+// ── Unified Config Template types ──
+
+/**
+ * The data payload stored inside a config template.
+ * Captures cue types, fields, columns, and view settings — everything
+ * a user might want to reuse across projects.
+ */
+export interface TemplateData {
+  cueTypes: string[];
+  cueTypeColors: Record<string, string>;
+  cueTypeShortCodes: Record<string, string>;
+  cueTypeFontColors: Record<string, string>;
+  cueTypeFields: Record<string, string[]>;
+  mandatoryFields: Record<string, string[]>;
+  fieldDefinitions: FieldDefinition[];
+  visibleColumns: ColumnConfig[];
+  cueTypeColumns: Record<string, ColumnConfig[]>;
+  cueSheetView: CueSheetView;
+  theatreMode: boolean;
+  showShortCodes: boolean;
+  showPastCues: boolean;
+  showSkippedCues: boolean;
+  distanceView: boolean;
+  expandedSearchFilter: boolean;
+  showVideoTimecode: boolean;
+  videoTimecodePosition: { x: number; y: number };
+}
+
+/** A saved config template (stored in IndexedDB). */
+export interface ConfigTemplate {
+  id: string;
+  name: string;
+  data: TemplateData;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Extract template-relevant settings from a full AppConfig. */
+export function extractTemplateData(config: AppConfig): TemplateData {
+  return {
+    cueTypes: [...config.cueTypes],
+    cueTypeColors: { ...config.cueTypeColors },
+    cueTypeShortCodes: { ...config.cueTypeShortCodes },
+    cueTypeFontColors: { ...config.cueTypeFontColors },
+    cueTypeFields: Object.fromEntries(
+      Object.entries(config.cueTypeFields).map(([k, v]) => [k, [...v]])
+    ),
+    mandatoryFields: Object.fromEntries(
+      Object.entries(config.mandatoryFields ?? {}).map(([k, v]) => [k, [...v]])
+    ),
+    fieldDefinitions: config.fieldDefinitions.map((f) => ({ ...f })),
+    visibleColumns: config.visibleColumns.map((c) => ({ ...c })),
+    cueTypeColumns: Object.fromEntries(
+      Object.entries(config.cueTypeColumns).map(([k, v]) => [k, v.map((c) => ({ ...c }))])
+    ),
+    cueSheetView: config.cueSheetView,
+    theatreMode: config.theatreMode,
+    showShortCodes: config.showShortCodes,
+    showPastCues: config.showPastCues,
+    showSkippedCues: config.showSkippedCues,
+    distanceView: config.distanceView,
+    expandedSearchFilter: config.expandedSearchFilter,
+    showVideoTimecode: config.showVideoTimecode,
+    videoTimecodePosition: { ...config.videoTimecodePosition },
+  };
+}
+
 export interface AppConfig {
   cueTypes: string[];
   cueTypeColors: Record<string, string>; // hex colour per cue type
@@ -209,6 +369,8 @@ export interface AppConfig {
   cueBackupIntervalMinutes: number; // how often (minutes) to create cue backups while active
   showVideoTimecode: boolean; // whether to show timecode overlay on video
   videoTimecodePosition: { x: number; y: number }; // overlay position as percentages (0–100)
+  fieldDefinitions: FieldDefinition[]; // global field registry (Tier 1 + 2 + 3)
+  mandatoryFields: Record<string, string[]>; // per-cue-type mandatory field keys
 }
 
 /**
@@ -324,6 +486,17 @@ export const DEFAULT_CONFIG: AppConfig = {
   cueBackupIntervalMinutes: 5,
   showVideoTimecode: false,
   videoTimecodePosition: { x: 2, y: 4 },
+  fieldDefinitions: [...DEFAULT_FIELD_DEFINITIONS],
+  mandatoryFields: {},
+};
+
+/** The factory-default template. Always available for "Reset to Factory". */
+export const FACTORY_DEFAULT_TEMPLATE: ConfigTemplate = {
+  id: '__factory__',
+  name: 'Cuetation Standard',
+  data: extractTemplateData(DEFAULT_CONFIG),
+  createdAt: '2025-01-01T00:00:00.000Z',
+  updatedAt: '2025-01-01T00:00:00.000Z',
 };
 
 // ── XLSX Export Template types ──

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
-import type { ConfigTemplate } from '../utils/configTemplates';
+import type { ConfigTemplate, TemplateData } from '../types';
+import { FACTORY_DEFAULT_TEMPLATE } from '../types';
 import { loadConfigTemplates } from '../utils/configTemplates';
 
 interface CreateProjectFormProps {
@@ -13,6 +14,7 @@ interface CreateProjectFormProps {
     year?: string;
     notes?: string;
     config_template_id?: string;
+    templateData?: TemplateData;
   }) => void;
 }
 
@@ -39,12 +41,9 @@ export function CreateProjectForm({ onCancel, onCreate }: CreateProjectFormProps
     nameInputRef.current?.focus();
   }, []);
 
-  // Load global config templates (cueTypes category) for the dropdown
+  // Load unified config templates for the dropdown
   useEffect(() => {
-    loadConfigTemplates().then((all) => {
-      const cueTypeTemplates = all.filter((t) => t.category === 'cueTypes');
-      setTemplates(cueTypeTemplates);
-    });
+    loadConfigTemplates().then(setTemplates);
   }, []);
 
   const trimmedName = name.trim();
@@ -63,7 +62,11 @@ export function CreateProjectForm({ onCancel, onCreate }: CreateProjectFormProps
     if (venue.trim()) data.venue = venue.trim();
     if (year.trim()) data.year = year.trim();
     if (notes.trim()) data.notes = notes.trim();
-    if (selectedTemplateId !== '__default__') data.config_template_id = selectedTemplateId;
+    if (selectedTemplateId !== '__default__') {
+      data.config_template_id = selectedTemplateId;
+      const tpl = templates.find((t) => t.id === selectedTemplateId);
+      if (tpl) data.templateData = tpl.data;
+    }
 
     onCreate(data);
   };
@@ -124,7 +127,7 @@ export function CreateProjectForm({ onCancel, onCreate }: CreateProjectFormProps
                   ))}
                 </select>
                 <p className="text-xs mt-1" style={{ color: "var(--text-dim)" }}>
-                  Sets the initial cue types and fields. You can change these later.
+                  Sets the initial cue types, fields, columns, and view settings. You can change these later.
                 </p>
               </div>
 

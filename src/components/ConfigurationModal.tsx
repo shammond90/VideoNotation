@@ -1,9 +1,8 @@
 import React, { useState, useRef, useMemo, useCallback, useEffect } from 'react';
-import { X, Plus, Trash2, GripVertical, Download, Upload, Lock, Pencil, Check, AlertTriangle, ChevronDown, ChevronRight, Save, FileDown, FileUp, Info } from 'lucide-react';
-import type { ColumnConfig, Project, AppConfig } from '../types';
-import { RESERVED_CUE_TYPES, LOOP_CUE_TYPE, EDITABLE_FIELD_KEYS, EDITABLE_FIELD_LABELS, AUTOFOLLOW_COLUMN_KEYS, LINK_COLUMN_KEYS, getDefaultFieldsForType } from '../types';
-import type { ConfigTemplate } from '../utils/configTemplates';
-import { loadConfigTemplates, saveConfigTemplate, deleteConfigTemplate, renameConfigTemplate, exportTemplateToJSON, exportAllTemplatesToJSON, importTemplatesFromJSON } from '../utils/configTemplates';
+import { X, Plus, Trash2, GripVertical, Download, Upload, Lock, Pencil, Check, AlertTriangle, ChevronDown, ChevronRight, Save, FileDown, FileUp, Info, Shield, UserCircle, RotateCcw, Archive } from 'lucide-react';
+import type { ColumnConfig, Project, AppConfig, FieldDefinition, ConfigTemplate, TemplateData } from '../types';
+import { RESERVED_CUE_TYPES, LOOP_CUE_TYPE, EDITABLE_FIELD_KEYS, AUTOFOLLOW_COLUMN_KEYS, LINK_COLUMN_KEYS, getDefaultFieldsForType, getFieldLabel, extractTemplateData, FACTORY_DEFAULT_TEMPLATE } from '../types';
+import { loadConfigTemplates, saveConfigTemplate, deleteConfigTemplate, renameConfigTemplate, exportTemplateToJSON, importTemplateFromJSON } from '../utils/configTemplates';
 import { loadProjects, deleteProject as deleteProjectFromStorage, updateProjectMetadata, exportProjectToJSON } from '../utils/projectStorage';
 import {
   listBackups,
@@ -100,23 +99,18 @@ interface ConfigurationModalProps {
   onClearAllData: () => void;
   onClearCurrentVideoCues: (fileName: string, fileSize: number) => void;
   onClearAllCues: () => void;
-  onApplyCueTypesTemplate: (data: CueTypesTemplateData) => void;
-  onApplyColumnsTemplate: (data: ColumnsTemplateData) => void;
-}
-
-/** Data shape stored in a "cueTypes" template. */
-export interface CueTypesTemplateData {
-  cueTypes: string[];
-  cueTypeColors: Record<string, string>;
-  cueTypeShortCodes: Record<string, string>;
-  cueTypeFontColors?: Record<string, string>;
-  cueTypeFields: Record<string, string[]>;
-}
-
-/** Data shape stored in a "columns" template. */
-export interface ColumnsTemplateData {
-  visibleColumns: ColumnConfig[];
-  cueTypeColumns: Record<string, ColumnConfig[]>;
+  onApplyTemplate: (data: TemplateData) => void;
+  // Field definition CRUD
+  onAddField: (def: Omit<FieldDefinition, 'key' | 'tier' | 'archived'>) => string | null;
+  onUpdateField: (key: string, updates: Partial<Pick<FieldDefinition, 'label' | 'sizeHint'>>) => void;
+  onArchiveField: (key: string) => void;
+  onRestoreField: (key: string) => void;
+  // In-use field detection
+  usedFieldKeys?: Set<string>;
+  // Mandatory fields per type
+  mandatoryFields?: Record<string, string[]>;
+  onSetMandatoryField?: (cueType: string, fieldKey: string) => void;
+  onUnsetMandatoryField?: (cueType: string, fieldKey: string) => void;
 }
 
 // ── Sortable column item ──
@@ -176,13 +170,17 @@ function SortableFieldItem({
   label,
   isActive,
   isLocked,
+  isMandatory,
   onToggle,
+  onToggleMandatory,
 }: {
   fieldKey: string;
   label: string;
   isActive: boolean;
   isLocked: boolean;
+  isMandatory?: boolean;
   onToggle: () => void;
+  onToggleMandatory?: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: `field-${fieldKey}`,
@@ -229,6 +227,21 @@ function SortableFieldItem({
           {label}
         </span>
       </label>
+      {/* Mandatory toggle — only for active, non-locked fields */}
+      {isActive && !isLocked && onToggleMandatory && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onToggleMandatory(); }}
+          className={`text-[10px] px-1.5 py-0.5 rounded transition-colors shrink-0 ${
+            isMandatory
+              ? 'text-red-400 bg-red-500/15 hover:bg-red-500/25'
+              : 'text-[var(--text-dim)] hover:text-[var(--text-mid)] hover:bg-[var(--bg-hover)]'
+          }`}
+          title={isMandatory ? 'Remove mandatory requirement' : 'Mark as mandatory'}
+        >
+          {isMandatory ? '✱ Req' : '✱'}
+        </button>
+      )}
     </div>
   );
 }
@@ -529,11 +542,18 @@ export function ConfigurationModal({
   onClearAllData,
   onClearCurrentVideoCues,
   onClearAllCues,
-  onApplyCueTypesTemplate,
-  onApplyColumnsTemplate,
+  onApplyTemplate,
+  onAddField,
+  onUpdateField,
+  onArchiveField,
+  onRestoreField,
+  usedFieldKeys,
+  mandatoryFields,
+  onSetMandatoryField,
+  onUnsetMandatoryField,
 }: ConfigurationModalProps) {
   const [newTypeName, setNewTypeName] = useState('');
-  const [activeTab, setActiveTab] = useState<'types' | 'columns' | 'view' | 'templates' | 'savefiles' | 'data' | 'projects' | 'info'>('types');
+  const [activeTab, setActiveTab] = useState<'types' | 'fields' | 'columns' | 'view' | 'templates' | 'savefiles' | 'data' | 'projects' | 'info'>('types');
   const [showFeatureNotes, setShowFeatureNotes] = useState(false);
   const [showUserGuide, setShowUserGuide] = useState(false);
   const [editingType, setEditingType] = useState<string | null>(null);
@@ -542,15 +562,21 @@ export function ConfigurationModal({
   const [recoveryTick, setRecoveryTick] = useState(0);
   const [selectedVideoKey, setSelectedVideoKey] = useState<string>('');
   const [expandedFieldType, setExpandedFieldType] = useState<string | null>(null);
+  // Field management state
+  const [newFieldLabel, setNewFieldLabel] = useState('');
+  const [newFieldInputType, setNewFieldInputType] = useState<'text' | 'number' | 'checkbox'>('text');
+  const [newFieldPrecision, setNewFieldPrecision] = useState<'integer' | 'decimal'>('integer');
+  const [newFieldSizeHint, setNewFieldSizeHint] = useState<'small' | 'medium' | 'large'>('small');
+  const [editingFieldKey, setEditingFieldKey] = useState<string | null>(null);
+  const [editingFieldLabel, setEditingFieldLabel] = useState('');
+  const [editingFieldSizeHint, setEditingFieldSizeHint] = useState<'small' | 'medium' | 'large'>('small');
+  const [showArchivedFields, setShowArchivedFields] = useState(false);
   const importRef = useRef<HTMLInputElement>(null);
   const templateImportRef = useRef<HTMLInputElement>(null);
 
   // Template state
   const [savedTemplates, setSavedTemplates] = useState<ConfigTemplate[]>([]);
-  const [typesTemplateId, setTypesTemplateId] = useState('');
-  const [typesTemplateName, setTypesTemplateName] = useState('');
-  const [columnsTemplateId, setColumnsTemplateId] = useState('');
-  const [columnsTemplateName, setColumnsTemplateName] = useState('');
+  const [newTemplateName, setNewTemplateName] = useState('');
   // Templates tab state
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [editingTemplateName, setEditingTemplateName] = useState('');
@@ -723,6 +749,17 @@ export function ConfigurationModal({
           </button>
           <button
             type="button"
+            onClick={() => setActiveTab('fields')}
+            className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors ${
+              activeTab === 'fields'
+                ? 'text-[var(--amber-hi)] border-b-2 border-[var(--amber-hi)] bg-[var(--bg-panel)]/30'
+                : 'text-[var(--text-mid)] hover:text-[var(--text)]'
+            }`}
+          >
+            Fields
+          </button>
+          <button
+            type="button"
             onClick={() => setActiveTab('columns')}
             className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors ${
               activeTab === 'columns'
@@ -804,86 +841,6 @@ export function ConfigurationModal({
         <div className="flex-1 overflow-y-auto annotation-scroll p-6">
           {activeTab === 'types' && (
             <div className="space-y-4">
-              {/* Template selector bar */}
-              <div className="flex items-center gap-2 p-3 bg-[var(--bg-panel)]/30 border border-[var(--border-hi)]/40 rounded-lg">
-                <label className="text-xs text-[var(--text-mid)] font-medium shrink-0">Template:</label>
-                <div className="relative flex-1 max-w-[180px]">
-                  <select
-                    value={typesTemplateId}
-                    onChange={(e) => {
-                      const tpl = savedTemplates.find((t) => t.id === e.target.value);
-                      if (tpl) {
-                        setTypesTemplateId(tpl.id);
-                        setTypesTemplateName(tpl.name);
-                      } else {
-                        setTypesTemplateId('');
-                        setTypesTemplateName('');
-                      }
-                    }}
-                    className="w-full bg-[var(--bg-panel)] border border-[var(--border-hi)] rounded-md px-2 py-1.5 text-xs text-[var(--text)] appearance-none pr-7 focus:border-[var(--amber)] focus:outline-none"
-                  >
-                    <option value="">New template…</option>
-                    {savedTemplates.filter((t) => t.category === 'cueTypes').map((t) => (
-                      <option key={t.id} value={t.id}>{t.name}</option>
-                    ))}
-                  </select>
-                  <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-mid)] pointer-events-none" />
-                </div>
-                <input
-                  type="text"
-                  value={typesTemplateName}
-                  onChange={(e) => setTypesTemplateName(e.target.value)}
-                  placeholder="Template name"
-                  className="flex-1 max-w-[180px] bg-[var(--bg-panel)] border border-[var(--border-hi)] rounded-md px-2 py-1.5 text-xs text-[var(--text)] focus:border-[var(--amber)] focus:outline-none"
-                />
-                <button
-                  type="button"
-                  onClick={async () => {
-                    const name = typesTemplateName.trim() || `Cue Types ${savedTemplates.filter((t) => t.category === 'cueTypes').length + 1}`;
-                    const data: CueTypesTemplateData = {
-                      cueTypes: [...cueTypes],
-                      cueTypeColors: { ...cueTypeColors },
-                      cueTypeShortCodes: { ...cueTypeShortCodes },
-                      cueTypeFontColors: { ...cueTypeFontColors },
-                      cueTypeFields: { ...cueTypeFields },
-                    };
-                    const template: ConfigTemplate = {
-                      id: typesTemplateId || crypto.randomUUID(),
-                      name,
-                      category: 'cueTypes',
-                      data,
-                      createdAt: typesTemplateId
-                        ? savedTemplates.find((t) => t.id === typesTemplateId)?.createdAt ?? new Date().toISOString()
-                        : new Date().toISOString(),
-                      updatedAt: new Date().toISOString(),
-                    };
-                    await saveConfigTemplate(template);
-                    await refreshTemplates();
-                    setTypesTemplateId(template.id);
-                    setTypesTemplateName(template.name);
-                  }}
-                  className="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-[var(--amber)] text-white rounded-md hover:bg-[var(--amber)] transition-colors shrink-0"
-                >
-                  <Save className="w-3 h-3" />
-                  Save
-                </button>
-                {typesTemplateId && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const tpl = savedTemplates.find((t) => t.id === typesTemplateId);
-                      if (!tpl) return;
-                      if (confirm(`Apply template "${tpl.name}"?\n\nThis will update your cue type configuration. Reserved and in-use types will be preserved; other types may be removed.`)) {
-                        onApplyCueTypesTemplate(tpl.data as CueTypesTemplateData);
-                      }
-                    }}
-                    className="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-emerald-600 text-white rounded-md hover:bg-emerald-500 transition-colors shrink-0"
-                  >
-                    Apply
-                  </button>
-                )}
-              </div>
-
               <p className="text-xs text-[var(--text-mid)]">
                 Define the cue types available in the dropdown when creating or editing a cue.
                 Types that are in use cannot be deleted. You can rename any type.
@@ -1055,9 +1012,15 @@ export function ConfigurationModal({
 
                     {/* Expandable field selection — now a sortable list with locked fields at top */}
                     {expandedFieldType === type && !isEditing && (() => {
+                      const fieldDefs = liveConfig.fieldDefinitions ?? [];
+                      const archivedKeys = new Set(fieldDefs.filter((f) => f.archived).map((f) => f.key));
+                      // Combine static editable keys + custom (Tier 3) keys, excluding archived
+                      const tier3Keys = fieldDefs.filter((f) => f.tier === 3 && !f.archived).map((f) => f.key);
+                      const allEditableKeys = [...EDITABLE_FIELD_KEYS.filter((k) => !archivedKeys.has(k)), ...tier3Keys];
+
                       const currentFields = cueTypeFields[type] ?? getDefaultFieldsForType(type);
-                      const allCount = EDITABLE_FIELD_KEYS.length;
-                      const selectedCount = currentFields.length;
+                      const allCount = allEditableKeys.length;
+                      const selectedCount = currentFields.filter((k) => !archivedKeys.has(k)).length;
 
                       const toggleField = (fieldKey: string) => {
                         if (LOCKED_FIELD_KEYS.includes(fieldKey)) return;
@@ -1068,8 +1031,8 @@ export function ConfigurationModal({
                       };
 
                       const selectAll = () => {
-                        // Keep locked at top, add remaining in EDITABLE order
-                        const ordered = [...LOCKED_FIELD_KEYS, ...EDITABLE_FIELD_KEYS.filter((k) => !LOCKED_FIELD_KEYS.includes(k))];
+                        // Keep locked at top, add remaining in editable order
+                        const ordered = [...LOCKED_FIELD_KEYS, ...allEditableKeys.filter((k) => !LOCKED_FIELD_KEYS.includes(k))];
                         onSetCueTypeFields(type, ordered);
                       };
                       const selectNone = () => onSetCueTypeFields(type, [...LOCKED_FIELD_KEYS]);
@@ -1078,9 +1041,9 @@ export function ConfigurationModal({
                       // Build the ordered display list:
                       // 1. Locked fields always at top (always active)
                       // 2. Active (non-locked) fields in their current order
-                      // 3. Inactive fields at the bottom in EDITABLE_FIELD_KEYS order
-                      const activeNonLocked = currentFields.filter((k) => !LOCKED_FIELD_KEYS.includes(k));
-                      const inactiveFields = EDITABLE_FIELD_KEYS.filter((k) => !LOCKED_FIELD_KEYS.includes(k) && !currentFields.includes(k));
+                      // 3. Inactive fields at the bottom in definition order
+                      const activeNonLocked = currentFields.filter((k) => !LOCKED_FIELD_KEYS.includes(k) && !archivedKeys.has(k));
+                      const inactiveFields = allEditableKeys.filter((k) => !LOCKED_FIELD_KEYS.includes(k) && !currentFields.includes(k));
                       const orderedKeys = [...LOCKED_FIELD_KEYS, ...activeNonLocked, ...inactiveFields];
 
                       const handleFieldDragEnd = (event: DragEndEvent) => {
@@ -1119,16 +1082,30 @@ export function ConfigurationModal({
                               strategy={verticalListSortingStrategy}
                             >
                               <div className="space-y-1 max-h-60 overflow-y-auto annotation-scroll">
-                                {orderedKeys.map((fieldKey) => (
-                                  <SortableFieldItem
-                                    key={fieldKey}
-                                    fieldKey={fieldKey}
-                                    label={EDITABLE_FIELD_LABELS[fieldKey] || fieldKey}
-                                    isActive={LOCKED_FIELD_KEYS.includes(fieldKey) || currentFields.includes(fieldKey)}
-                                    isLocked={LOCKED_FIELD_KEYS.includes(fieldKey)}
-                                    onToggle={() => toggleField(fieldKey)}
-                                  />
-                                ))}
+                                {orderedKeys.map((fieldKey) => {
+                                  const fieldActive = LOCKED_FIELD_KEYS.includes(fieldKey) || currentFields.includes(fieldKey);
+                                  const fieldLocked = LOCKED_FIELD_KEYS.includes(fieldKey);
+                                  const typeMandatory = mandatoryFields?.[type] ?? [];
+                                  const isMandatory = typeMandatory.includes(fieldKey);
+                                  return (
+                                    <SortableFieldItem
+                                      key={fieldKey}
+                                      fieldKey={fieldKey}
+                                      label={getFieldLabel(fieldKey, liveConfig.fieldDefinitions)}
+                                      isActive={fieldActive}
+                                      isLocked={fieldLocked}
+                                      isMandatory={isMandatory}
+                                      onToggle={() => toggleField(fieldKey)}
+                                      onToggleMandatory={onSetMandatoryField && onUnsetMandatoryField ? () => {
+                                        if (isMandatory) {
+                                          onUnsetMandatoryField(type, fieldKey);
+                                        } else {
+                                          onSetMandatoryField(type, fieldKey);
+                                        }
+                                      } : undefined}
+                                    />
+                                  );
+                                })}
                               </div>
                             </SortableContext>
                           </DndContext>
@@ -1139,90 +1116,276 @@ export function ConfigurationModal({
                   );
                 })}
               </div>
+
             </div>
           )}
 
-          {activeTab === 'columns' && (
-            <div className="space-y-4">
-              {/* Template selector bar */}
-              <div className="flex items-center gap-2 p-3 bg-[var(--bg-panel)]/30 border border-[var(--border-hi)]/40 rounded-lg">
-                <label className="text-xs text-[var(--text-mid)] font-medium shrink-0">Template:</label>
-                <div className="relative flex-1 max-w-[180px]">
-                  <select
-                    value={columnsTemplateId}
-                    onChange={(e) => {
-                      const tpl = savedTemplates.find((t) => t.id === e.target.value);
-                      if (tpl) {
-                        setColumnsTemplateId(tpl.id);
-                        setColumnsTemplateName(tpl.name);
-                      } else {
-                        setColumnsTemplateId('');
-                        setColumnsTemplateName('');
-                      }
-                    }}
-                    className="w-full bg-[var(--bg-panel)] border border-[var(--border-hi)] rounded-md px-2 py-1.5 text-xs text-[var(--text)] appearance-none pr-7 focus:border-[var(--amber)] focus:outline-none"
-                  >
-                    <option value="">New template…</option>
-                    {savedTemplates.filter((t) => t.category === 'columns').map((t) => (
-                      <option key={t.id} value={t.id}>{t.name}</option>
-                    ))}
-                  </select>
-                  <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-mid)] pointer-events-none" />
+          {activeTab === 'fields' && (() => {
+            const fieldDefs = liveConfig.fieldDefinitions ?? [];
+            const activeFields = fieldDefs.filter((f) => !f.archived);
+            const archivedFields = fieldDefs.filter((f) => f.archived);
+            const tierLabel = (t: 1 | 2 | 3) => t === 1 ? 'Reserved' : t === 2 ? 'Default' : 'Custom';
+            const tierColor = (t: 1 | 2 | 3) => t === 1 ? 'text-amber-400 bg-amber-500/10' : t === 2 ? 'text-sky-400 bg-sky-500/10' : 'text-emerald-400 bg-emerald-500/10';
+            const isFieldInUse = (key: string) => usedFieldKeys?.has(key) ?? false;
+
+            return (
+              <div className="space-y-4">
+                <p className="text-xs text-[var(--text-mid)]">
+                  Create custom fields, rename existing fields, or archive fields you no longer need.
+                  Reserved and in-use fields cannot be archived. Archived fields preserve existing cue data.
+                </p>
+
+                {/* Add new custom field */}
+                <div className="p-3 bg-[var(--bg-card)]/60 border border-[var(--border-hi)]/30 rounded-md space-y-2">
+                  <span className="text-[10px] uppercase tracking-wider text-[var(--text-dim)]">Create Custom Field</span>
+                  <div className="flex gap-2 flex-wrap">
+                    <input
+                      type="text"
+                      value={newFieldLabel}
+                      onChange={(e) => setNewFieldLabel(e.target.value)}
+                      placeholder="Field label..."
+                      className="flex-1 min-w-[120px] bg-[var(--bg-panel)] text-[var(--text)] rounded px-2.5 py-1.5 text-xs border border-[var(--border-hi)] focus:border-[var(--amber)] focus:ring-1 focus:ring-[#BF5700] outline-none placeholder-slate-500"
+                    />
+                    <div className="relative">
+                      <select
+                        value={newFieldInputType}
+                        onChange={(e) => {
+                          const val = e.target.value as 'text' | 'number' | 'checkbox';
+                          setNewFieldInputType(val);
+                          if (val === 'checkbox') setNewFieldSizeHint('small');
+                        }}
+                        className="bg-[var(--bg-panel)] border border-[var(--border-hi)] rounded px-2 py-1.5 text-xs text-[var(--text)] appearance-none pr-6 focus:border-[var(--amber)] focus:outline-none"
+                      >
+                        <option value="text">Text</option>
+                        <option value="number">Number</option>
+                        <option value="checkbox">Checkbox</option>
+                      </select>
+                      <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-[var(--text-mid)] pointer-events-none" />
+                    </div>
+                    {newFieldInputType === 'number' && (
+                      <div className="relative">
+                        <select
+                          value={newFieldPrecision}
+                          onChange={(e) => setNewFieldPrecision(e.target.value as 'integer' | 'decimal')}
+                          className="bg-[var(--bg-panel)] border border-[var(--border-hi)] rounded px-2 py-1.5 text-xs text-[var(--text)] appearance-none pr-6 focus:border-[var(--amber)] focus:outline-none"
+                        >
+                          <option value="integer">Integer</option>
+                          <option value="decimal">Decimal</option>
+                        </select>
+                        <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-[var(--text-mid)] pointer-events-none" />
+                      </div>
+                    )}
+                    {newFieldInputType !== 'checkbox' && (
+                      <div className="relative">
+                        <select
+                          value={newFieldSizeHint}
+                          onChange={(e) => setNewFieldSizeHint(e.target.value as 'small' | 'medium' | 'large')}
+                          className="bg-[var(--bg-panel)] border border-[var(--border-hi)] rounded px-2 py-1.5 text-xs text-[var(--text)] appearance-none pr-6 focus:border-[var(--amber)] focus:outline-none"
+                        >
+                          <option value="small">Small</option>
+                          <option value="medium">Medium</option>
+                          <option value="large">Large</option>
+                        </select>
+                        <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-[var(--text-mid)] pointer-events-none" />
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!newFieldLabel.trim()) return;
+                        onAddField({
+                          label: newFieldLabel.trim(),
+                          inputType: newFieldInputType,
+                          ...(newFieldInputType === 'number' ? { numberPrecision: newFieldPrecision } : {}),
+                          sizeHint: newFieldSizeHint,
+                        });
+                        setNewFieldLabel('');
+                        setNewFieldInputType('text');
+                        setNewFieldPrecision('integer');
+                        setNewFieldSizeHint('small');
+                      }}
+                      disabled={!newFieldLabel.trim()}
+                      className="flex items-center gap-1 px-3 py-1.5 text-xs bg-[var(--amber)] text-white rounded hover:bg-[var(--amber)]/80 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <Plus className="w-3 h-3" />
+                      Add
+                    </button>
+                  </div>
                 </div>
-                <input
-                  type="text"
-                  value={columnsTemplateName}
-                  onChange={(e) => setColumnsTemplateName(e.target.value)}
-                  placeholder="Template name"
-                  className="flex-1 max-w-[180px] bg-[var(--bg-panel)] border border-[var(--border-hi)] rounded-md px-2 py-1.5 text-xs text-[var(--text)] focus:border-[var(--amber)] focus:outline-none"
-                />
-                <button
-                  type="button"
-                  onClick={async () => {
-                    const name = columnsTemplateName.trim() || `Columns ${savedTemplates.filter((t) => t.category === 'columns').length + 1}`;
-                    const data: ColumnsTemplateData = {
-                      visibleColumns: visibleColumns.map((c) => ({ ...c })),
-                      cueTypeColumns: Object.fromEntries(
-                        Object.entries(cueTypeColumns).map(([k, v]) => [k, v.map((c) => ({ ...c }))])
-                      ),
-                    };
-                    const template: ConfigTemplate = {
-                      id: columnsTemplateId || crypto.randomUUID(),
-                      name,
-                      category: 'columns',
-                      data,
-                      createdAt: columnsTemplateId
-                        ? savedTemplates.find((t) => t.id === columnsTemplateId)?.createdAt ?? new Date().toISOString()
-                        : new Date().toISOString(),
-                      updatedAt: new Date().toISOString(),
-                    };
-                    await saveConfigTemplate(template);
-                    await refreshTemplates();
-                    setColumnsTemplateId(template.id);
-                    setColumnsTemplateName(template.name);
-                  }}
-                  className="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-[var(--amber)] text-white rounded-md hover:bg-[var(--amber)] transition-colors shrink-0"
-                >
-                  <Save className="w-3 h-3" />
-                  Save
-                </button>
-                {columnsTemplateId && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const tpl = savedTemplates.find((t) => t.id === columnsTemplateId);
-                      if (!tpl) return;
-                      if (confirm(`Apply template "${tpl.name}"?\n\nThis will replace your default column configuration and rebuild all type-specific overrides from the template.`)) {
-                        onApplyColumnsTemplate(tpl.data as ColumnsTemplateData);
-                      }
-                    }}
-                    className="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-emerald-600 text-white rounded-md hover:bg-emerald-500 transition-colors shrink-0"
-                  >
-                    Apply
-                  </button>
+
+                {/* Active fields list */}
+                <div className="space-y-1">
+                  <span className="text-[10px] uppercase tracking-wider text-[var(--text-dim)]">Active Fields ({activeFields.length})</span>
+                  <div className="space-y-1 max-h-72 overflow-y-auto annotation-scroll">
+                    {activeFields.map((fd) => (
+                      <div
+                        key={fd.key}
+                        className="flex items-center justify-between px-3 py-1.5 bg-[var(--bg-panel-a50)] rounded border border-[var(--border-hi-a50)]"
+                      >
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          {editingFieldKey === fd.key ? (
+                            <div className="flex items-center gap-1.5 flex-1">
+                              <input
+                                type="text"
+                                value={editingFieldLabel}
+                                onChange={(e) => setEditingFieldLabel(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    if (editingFieldLabel.trim()) {
+                                      onUpdateField(fd.key, { label: editingFieldLabel.trim(), sizeHint: editingFieldSizeHint });
+                                    }
+                                    setEditingFieldKey(null);
+                                  }
+                                  if (e.key === 'Escape') {
+                                    e.preventDefault();
+                                    setEditingFieldKey(null);
+                                  }
+                                }}
+                                autoFocus
+                                className="flex-1 bg-[var(--bg-hover)] text-[var(--text)] rounded px-2 py-0.5 text-xs border border-[var(--amber)] focus:ring-1 focus:ring-[#BF5700] outline-none"
+                              />
+                              <div className="relative">
+                                <select
+                                  value={editingFieldSizeHint}
+                                  onChange={(e) => setEditingFieldSizeHint(e.target.value as 'small' | 'medium' | 'large')}
+                                  className="bg-[var(--bg-panel)] border border-[var(--border-hi)] rounded px-1.5 py-0.5 text-[10px] text-[var(--text)] appearance-none pr-5 focus:border-[var(--amber)] focus:outline-none"
+                                >
+                                  <option value="small">S</option>
+                                  <option value="medium">M</option>
+                                  <option value="large">L</option>
+                                </select>
+                                <ChevronDown className="absolute right-1 top-1/2 -translate-y-1/2 w-2.5 h-2.5 text-[var(--text-mid)] pointer-events-none" />
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (editingFieldLabel.trim()) {
+                                    onUpdateField(fd.key, { label: editingFieldLabel.trim(), sizeHint: editingFieldSizeHint });
+                                  }
+                                  setEditingFieldKey(null);
+                                }}
+                                className="p-0.5 text-emerald-400 hover:text-emerald-300 rounded transition-colors"
+                                title="Save"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditingFieldKey(null)}
+                                className="p-0.5 text-[var(--text-dim)] hover:text-[var(--text-mid)] rounded transition-colors"
+                                title="Cancel"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ) : (
+                            <>
+                              <span className="text-xs text-[var(--text)] font-medium truncate">{fd.label}</span>
+                              <span className={`text-[9px] px-1.5 py-0.5 rounded inline-flex items-center gap-0.5 ${tierColor(fd.tier as 1 | 2 | 3)}`}>
+                                {fd.tier === 1 ? <Lock className="w-2.5 h-2.5" /> : fd.tier === 3 ? <UserCircle className="w-2.5 h-2.5" /> : null}
+                                {tierLabel(fd.tier as 1 | 2 | 3)}
+                              </span>
+                              {fd.tier !== 1 && isFieldInUse(fd.key) && (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded inline-flex items-center gap-0.5 text-violet-400 bg-violet-500/10">
+                                  <Lock className="w-2.5 h-2.5" />
+                                  In Use
+                                </span>
+                              )}
+                              {fd.inputType === 'number' && (
+                                <span className="text-[9px] text-[var(--text-dim)] bg-[var(--bg-hover)] px-1 py-0.5 rounded">
+                                  {fd.numberPrecision === 'decimal' ? '#.##' : '#'}
+                                </span>
+                              )}
+                              {fd.inputType === 'checkbox' && (
+                                <span className="text-[9px] text-[var(--text-dim)] bg-[var(--bg-hover)] px-1 py-0.5 rounded">☑</span>
+                              )}
+                              <span className="text-[9px] text-[var(--text-dim)]">
+                                {fd.sizeHint === 'large' ? 'L' : fd.sizeHint === 'medium' ? 'M' : 'S'}
+                              </span>
+                            </>
+                          )}
+                        </div>
+                        {editingFieldKey !== fd.key && (
+                          <div className="flex items-center gap-1 ml-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingFieldKey(fd.key);
+                                setEditingFieldLabel(fd.label);
+                                setEditingFieldSizeHint(fd.sizeHint);
+                              }}
+                              className="p-0.5 text-[var(--text-dim)] hover:text-[var(--text-mid)] hover:bg-[var(--bg-hover)] rounded transition-colors"
+                              title={`Edit ${fd.label}`}
+                            >
+                              <Pencil className="w-3 h-3" />
+                            </button>
+                            {fd.tier !== 1 && !isFieldInUse(fd.key) && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (confirm(`Archive "${fd.label}"?\n\nExisting cue data will be preserved. You can restore this field later.`)) {
+                                    onArchiveField(fd.key);
+                                  }
+                                }}
+                                className="p-0.5 text-[var(--text-dim)] hover:text-red-400 hover:bg-[var(--bg-hover)] rounded transition-colors"
+                                title={`Archive ${fd.label}`}
+                              >
+                                <Archive className="w-3 h-3" />
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Archived fields */}
+                {archivedFields.length > 0 && (
+                  <div className="space-y-1">
+                    <button
+                      type="button"
+                      onClick={() => setShowArchivedFields((v) => !v)}
+                      className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-[var(--text-dim)] hover:text-[var(--text-mid)]"
+                    >
+                      {showArchivedFields ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                      Archived ({archivedFields.length})
+                    </button>
+                    {showArchivedFields && (
+                      <div className="space-y-1">
+                        {archivedFields.map((fd) => (
+                          <div
+                            key={fd.key}
+                            className="flex items-center justify-between px-3 py-1.5 bg-[var(--bg-panel-a50)]/50 rounded border border-[var(--border-hi-a50)] opacity-60"
+                          >
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              <span className="text-xs text-[var(--text-mid)] line-through truncate">{fd.label}</span>
+                              <span className={`text-[9px] px-1.5 py-0.5 rounded ${tierColor(fd.tier as 1 | 2 | 3)}`}>
+                                {tierLabel(fd.tier as 1 | 2 | 3)}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => onRestoreField(fd.key)}
+                              className="flex items-center gap-1 px-2 py-0.5 text-[10px] text-emerald-400 hover:text-emerald-300 hover:bg-[var(--bg-hover)] rounded transition-colors"
+                              title={`Restore ${fd.label}`}
+                            >
+                              <RotateCcw className="w-3 h-3" />
+                              Restore
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
+            );
+          })()}
 
+          {activeTab === 'columns' && (
+            <div className="space-y-4">
               <p className="text-xs text-[var(--text-mid)]">
                 Choose which fields appear in the abridged cue list.
                 Drag to reorder. Toggle visibility with the checkbox.
@@ -1430,44 +1593,100 @@ export function ConfigurationModal({
           {activeTab === 'templates' && (
             <div className="space-y-5">
               <p className="text-xs text-[var(--text-mid)]">
-                Manage saved templates for Cue Types, Columns, and XLSX Export configurations.
-                You can rename, delete, export, and import templates here.
+                Save and load configuration templates that capture Cue Types, Fields, Columns, and View settings.
+                Templates can be exported as <code>.cuetation-template.json</code> files to share between installations.
               </p>
 
-              {/* Import / Export All bar */}
+              {/* Save current config as template */}
+              <div className="p-4 bg-[var(--bg-panel)]/30 border border-[var(--border-hi-a50)] rounded-lg space-y-3">
+                <h3 className="text-sm font-medium text-[var(--text)]">Save Current Configuration</h3>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={newTemplateName}
+                    onChange={(e) => setNewTemplateName(e.target.value)}
+                    placeholder="Template name"
+                    className="flex-1 bg-[var(--bg-panel)] border border-[var(--border-hi)] rounded-md px-3 py-2 text-sm text-[var(--text)] focus:border-[var(--amber)] focus:outline-none"
+                    onKeyDown={async (e) => {
+                      if (e.key === 'Enter') {
+                        const name = newTemplateName.trim();
+                        if (!name) return;
+                        const existing = savedTemplates.find((t) => t.name === name);
+                        if (existing && !confirm(`A template named "${name}" already exists. Overwrite it?`)) return;
+                        const template: ConfigTemplate = {
+                          id: existing?.id ?? crypto.randomUUID(),
+                          name,
+                          data: extractTemplateData(liveConfig),
+                          createdAt: existing?.createdAt ?? new Date().toISOString(),
+                          updatedAt: new Date().toISOString(),
+                        };
+                        await saveConfigTemplate(template);
+                        await refreshTemplates();
+                        setNewTemplateName('');
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    disabled={!newTemplateName.trim()}
+                    onClick={async () => {
+                      const name = newTemplateName.trim();
+                      if (!name) return;
+                      const existing = savedTemplates.find((t) => t.name === name);
+                      if (existing && !confirm(`A template named "${name}" already exists. Overwrite it?`)) return;
+                      const template: ConfigTemplate = {
+                        id: existing?.id ?? crypto.randomUUID(),
+                        name,
+                        data: extractTemplateData(liveConfig),
+                        createdAt: existing?.createdAt ?? new Date().toISOString(),
+                        updatedAt: new Date().toISOString(),
+                      };
+                      await saveConfigTemplate(template);
+                      await refreshTemplates();
+                      setNewTemplateName('');
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-2 text-sm bg-[var(--amber)] text-white rounded-md hover:brightness-110 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    Save
+                  </button>
+                </div>
+              </div>
+
+              {/* Import template */}
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await exportAllTemplatesToJSON();
-                  }}
-                  disabled={savedTemplates.length === 0}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-[var(--bg-panel)] text-[var(--text-mid)] rounded-md hover:bg-[var(--bg-hover)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  <FileDown className="w-3.5 h-3.5" />
-                  Export All Templates
-                </button>
                 <button
                   type="button"
                   onClick={() => templateImportRef.current?.click()}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-[var(--bg-panel)] text-[var(--text-mid)] rounded-md hover:bg-[var(--bg-hover)] transition-colors"
                 >
                   <FileUp className="w-3.5 h-3.5" />
-                  Import Templates
+                  Import Template
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (confirm('Reset configuration to Cuetation Standard factory defaults?\n\nThis replaces your current cue types, fields, columns, and view settings.')) {
+                      onApplyTemplate(FACTORY_DEFAULT_TEMPLATE.data);
+                    }
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-[var(--bg-panel)] text-[var(--text-mid)] rounded-md hover:bg-[var(--bg-hover)] transition-colors"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  Reset to Factory
                 </button>
                 <input
                   ref={templateImportRef}
                   type="file"
-                  accept=".json"
+                  accept=".json,.cuetation-template.json"
                   onChange={async (e) => {
                     const file = e.target.files?.[0];
                     if (!file) return;
                     try {
-                      const result = await importTemplatesFromJSON(file);
-                      refreshTemplates();
-                      alert(`Imported ${result.imported} template(s)${result.skipped ? `, skipped ${result.skipped}` : ''}.`);
-                    } catch {
-                      alert('Failed to import templates. Please check the JSON file.');
+                      await importTemplateFromJSON(file);
+                      await refreshTemplates();
+                    } catch (err) {
+                      alert(`Failed to import template: ${err instanceof Error ? err.message : 'Check the file format.'}`);
                     }
                     if (templateImportRef.current) templateImportRef.current.value = '';
                   }}
@@ -1475,136 +1694,144 @@ export function ConfigurationModal({
                 />
               </div>
 
-              {/* Template categories */}
-              {(['cueTypes', 'columns', 'xlsxExport'] as const).map((category) => {
-                const categoryLabels: Record<string, string> = {
-                  cueTypes: 'Cue Types',
-                  columns: 'Columns',
-                  xlsxExport: 'XLSX Export',
-                };
-                const categoryTemplates = savedTemplates.filter((t) => t.category === category);
+              {/* Saved templates list */}
+              <div className="p-4 bg-[var(--bg-panel)]/30 border border-[var(--border-hi-a50)] rounded-lg space-y-2">
+                <h3 className="text-sm font-medium text-[var(--text)]">Saved Templates</h3>
+                {savedTemplates.length === 0 ? (
+                  <p className="text-[11px] text-[var(--text-dim)] italic">No templates saved. Save your current configuration above to get started.</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {savedTemplates
+                      .slice()
+                      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+                      .map((tpl) => {
+                        const isEditingThis = editingTemplateId === tpl.id;
+                        const isDeletingThis = deletingTemplateId === tpl.id;
 
-                return (
-                  <div key={category} className="p-4 bg-[var(--bg-panel)]/30 border border-[var(--border-hi-a50)] rounded-lg space-y-2">
-                    <h3 className="text-sm font-medium text-[var(--text)]">{categoryLabels[category]} Templates</h3>
-                    {categoryTemplates.length === 0 ? (
-                      <p className="text-[11px] text-[var(--text-dim)] italic">No templates saved.</p>
-                    ) : (
-                      <div className="space-y-1.5">
-                        {categoryTemplates.map((tpl) => {
-                          const isEditingThis = editingTemplateId === tpl.id;
-                          const isDeletingThis = deletingTemplateId === tpl.id;
-
-                          return (
-                            <div
-                              key={tpl.id}
-                              className="flex items-center gap-2 px-3 py-2 bg-[var(--bg-card)]/50 border border-[var(--border-hi)]/40 rounded-md"
-                            >
-                              {isEditingThis ? (
-                                <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                                  <input
-                                    type="text"
-                                    value={editingTemplateName}
-                                    onChange={(e) => setEditingTemplateName(e.target.value)}
-                                    onKeyDown={async (e) => {
-                                      if (e.key === 'Enter') {
-                                        await renameConfigTemplate(tpl.id, editingTemplateName);
-                                        await refreshTemplates();
-                                        setEditingTemplateId(null);
-                                      }
-                                      if (e.key === 'Escape') setEditingTemplateId(null);
-                                    }}
-                                    autoFocus
-                                    className="flex-1 bg-[var(--bg-hover)] text-[var(--text)] rounded px-2 py-1 text-xs border border-[var(--amber)] focus:ring-1 focus:ring-[#BF5700] outline-none"
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={async () => {
+                        return (
+                          <div
+                            key={tpl.id}
+                            className="flex items-center gap-2 px-3 py-2 bg-[var(--bg-card)]/50 border border-[var(--border-hi)]/40 rounded-md"
+                          >
+                            {isEditingThis ? (
+                              <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                                <input
+                                  type="text"
+                                  value={editingTemplateName}
+                                  onChange={(e) => setEditingTemplateName(e.target.value)}
+                                  onKeyDown={async (e) => {
+                                    if (e.key === 'Enter') {
                                       await renameConfigTemplate(tpl.id, editingTemplateName);
                                       await refreshTemplates();
                                       setEditingTemplateId(null);
-                                    }}
-                                    className="p-1 text-emerald-400 hover:text-emerald-300 rounded"
-                                  >
-                                    <Check className="w-3.5 h-3.5" />
-                                  </button>
+                                    }
+                                    if (e.key === 'Escape') setEditingTemplateId(null);
+                                  }}
+                                  autoFocus
+                                  className="flex-1 bg-[var(--bg-hover)] text-[var(--text)] rounded px-2 py-1 text-xs border border-[var(--amber)] focus:ring-1 focus:ring-[#BF5700] outline-none"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    await renameConfigTemplate(tpl.id, editingTemplateName);
+                                    await refreshTemplates();
+                                    setEditingTemplateId(null);
+                                  }}
+                                  className="p-1 text-emerald-400 hover:text-emerald-300 rounded"
+                                >
+                                  <Check className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingTemplateId(null)}
+                                  className="p-1 text-[var(--text-dim)] hover:text-[var(--text-mid)] rounded"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ) : (
+                              <>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs text-[var(--text)] truncate">{tpl.name}</p>
+                                  <p className="text-[10px] text-[var(--text-dim)] truncate">
+                                    {tpl.data.cueTypes.length} types · Updated {relativeTimeAgo(tpl.updatedAt)}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  {/* Apply */}
                                   <button
                                     type="button"
-                                    onClick={() => setEditingTemplateId(null)}
-                                    className="p-1 text-[var(--text-dim)] hover:text-[var(--text-mid)] rounded"
+                                    onClick={() => {
+                                      if (confirm(`Apply template "${tpl.name}"?\n\nThis will replace your current cue types, fields, columns, and view settings.`)) {
+                                        onApplyTemplate(tpl.data);
+                                      }
+                                    }}
+                                    className="px-2 py-1 text-[10px] font-medium bg-emerald-600 text-white rounded hover:bg-emerald-500 transition-colors"
+                                    title="Apply template"
                                   >
-                                    <X className="w-3.5 h-3.5" />
+                                    Apply
                                   </button>
-                                </div>
-                              ) : (
-                                <>
-                                  <div className="flex-1 min-w-0">
-                                    <p className="text-xs text-[var(--text)] truncate">{tpl.name}</p>
-                                    <p className="text-[10px] text-[var(--text-dim)] truncate">
-                                      Updated {relativeTimeAgo(tpl.updatedAt)}
-                                    </p>
-                                  </div>
-                                  <div className="flex items-center gap-1 shrink-0">
-                                    <button
-                                      type="button"
-                                      onClick={() => { setEditingTemplateId(tpl.id); setEditingTemplateName(tpl.name); }}
-                                      className="p-1 text-[var(--text-dim)] hover:text-[var(--text-mid)] hover:bg-[var(--bg-hover)] rounded transition-colors"
-                                      title="Rename"
-                                    >
-                                      <Pencil className="w-3 h-3" />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => exportTemplateToJSON(tpl)}
-                                      className="p-1 text-[var(--text-dim)] hover:text-[var(--text-mid)] hover:bg-[var(--bg-hover)] rounded transition-colors"
-                                      title="Export as JSON"
-                                    >
-                                      <Download className="w-3 h-3" />
-                                    </button>
-                                    {isDeletingThis ? (
-                                      <div className="flex items-center gap-1 bg-red-900/30 border border-red-700/50 rounded px-2 py-1">
-                                        <AlertTriangle className="w-3 h-3 text-red-400" />
-                                        <span className="text-[10px] text-red-300">Delete?</span>
-                                        <button
-                                          type="button"
-                                          onClick={async () => {
-                                            await deleteConfigTemplate(tpl.id);
-                                            await refreshTemplates();
-                                            setDeletingTemplateId(null);
-                                          }}
-                                          className="text-[10px] text-red-400 hover:text-red-300 font-medium px-1"
-                                        >
-                                          Yes
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => setDeletingTemplateId(null)}
-                                          className="text-[10px] text-[var(--text-mid)] hover:text-[var(--text-mid)] px-1"
-                                        >
-                                          No
-                                        </button>
-                                      </div>
-                                    ) : (
+                                  {/* Rename */}
+                                  <button
+                                    type="button"
+                                    onClick={() => { setEditingTemplateId(tpl.id); setEditingTemplateName(tpl.name); }}
+                                    className="p-1 text-[var(--text-dim)] hover:text-[var(--text-mid)] hover:bg-[var(--bg-hover)] rounded transition-colors"
+                                    title="Rename"
+                                  >
+                                    <Pencil className="w-3 h-3" />
+                                  </button>
+                                  {/* Export */}
+                                  <button
+                                    type="button"
+                                    onClick={() => exportTemplateToJSON(tpl)}
+                                    className="p-1 text-[var(--text-dim)] hover:text-[var(--text-mid)] hover:bg-[var(--bg-hover)] rounded transition-colors"
+                                    title="Export as .cuetation-template.json"
+                                  >
+                                    <Download className="w-3 h-3" />
+                                  </button>
+                                  {/* Delete */}
+                                  {isDeletingThis ? (
+                                    <div className="flex items-center gap-1 bg-red-900/30 border border-red-700/50 rounded px-2 py-1">
+                                      <AlertTriangle className="w-3 h-3 text-red-400" />
+                                      <span className="text-[10px] text-red-300">Delete?</span>
                                       <button
                                         type="button"
-                                        onClick={() => setDeletingTemplateId(tpl.id)}
-                                        className="p-1 text-[var(--text-dim)] hover:text-red-400 hover:bg-[var(--bg-hover)] rounded transition-colors"
-                                        title="Delete template"
+                                        onClick={async () => {
+                                          await deleteConfigTemplate(tpl.id);
+                                          await refreshTemplates();
+                                          setDeletingTemplateId(null);
+                                        }}
+                                        className="text-[10px] text-red-400 hover:text-red-300 font-medium px-1"
                                       >
-                                        <Trash2 className="w-3 h-3" />
+                                        Yes
                                       </button>
-                                    )}
-                                  </div>
-                                </>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
+                                      <button
+                                        type="button"
+                                        onClick={() => setDeletingTemplateId(null)}
+                                        className="text-[10px] text-[var(--text-mid)] hover:text-[var(--text-mid)] px-1"
+                                      >
+                                        No
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => setDeletingTemplateId(tpl.id)}
+                                      className="p-1 text-[var(--text-dim)] hover:text-red-400 hover:bg-[var(--bg-hover)] rounded transition-colors"
+                                      title="Delete template"
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                    </button>
+                                  )}
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        );
+                      })}
                   </div>
-                );
-              })}
+                )}
+              </div>
             </div>
           )}
 
