@@ -377,7 +377,7 @@ export function ExportTemplateBuilder({
       data: {
         columns: columns.map((c) => ({ ...c })),
         colorOverrides: { ...colorOverrides },
-      },
+      } as unknown as ConfigTemplate['data'],
       createdAt: selectedTemplateId
         ? savedTemplates.find((t) => t.id === selectedTemplateId)?.createdAt ?? new Date().toISOString()
         : new Date().toISOString(),
