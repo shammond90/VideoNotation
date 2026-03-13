@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useProject } from './hooks/useProject';
+import { useToast } from './hooks/useToast';
 import { HomeScreen } from './components/HomeScreen';
 import { CreateProjectForm } from './components/CreateProjectForm';
 import { ImportConflictModal } from './components/ImportConflictModal';
 import { ProjectSwitcherModal } from './components/ProjectSwitcherModal';
+import { ToastContainer } from './components/ToastContainer';
 import { parseImportedProject, importProject, deleteProject as deleteProjectFromStorage } from './utils/projectStorage';
 import type { ImportedProjectData } from './utils/projectStorage';
 import type { TemplateData } from './types';
@@ -32,6 +34,8 @@ export function AppShell() {
     openProject,
     updateVideo,
   } = useProject();
+
+  const { toasts, addToast, removeToast } = useToast();
 
   const [appState, setAppState] = useState<AppShellState>({ screen: 'home' });
   const [savePromptOpen, setSavePromptOpen] = useState(false);
@@ -94,7 +98,9 @@ export function AppShell() {
         setAppState({ screen: 'cue-sheet' });
       } catch (err) {
         console.error('Failed to create project:', err);
-        alert('Failed to create project');
+        addToast('Could not create project. Please try again.', 'error', {
+          details: err instanceof Error ? err.message : String(err),
+        });
       }
     },
     [createNewProject]
@@ -111,7 +117,9 @@ export function AppShell() {
         setAppState({ screen: 'cue-sheet' });
       } catch (err) {
         console.error('Failed to open project:', err);
-        alert('Failed to open project');
+        addToast('Could not open this project. It may be corrupted.', 'error', {
+          details: err instanceof Error ? err.message : String(err),
+        });
       }
     },
     [openProject, projects]
@@ -170,9 +178,9 @@ export function AppShell() {
         }
       } catch (err) {
         console.error('Import failed:', err);
-        alert(
-          `Import failed: ${err instanceof Error ? err.message : 'Unknown error'}`
-        );
+        addToast('This doesn\u2019t look like a Cuetation project file.', 'error', {
+          details: err instanceof Error ? err.message : String(err),
+        });
       }
     },
     [projects, loadAllProjects, openProject]
@@ -194,7 +202,9 @@ export function AppShell() {
       setAppState({ screen: 'cue-sheet' });
     } catch (err) {
       console.error('Import overwrite failed:', err);
-      alert('Failed to import project');
+      addToast('Import failed while overwriting. Please try again.', 'error', {
+        details: err instanceof Error ? err.message : String(err),
+      });
       setImportConflict(null);
     }
   }, [importConflict, loadAllProjects, openProject]);
@@ -210,7 +220,9 @@ export function AppShell() {
         setAppState({ screen: 'cue-sheet' });
       } catch (err) {
         console.error('Import rename failed:', err);
-        alert('Failed to import project');
+        addToast('Import failed. Please try again.', 'error', {
+          details: err instanceof Error ? err.message : String(err),
+        });
         setImportConflict(null);
       }
     },
@@ -261,7 +273,9 @@ export function AppShell() {
         setUnsavedChanges(false);
       } catch (err) {
         console.error('Failed to switch project:', err);
-        alert('Failed to switch project');
+        addToast('Could not switch to this project.', 'error', {
+          details: err instanceof Error ? err.message : String(err),
+        });
       }
     },
     [openProject, projects]
@@ -294,6 +308,7 @@ export function AppShell() {
             onRename={handleImportConflictRename}
           />
         )}
+        <ToastContainer toasts={toasts} onRemove={removeToast} />
       </>
     );
   }
@@ -305,6 +320,7 @@ export function AppShell() {
           onCancel={handleCreateProjectCancel}
           onCreate={handleCreateProjectSubmit}
         />
+        <ToastContainer toasts={toasts} onRemove={removeToast} />
       </>
     );
   }
@@ -315,6 +331,8 @@ export function AppShell() {
         <App
           projectId={currentProject.id}
           projectName={currentProject.name}
+          videoFilename={currentProject.video_filename}
+          videoFilesize={currentProject.video_filesize}
           onGoHome={handleGoHome}
           onSwitchProject={handleOpenSwitcher}
           onVideoLoaded={handleVideoLoaded}

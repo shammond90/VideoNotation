@@ -13,10 +13,13 @@ import { useAnnotations } from './hooks/useAnnotations';
 import { SCENE_BAND_COLORS } from './hooks/useCueGrouping';
 import { useConfiguration } from './hooks/useConfiguration';
 import { useToast } from './hooks/useToast';
+import { useVideoHandle } from './hooks/useVideoHandle';
 import { exportAnnotationsToCSV, importAnnotationsFromCSV } from './utils/csv';
 import { formatTime } from './utils/formatTime';
 import { saveAnnotations, loadAnnotations, backupAnnotations, popRecoveryEvents, migrateNoVideoAnnotations, hasAnnotationData } from './utils/storage';
 import { updateProjectConfig, exportProjectToJSON, loadProjects } from './utils/projectStorage';
+import { supportsFileSystemAccess, pickVideoWithHandle } from './utils/videoHandleStorage';
+import { VideoReconnectBanner } from './components/VideoReconnectBanner';
 import type { CueFields } from './types';
 import { RESERVED_CUE_TYPES, LOOP_CUE_TYPE } from './types';
 import { Film, Settings, X as XIcon } from 'lucide-react';
@@ -25,9 +28,12 @@ interface AppProps {
   projectId?: string;
   projectName?: string;
   initialVideoFile?: File;
+  videoFilename?: string | null;
+  videoFilesize?: number | null;
   onGoHome?: () => void;
   onSwitchProject?: () => void;
   onVideoLoaded?: (file: File, duration: number) => void;
+  onVideoHandleStored?: (handle: FileSystemFileHandle) => void;
   onUnsavedChangesChange?: (hasChanges: boolean) => void;
   onSave?: () => void;
 }
@@ -36,9 +42,12 @@ export default function App({
   projectId,
   projectName,
   initialVideoFile,
+  videoFilename: projectVideoFilename = null,
+  videoFilesize: projectVideoFilesize = null,
   onGoHome,
   onSwitchProject,
   onVideoLoaded,
+  onVideoHandleStored,
   onUnsavedChangesChange,
   onSave,
 }: AppProps = {}) {
@@ -77,6 +86,20 @@ export default function App({
   const cuesDirtyRef = useRef(false);
   const isConfigOpenRef = useRef(false);
   const loopRegionRef = useRef<import('./hooks/useVideoPlayer').LoopRegion | null>(null);
+
+  // ── Persistent video handle (File System Access API) ──
+  const {
+    state: handleState,
+    requestAccess: requestVideoAccess,
+    pickAndStoreVideo,
+    storeHandle: storeVideoHandle,
+    clearHandle: clearVideoHandle,
+  } = useVideoHandle({
+    projectId,
+    videoFilename: projectVideoFilename,
+    videoFilesize: projectVideoFilesize,
+    autoRequest: true, // project was opened via user click (gesture)
+  });
 
   // ── Splitter drag effect ──
   useEffect(() => {
@@ -364,9 +387,9 @@ export default function App({
     updateActiveAnnotation(playerState.currentTime);
   }, [playerState.currentTime, updateActiveAnnotation]);
 
-  // Handle file selection
+  // Handle file selection (with optional handle from File System Access API)
   const handleFileSelected = useCallback(
-    (file: File) => {
+    (file: File, handle?: FileSystemFileHandle) => {
       // Revoke previous video URL
       if (previousUrlRef.current) {
         URL.revokeObjectURL(previousUrlRef.current);
@@ -383,6 +406,12 @@ export default function App({
       }
       setIsAnnotating(false);
       setIsNoVideoMode(false);
+
+      // Store the handle if provided (FSAA — persistent access for next session)
+      if (handle && projectId) {
+        storeVideoHandle(handle);
+        onVideoHandleStored?.(handle);
+      }
 
       // Notify parent (AppShell) so it can update the project's video reference
       if (onVideoLoaded) {
@@ -406,8 +435,22 @@ export default function App({
         }
       })();
     },
-    [addToast, onVideoLoaded, projectId],
+    [addToast, onVideoLoaded, onVideoHandleStored, projectId, storeVideoHandle],
   );
+
+  // Auto-load video when handle resolves to 'granted' (returning user with stored handle)
+  const handleAutoLoadedRef = useRef(false);
+  useEffect(() => {
+    if (handleState.status === 'granted' && handleState.file && !videoSrc && !isNoVideoMode && !handleAutoLoadedRef.current) {
+      handleAutoLoadedRef.current = true;
+      handleFileSelected(handleState.file);
+      addToast('Video reconnected from previous session', 'success', 3000);
+    }
+    // Reset the flag when project changes
+    if (handleState.status === 'loading' || handleState.status === 'none') {
+      handleAutoLoadedRef.current = false;
+    }
+  }, [handleState.status, handleState.file, videoSrc, isNoVideoMode, handleFileSelected, addToast]);
 
   // Handle continue without video
   const handleContinueWithoutVideo = useCallback(() => {
@@ -437,16 +480,24 @@ export default function App({
     saveAnnotations(currentFileName, currentFileSize, annotations);
   }, [annotationScope, annotations]);
 
-  // Open a file picker for video selection
-  const openVideoPicker = useCallback((onPicked: (file: File) => void) => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'video/*';
-    input.onchange = () => {
-      const file = input.files?.[0];
-      if (file) onPicked(file);
-    };
-    input.click();
+  // Open a file picker for video selection (uses FSAA when available for persistent handle)
+  const openVideoPicker = useCallback((onPicked: (file: File, handle?: FileSystemFileHandle) => void) => {
+    if (supportsFileSystemAccess) {
+      pickVideoWithHandle().then((result) => {
+        if (result) {
+          onPicked(result.file, result.handle);
+        }
+      });
+    } else {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'video/*';
+      input.onchange = () => {
+        const file = input.files?.[0];
+        if (file) onPicked(file);
+      };
+      input.click();
+    }
   }, []);
 
   // Toggle play/pause (Space)
@@ -867,12 +918,49 @@ export default function App({
 
       {/* Main content */}
       {!videoSrc && !isNoVideoMode ? (
-        <main className="flex-1 flex items-center justify-center p-8" style={{ background: 'var(--bg)' }}>
-          <VideoDropZone
-            onFileSelected={handleFileSelected}
-            onContinueWithoutVideo={handleContinueWithoutVideo}
-          />
-        </main>
+        // Show reconnect banner when there's a stored handle needing attention
+        handleState.isSupported && handleState.status !== 'none' && handleState.status !== 'granted' ? (
+          <main className="flex-1 flex flex-col lg:flex-row gap-0 min-h-0 overflow-hidden" style={{ background: 'var(--bg)' }}>
+            <div className="flex flex-col min-w-0 min-h-0 w-full" style={{ flex: '1 1 0%', background: '#0a0a0c' }}>
+              <VideoReconnectBanner
+                bannerState={handleState.status === 'loading' ? 'loading' : handleState.status as 'prompt' | 'denied' | 'broken'}
+                videoFilename={handleState.videoFilename}
+                onRequestAccess={async () => {
+                  const file = await requestVideoAccess();
+                  if (file) {
+                    handleFileSelected(file);
+                    addToast('Video reconnected', 'success', 3000);
+                  }
+                }}
+                onRelinkVideo={async () => {
+                  const result = await pickAndStoreVideo();
+                  if (result) {
+                    handleFileSelected(result.file, result.handle);
+                    addToast('Video relinked', 'success', 3000);
+                  }
+                }}
+                onLoadDifferentVideo={async () => {
+                  await clearVideoHandle();
+                  const result = supportsFileSystemAccess
+                    ? await pickAndStoreVideo()
+                    : null;
+                  if (result) {
+                    handleFileSelected(result.file, result.handle);
+                  }
+                  // If FSAA not available or cancelled, will show VideoDropZone
+                }}
+                onContinueWithoutVideo={handleContinueWithoutVideo}
+              />
+            </div>
+          </main>
+        ) : (
+          <main className="flex-1 flex items-center justify-center p-8" style={{ background: 'var(--bg)' }}>
+            <VideoDropZone
+              onFileSelected={handleFileSelected}
+              onContinueWithoutVideo={handleContinueWithoutVideo}
+            />
+          </main>
+        )
       ) : (
         <main ref={mainRef} className="flex-1 flex flex-col lg:flex-row gap-0 min-h-0 overflow-hidden" style={{ background: 'var(--bg)' }}>
           {/* Left: Video + cue form */}
@@ -1181,10 +1269,10 @@ export default function App({
               <button
                 type="button"
                 onClick={() => {
-                  openVideoPicker((file) => {
+                  openVideoPicker((file, handle) => {
                     saveCurrentVideoAnnotations();
                     saveAnnotations(file.name, file.size, annotations);
-                    handleFileSelected(file);
+                    handleFileSelected(file, handle);
                     setIsChangeVideoOpen(false);
                     addToast('Switched video and copied current cues', 'success');
                   });
@@ -1199,9 +1287,9 @@ export default function App({
               <button
                 type="button"
                 onClick={() => {
-                  openVideoPicker((file) => {
+                  openVideoPicker((file, handle) => {
                     saveCurrentVideoAnnotations();
-                    handleFileSelected(file);
+                    handleFileSelected(file, handle);
                     setIsChangeVideoOpen(false);
                     addToast('Switched video \u2014 loaded its own cues', 'info');
                   });
@@ -1278,6 +1366,7 @@ export default function App({
         mandatoryFields={config.mandatoryFields}
         onSetMandatoryField={setMandatoryField}
         onUnsetMandatoryField={unsetMandatoryField}
+        addToast={addToast}
       />
 
       {/* Export Dialog — CSV vs XLSX chooser */}

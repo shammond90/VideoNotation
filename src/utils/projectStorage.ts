@@ -2,6 +2,7 @@ import { openDB } from 'idb';
 import type { Project, AppConfig, ColumnConfig, Annotation } from '../types/index';
 import { DEFAULT_CONFIG, DEFAULT_VISIBLE_COLUMNS } from '../types/index';
 import { loadAnnotations, saveAnnotations, saveConfig } from './storage';
+import { deleteVideoHandle } from './videoHandleStorage';
 
 const DB_NAME = 'CuetationDB';
 const PROJECTS_STORE = 'projects';
@@ -99,11 +100,13 @@ export async function saveProject(project: Project): Promise<void> {
 }
 
 /**
- * Delete a project by ID.
+ * Delete a project by ID. Also cleans up the stored video handle.
  */
 export async function deleteProject(projectId: string): Promise<void> {
   const db = await getDB();
   await db.delete(PROJECTS_STORE, projectId);
+  // Clean up any stored video handle
+  await deleteVideoHandle(projectId).catch(() => {});
 }
 
 /**

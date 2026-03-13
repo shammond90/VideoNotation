@@ -1,8 +1,9 @@
 import { useCallback, useRef, useState } from 'react';
 import { Upload } from 'lucide-react';
+import { supportsFileSystemAccess, pickVideoWithHandle } from '../utils/videoHandleStorage';
 
 interface VideoDropZoneProps {
-  onFileSelected: (file: File) => void;
+  onFileSelected: (file: File, handle?: FileSystemFileHandle) => void;
   onContinueWithoutVideo?: () => void;
 }
 
@@ -42,13 +43,25 @@ export function VideoDropZone({ onFileSelected, onContinueWithoutVideo }: VideoD
     [onFileSelected],
   );
 
+  // Use File System Access API when available (Chromium) for persistent handle
+  const handleBrowseClick = useCallback(async () => {
+    if (supportsFileSystemAccess) {
+      const result = await pickVideoWithHandle();
+      if (result) {
+        onFileSelected(result.file, result.handle);
+      }
+    } else {
+      fileInputRef.current?.click();
+    }
+  }, [onFileSelected]);
+
   return (
     <div className="flex items-center justify-center w-full h-full min-h-[60vh]">
       <div
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        onClick={() => fileInputRef.current?.click()}
+        onClick={handleBrowseClick}
         className="flex flex-col items-center justify-center w-full max-w-2xl p-16 rounded-2xl border-2 border-dashed cursor-pointer transition-all duration-200 select-none"
         style={{
           borderColor: isDragging ? 'var(--amber)' : 'var(--border-hi)',

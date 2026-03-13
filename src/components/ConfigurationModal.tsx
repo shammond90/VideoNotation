@@ -1,6 +1,6 @@
 import React, { useState, useRef, useMemo, useCallback, useEffect } from 'react';
 import { X, Plus, Trash2, GripVertical, Download, Upload, Lock, Pencil, Check, AlertTriangle, ChevronDown, ChevronRight, Save, FileDown, FileUp, Info, Shield, UserCircle, RotateCcw, Archive } from 'lucide-react';
-import type { ColumnConfig, Project, AppConfig, FieldDefinition, ConfigTemplate, TemplateData } from '../types';
+import type { ColumnConfig, Project, AppConfig, FieldDefinition, ConfigTemplate, TemplateData, Toast } from '../types';
 import { RESERVED_CUE_TYPES, LOOP_CUE_TYPE, EDITABLE_FIELD_KEYS, AUTOFOLLOW_COLUMN_KEYS, LINK_COLUMN_KEYS, getDefaultFieldsForType, getFieldLabel, extractTemplateData, FACTORY_DEFAULT_TEMPLATE } from '../types';
 import { loadConfigTemplates, saveConfigTemplate, deleteConfigTemplate, renameConfigTemplate, exportTemplateToJSON, importTemplateFromJSON } from '../utils/configTemplates';
 import { loadProjects, deleteProject as deleteProjectFromStorage, updateProjectMetadata, exportProjectToJSON } from '../utils/projectStorage';
@@ -19,6 +19,8 @@ import { exportAnnotationsToCSV } from '../utils/csv';
 import InfoModal from './InfoModal';
 import { featureNotes } from '../content/featureNotes';
 import { userGuide } from '../content/userGuide';
+import { ConfirmDialog } from './ConfirmDialog';
+import { useConfirm } from '../hooks/useConfirm';
 import {
   DndContext,
   closestCenter,
@@ -111,6 +113,8 @@ interface ConfigurationModalProps {
   mandatoryFields?: Record<string, string[]>;
   onSetMandatoryField?: (cueType: string, fieldKey: string) => void;
   onUnsetMandatoryField?: (cueType: string, fieldKey: string) => void;
+  /** Toast notification handler — passed from parent so toasts use the shared stack. */
+  addToast?: (message: string, type: Toast['type'], opts?: number | { duration?: number; details?: string }) => string;
 }
 
 // ── Sortable column item ──
@@ -551,7 +555,9 @@ export function ConfigurationModal({
   mandatoryFields,
   onSetMandatoryField,
   onUnsetMandatoryField,
+  addToast,
 }: ConfigurationModalProps) {
+  const { confirmState, showConfirm } = useConfirm();
   const [newTypeName, setNewTypeName] = useState('');
   const [activeTab, setActiveTab] = useState<'types' | 'fields' | 'columns' | 'view' | 'templates' | 'savefiles' | 'data' | 'projects' | 'info'>('types');
   const [showFeatureNotes, setShowFeatureNotes] = useState(false);
@@ -1323,10 +1329,15 @@ export function ConfigurationModal({
                             {fd.tier !== 1 && !isFieldInUse(fd.key) && (
                               <button
                                 type="button"
-                                onClick={() => {
-                                  if (confirm(`Archive "${fd.label}"?\n\nExisting cue data will be preserved. You can restore this field later.`)) {
-                                    onArchiveField(fd.key);
-                                  }
+                                onClick={async () => {
+                                  const ok = await showConfirm({
+                                    title: 'Archive Field',
+                                    message: `Archive "${fd.label}"? Existing cue data will be preserved and you can restore this field later.`,
+                                    confirmLabel: 'Archive',
+                                    variant: 'warning',
+                                    icon: 'archive',
+                                  });
+                                  if (ok) onArchiveField(fd.key);
                                 }}
                                 className="p-0.5 text-[var(--text-dim)] hover:text-red-400 hover:bg-[var(--bg-hover)] rounded transition-colors"
                                 title={`Archive ${fd.label}`}
@@ -1612,7 +1623,15 @@ export function ConfigurationModal({
                         const name = newTemplateName.trim();
                         if (!name) return;
                         const existing = savedTemplates.find((t) => t.name === name);
-                        if (existing && !confirm(`A template named "${name}" already exists. Overwrite it?`)) return;
+                        if (existing) {
+                          const ok = await showConfirm({
+                            title: 'Overwrite Template',
+                            message: `A template named "${name}" already exists. Replace it with your current configuration?`,
+                            confirmLabel: 'Overwrite',
+                            variant: 'warning',
+                          });
+                          if (!ok) return;
+                        }
                         const template: ConfigTemplate = {
                           id: existing?.id ?? crypto.randomUUID(),
                           name,
@@ -1633,7 +1652,15 @@ export function ConfigurationModal({
                       const name = newTemplateName.trim();
                       if (!name) return;
                       const existing = savedTemplates.find((t) => t.name === name);
-                      if (existing && !confirm(`A template named "${name}" already exists. Overwrite it?`)) return;
+                      if (existing) {
+                        const ok = await showConfirm({
+                          title: 'Overwrite Template',
+                          message: `A template named "${name}" already exists. Replace it with your current configuration?`,
+                          confirmLabel: 'Overwrite',
+                          variant: 'warning',
+                        });
+                        if (!ok) return;
+                      }
                       const template: ConfigTemplate = {
                         id: existing?.id ?? crypto.randomUUID(),
                         name,
@@ -1665,10 +1692,15 @@ export function ConfigurationModal({
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    if (confirm('Reset configuration to Cuetation Standard factory defaults?\n\nThis replaces your current cue types, fields, columns, and view settings.')) {
-                      onApplyTemplate(FACTORY_DEFAULT_TEMPLATE.data);
-                    }
+                  onClick={async () => {
+                    const ok = await showConfirm({
+                      title: 'Reset to Factory Defaults',
+                      message: 'This will replace your current cue types, fields, columns, and view settings with the Cuetation Standard defaults.',
+                      confirmLabel: 'Reset',
+                      variant: 'warning',
+                      icon: 'reset',
+                    });
+                    if (ok) onApplyTemplate(FACTORY_DEFAULT_TEMPLATE.data);
                   }}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-[var(--bg-panel)] text-[var(--text-mid)] rounded-md hover:bg-[var(--bg-hover)] transition-colors"
                 >
@@ -1685,8 +1717,11 @@ export function ConfigurationModal({
                     try {
                       await importTemplateFromJSON(file);
                       await refreshTemplates();
+                      addToast?.('Template imported', 'success');
                     } catch (err) {
-                      alert(`Failed to import template: ${err instanceof Error ? err.message : 'Check the file format.'}`);
+                      addToast?.('This doesn\u2019t look like a valid template file.', 'error', {
+                        details: err instanceof Error ? err.message : 'Check the file format.',
+                      });
                     }
                     if (templateImportRef.current) templateImportRef.current.value = '';
                   }}
@@ -1761,10 +1796,14 @@ export function ConfigurationModal({
                                   {/* Apply */}
                                   <button
                                     type="button"
-                                    onClick={() => {
-                                      if (confirm(`Apply template "${tpl.name}"?\n\nThis will replace your current cue types, fields, columns, and view settings.`)) {
-                                        onApplyTemplate(tpl.data);
-                                      }
+                                    onClick={async () => {
+                                      const ok = await showConfirm({
+                                        title: 'Apply Template',
+                                        message: `Apply "${tpl.name}"? This will replace your current cue types, fields, columns, and view settings.`,
+                                        confirmLabel: 'Apply',
+                                        variant: 'warning',
+                                      });
+                                      if (ok) onApplyTemplate(tpl.data);
                                     }}
                                     className="px-2 py-1 text-[10px] font-medium bg-emerald-600 text-white rounded hover:bg-emerald-500 transition-colors"
                                     title="Apply template"
@@ -1956,11 +1995,13 @@ export function ConfigurationModal({
                                   <button
                                     type="button"
                                     onClick={async () => {
-                                      if (
-                                        confirm(
-                                          `Restore cues from backup at ${new Date(snapshot.savedAt).toLocaleString()}?\n\nThis will replace the saved cues for "${selectedDisplayName}".`,
-                                        )
-                                      ) {
+                                      const ok = await showConfirm({
+                                        title: 'Restore Backup',
+                                        message: `Restore cues from the backup at ${new Date(snapshot.savedAt).toLocaleString()}? This will replace the saved cues for "${selectedDisplayName}".`,
+                                        confirmLabel: 'Restore',
+                                        variant: 'warning',
+                                      });
+                                      if (ok) {
                                         if (await restoreBackup(effectiveSelectedKey, snapshot.slot)) {
                                           // If restoring the currently loaded video, reload it in the app
                                           if (
@@ -1987,11 +2028,14 @@ export function ConfigurationModal({
                         <button
                           type="button"
                           onClick={async () => {
-                            if (
-                              confirm(
-                                `⚠️ Delete all backups for "${selectedDisplayName}"?\n\nThis will permanently remove all backup snapshots for this video file. The video will no longer appear in this dropdown until new cues are created for it.\n\nThis cannot be undone.`,
-                              )
-                            ) {
+                            const ok = await showConfirm({
+                              title: 'Delete All Backups',
+                              message: `Permanently delete every backup snapshot for "${selectedDisplayName}"? The video will no longer appear in this list until new cues are created for it.`,
+                              confirmLabel: 'Delete All',
+                              variant: 'danger',
+                              icon: 'trash',
+                            });
+                            if (ok) {
                               await deleteVideoBackups(selectedVideoInfo.fileName, selectedVideoInfo.fileSize);
                               setSelectedVideoKey('');
                               setRecoveryTick((prev) => prev + 1);
@@ -2035,11 +2079,13 @@ export function ConfigurationModal({
                         <button
                           type="button"
                           onClick={async () => {
-                            if (
-                              confirm(
-                                `Restore configuration from backup at ${new Date(snapshot.savedAt).toLocaleString()}?`,
-                              )
-                            ) {
+                            const ok = await showConfirm({
+                              title: 'Restore Configuration',
+                              message: `Restore configuration from the backup at ${new Date(snapshot.savedAt).toLocaleString()}?`,
+                              confirmLabel: 'Restore',
+                              variant: 'warning',
+                            });
+                            if (ok) {
                               const key = getConfigStorageKey();
                               if (await restoreBackup(key, snapshot.slot)) {
                                 onRecoverConfig();
@@ -2070,14 +2116,15 @@ export function ConfigurationModal({
                   <div className="p-4 bg-red-900/20 border border-red-800/40 rounded-lg">
                     <button
                       type="button"
-                      onClick={() => {
-                        if (
-                          confirm(
-                            `Clear all cues for "${currentVideoName}"?\n\nThis will remove all annotations for this video only. Your configuration will be preserved.`,
-                          )
-                        ) {
-                          onClearCurrentVideoCues(currentVideoName, currentVideoSize);
-                        }
+                      onClick={async () => {
+                        const ok = await showConfirm({
+                          title: 'Clear Video Cues',
+                          message: `Remove all cues for "${currentVideoName}"? Your configuration will be preserved.`,
+                          confirmLabel: 'Clear Cues',
+                          variant: 'danger',
+                          icon: 'trash',
+                        });
+                        if (ok) onClearCurrentVideoCues(currentVideoName, currentVideoSize);
                       }}
                       className="w-full flex items-center gap-2 px-4 py-3 text-sm text-red-400 hover:text-red-300 hover:bg-red-900/30 rounded-md border border-red-800/50 transition-colors"
                     >
@@ -2093,14 +2140,15 @@ export function ConfigurationModal({
                 <div className="p-4 bg-red-900/20 border border-red-800/40 rounded-lg">
                   <button
                     type="button"
-                    onClick={() => {
-                      if (
-                        confirm(
-                          'Clear all cues from all videos?\n\nThis will remove all annotations but keep your configuration intact.',
-                        )
-                      ) {
-                        onClearAllCues();
-                      }
+                    onClick={async () => {
+                      const ok = await showConfirm({
+                        title: 'Clear All Cues',
+                        message: 'Remove every cue from every video? Your configuration will be preserved.',
+                        confirmLabel: 'Clear All',
+                        variant: 'danger',
+                        icon: 'trash',
+                      });
+                      if (ok) onClearAllCues();
                     }}
                     className="w-full flex items-center gap-2 px-4 py-3 text-sm text-red-400 hover:text-red-300 hover:bg-red-900/30 rounded-md border border-red-800/50 transition-colors"
                   >
@@ -2115,12 +2163,15 @@ export function ConfigurationModal({
                 <div className="p-4 bg-red-950/40 border border-red-800/60 rounded-lg">
                   <button
                     type="button"
-                    onClick={() => {
-                      if (
-                        confirm(
-                          'Factory reset all data?\n\nThis will delete all cues AND reset your configuration to defaults. This action is permanent.',
-                        )
-                      ) {
+                    onClick={async () => {
+                      const ok = await showConfirm({
+                        title: 'Factory Reset',
+                        message: 'Delete all cues and reset your configuration to defaults? This cannot be undone.',
+                        confirmLabel: 'Factory Reset',
+                        variant: 'danger',
+                        icon: 'reset',
+                      });
+                      if (ok) {
                         onClearAllData();
                         onClose();
                       }
@@ -2210,6 +2261,7 @@ export function ConfigurationModal({
           </button>
         </div>
       </div>
+      <ConfirmDialog {...confirmState} />
     </div>
   );
 }

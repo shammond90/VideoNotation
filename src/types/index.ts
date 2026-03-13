@@ -260,7 +260,9 @@ export interface VideoMeta {
 export interface Toast {
   id: string;
   message: string;
-  type: 'success' | 'error' | 'info';
+  type: 'success' | 'error' | 'info' | 'warning';
+  /** Optional technical details shown in a collapsible section (errors only). */
+  details?: string;
 }
 
 // ── Configuration types ──
