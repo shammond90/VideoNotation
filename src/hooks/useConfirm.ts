@@ -9,6 +9,8 @@ export interface ConfirmOptions {
   cancelLabel?: string;
   variant?: ConfirmVariant;
   icon?: 'trash' | 'reset' | 'archive' | 'alert' | 'warning';
+  /** If set, the user must type this exact string before the confirm button enables. */
+  requireText?: string;
 }
 
 export interface ConfirmState {
@@ -20,6 +22,7 @@ export interface ConfirmState {
   cancelLabel: string;
   variant: ConfirmVariant;
   icon?: 'trash' | 'reset' | 'archive' | 'alert' | 'warning';
+  requireText?: string;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -60,6 +63,7 @@ export function useConfirm() {
         cancelLabel: opts.cancelLabel ?? 'Cancel',
         variant: opts.variant ?? 'danger',
         icon: opts.icon,
+        requireText: opts.requireText,
         onConfirm: () => {
           setState((s) => ({ ...s, isOpen: false }));
           resolveRef.current?.(true);

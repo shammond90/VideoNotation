@@ -35,6 +35,7 @@ interface AppProps {
   onVideoLoaded?: (file: File, duration: number) => void;
   onVideoHandleStored?: (handle: FileSystemFileHandle) => void;
   onUnsavedChangesChange?: (hasChanges: boolean) => void;
+  onDeleteProject?: () => void;
   onSave?: () => void;
 }
 
@@ -49,6 +50,7 @@ export default function App({
   onVideoLoaded,
   onVideoHandleStored,
   onUnsavedChangesChange,
+  onDeleteProject,
   onSave,
 }: AppProps = {}) {
   const [videoFile, setVideoFile] = useState<File | null>(initialVideoFile || null);
@@ -1357,6 +1359,10 @@ export default function App({
         onClearAllData={handleClearAllData}
         onClearCurrentVideoCues={handleClearCurrentVideoCues}
         onClearAllCues={handleClearAllCues}
+        onDeleteProject={() => {
+          onDeleteProject?.();
+          setIsConfigOpen(false);
+        }}
         onApplyTemplate={applyTemplate}
         onAddField={addFieldDefinition}
         onUpdateField={updateFieldDefinition}
@@ -1367,6 +1373,8 @@ export default function App({
         onSetMandatoryField={setMandatoryField}
         onUnsetMandatoryField={unsetMandatoryField}
         addToast={addToast}
+        projectName={projectName}
+        annotationCount={annotations.length}
       />
 
       {/* Export Dialog — CSV vs XLSX chooser */}

@@ -1,8 +1,8 @@
 import React, { useState, useRef, useMemo, useCallback, useEffect } from 'react';
-import { X, Plus, Trash2, GripVertical, Download, Upload, Lock, Pencil, Check, AlertTriangle, ChevronDown, ChevronRight, Save, FileUp, Info, UserCircle, RotateCcw, Archive } from 'lucide-react';
+import { X, Plus, Trash2, GripVertical, Download, Upload, Lock, Pencil, Check, AlertTriangle, ChevronDown, ChevronRight, Save, FileUp, Info, UserCircle, RotateCcw, Archive, Star } from 'lucide-react';
 import type { ColumnConfig, Project, AppConfig, FieldDefinition, ConfigTemplate, TemplateData, Toast } from '../types';
 import { RESERVED_CUE_TYPES, LOOP_CUE_TYPE, EDITABLE_FIELD_KEYS, AUTOFOLLOW_COLUMN_KEYS, LINK_COLUMN_KEYS, getDefaultFieldsForType, getFieldLabel, extractTemplateData, FACTORY_DEFAULT_TEMPLATE } from '../types';
-import { loadConfigTemplates, saveConfigTemplate, deleteConfigTemplate, renameConfigTemplate, exportTemplateToJSON, importTemplateFromJSON } from '../utils/configTemplates';
+import { loadConfigTemplates, saveConfigTemplate, deleteConfigTemplate, renameConfigTemplate, exportTemplateToJSON, importTemplateFromJSON, getDefaultTemplate, setDefaultTemplate } from '../utils/configTemplates';
 import { loadProjects, deleteProject as deleteProjectFromStorage, updateProjectMetadata, exportProjectToJSON } from '../utils/projectStorage';
 import {
   listBackups,
@@ -101,6 +101,7 @@ interface ConfigurationModalProps {
   onClearAllData: () => void;
   onClearCurrentVideoCues: (fileName: string, fileSize: number) => void;
   onClearAllCues: () => void;
+  onDeleteProject: () => void;
   onApplyTemplate: (data: TemplateData) => void;
   // Field definition CRUD
   onAddField: (def: Omit<FieldDefinition, 'key' | 'tier' | 'archived'>) => string | null;
@@ -115,6 +116,10 @@ interface ConfigurationModalProps {
   onUnsetMandatoryField?: (cueType: string, fieldKey: string) => void;
   /** Toast notification handler — passed from parent so toasts use the shared stack. */
   addToast?: (message: string, type: Toast['type'], opts?: number | { duration?: number; details?: string }) => string;
+  /** Current project name for Data tab confirmation messages. */
+  projectName?: string;
+  /** Total annotation count across all videos in the current project. */
+  annotationCount?: number;
 }
 
 // ── Sortable column item ──
@@ -544,8 +549,9 @@ export function ConfigurationModal({
   onRecoverCurrentVideoCues,
   onRecoverConfig,
   onClearAllData,
-  onClearCurrentVideoCues,
+  onClearCurrentVideoCues: _onClearCurrentVideoCues,
   onClearAllCues,
+  onDeleteProject,
   onApplyTemplate,
   onAddField,
   onUpdateField,
@@ -556,6 +562,8 @@ export function ConfigurationModal({
   onSetMandatoryField,
   onUnsetMandatoryField,
   addToast,
+  projectName,
+  annotationCount,
 }: ConfigurationModalProps) {
   const { confirmState, showConfirm } = useConfirm();
   const [newTypeName, setNewTypeName] = useState('');
@@ -1810,6 +1818,25 @@ export function ConfigurationModal({
                                   >
                                     Apply
                                   </button>
+                                  {/* Set as Default */}
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      const isCurrentDefault = tpl.isDefault;
+                                      await setDefaultTemplate(isCurrentDefault ? null : tpl.id);
+                                      await refreshTemplates();
+                                      addToast?.(
+                                        isCurrentDefault
+                                          ? `"${tpl.name}" is no longer the default template.`
+                                          : `"${tpl.name}" set as default template.`,
+                                        'success',
+                                      );
+                                    }}
+                                    className={`p-1 rounded transition-colors ${tpl.isDefault ? 'text-amber-400 hover:text-amber-300' : 'text-[var(--text-dim)] hover:text-amber-400'} hover:bg-[var(--bg-hover)]`}
+                                    title={tpl.isDefault ? 'Remove as default template' : 'Set as default template'}
+                                  >
+                                    <Star className="w-3 h-3" fill={tpl.isDefault ? 'currentColor' : 'none'} />
+                                  </button>
                                   {/* Rename */}
                                   <button
                                     type="button"
@@ -2106,84 +2133,157 @@ export function ConfigurationModal({
           )}
 
           {activeTab === 'data' && (
-            <div className="space-y-4">
-              <p className="text-xs text-[var(--text-mid)]">
-                Manage stored data. These actions are permanent and cannot be undone.
-              </p>
-
-              <div className="space-y-3">
-                {currentVideoName && currentVideoSize !== undefined && (
+            <div className="space-y-6">
+              {/* ── THIS PROJECT ── */}
+              <div>
+                <p className="text-[11px] uppercase tracking-widest font-medium text-[var(--text-dim)] mb-4">
+                  This Project
+                </p>
+                <div className="space-y-3">
+                  {/* Reset Configuration */}
                   <div className="p-4 bg-red-900/20 border border-red-800/40 rounded-lg">
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-[var(--text)]">Reset Configuration</p>
+                        <p className="text-[13px] font-light text-[var(--text-mid)] mt-0.5">
+                          Revert cue types, fields, columns, and view settings to your default template. Cues are not affected.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const defaultTpl = await getDefaultTemplate();
+                          const hasDefault = !!defaultTpl;
+                          const ok = await showConfirm({
+                            title: 'Reset configuration?',
+                            message: 'This will revert all cue types, fields, and column settings to your default template. Your cues will not be affected.',
+                            detail: hasDefault
+                              ? undefined
+                              : "You don\u2019t have a saved default template. Cuetation\u2019s built-in defaults will be used.",
+                            confirmLabel: 'Reset Configuration',
+                            variant: 'danger',
+                            icon: 'reset',
+                          });
+                          if (ok) {
+                            const data = defaultTpl?.data ?? FACTORY_DEFAULT_TEMPLATE.data;
+                            onApplyTemplate(data);
+                            addToast?.(
+                              hasDefault
+                                ? 'Configuration reset to default template.'
+                                : 'Configuration reset to built-in defaults.',
+                              'success',
+                            );
+                          }
+                        }}
+                        className="shrink-0 px-4 py-2 text-xs text-red-400 rounded border border-red-800/50 bg-transparent hover:bg-red-900/20 transition-colors"
+                      >
+                        Reset
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Clear All Cues */}
+                  <div className="p-4 bg-red-900/20 border border-red-800/40 rounded-lg">
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-[var(--text)]">Clear All Cues</p>
+                        <p className="text-[13px] font-light text-[var(--text-mid)] mt-0.5">
+                          Permanently delete all cues in this project. Configuration and project metadata are not affected.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={annotationCount === 0}
+                        title={annotationCount === 0 ? 'This project has no cues.' : undefined}
+                        onClick={async () => {
+                          const ok = await showConfirm({
+                            title: 'Clear all cues?',
+                            message: `This will permanently delete all ${annotationCount ?? 0} cues in ${projectName ?? 'this project'}. This cannot be undone.`,
+                            detail: 'Configuration and project settings are not affected.',
+                            confirmLabel: 'Clear All Cues',
+                            variant: 'danger',
+                            icon: 'trash',
+                          });
+                          if (ok) {
+                            onClearAllCues();
+                            addToast?.('All cues cleared.', 'success');
+                          }
+                        }}
+                        className="shrink-0 px-4 py-2 text-xs text-red-400 rounded border border-red-800/50 bg-transparent hover:bg-red-900/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Delete Project */}
+                  <div className="p-4 bg-red-900/20 border border-red-800/40 rounded-lg">
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-[var(--text)]">Delete Project</p>
+                        <p className="text-[13px] font-light text-[var(--text-mid)] mt-0.5">
+                          Permanently delete this project and all its cues. You will be returned to the home screen.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const ok = await showConfirm({
+                            title: `Delete "${projectName ?? 'this project'}"?`,
+                            message: `This will permanently delete this project and all ${annotationCount ?? 0} of its cues. You will be returned to the home screen.`,
+                            detail: 'This cannot be undone.',
+                            confirmLabel: 'Delete Project',
+                            variant: 'danger',
+                            icon: 'trash',
+                          });
+                          if (ok) {
+                            onDeleteProject();
+                          }
+                        }}
+                        className="shrink-0 px-4 py-2 text-xs text-red-400 rounded border border-red-800/50 bg-transparent hover:bg-red-900/20 transition-colors"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* ── EVERYTHING ── */}
+              <div className="pt-2 mt-2 border-t border-[var(--border-hi)]">
+                <p className="text-[11px] uppercase tracking-widest font-medium text-[var(--text-dim)] mb-4">
+                  Everything
+                </p>
+                <div className="p-4 bg-red-950/40 border border-red-800/60 rounded-lg">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-[var(--text)]">Factory Reset</p>
+                      <p className="text-[13px] font-light text-[var(--text-mid)] mt-0.5">
+                        Delete all projects, cues, configuration, templates, and backups across the entire app. Returns to first-launch state.
+                      </p>
+                    </div>
                     <button
                       type="button"
                       onClick={async () => {
                         const ok = await showConfirm({
-                          title: 'Clear Video Cues',
-                          message: `Remove all cues for "${currentVideoName}"? Your configuration will be preserved.`,
-                          confirmLabel: 'Clear Cues',
+                          title: 'Delete Everything?',
+                          message: 'This will permanently delete all user data and settings, restoring the app to its default state. You will be returned to the home screen.',
+                          detail: 'This cannot be undone.',
+                          confirmLabel: 'Delete Everything',
                           variant: 'danger',
-                          icon: 'trash',
+                          icon: 'reset',
+                          requireText: 'EVERYTHING',
                         });
-                        if (ok) onClearCurrentVideoCues(currentVideoName, currentVideoSize);
+                        if (ok) {
+                          onClearAllData();
+                          onClose();
+                        }
                       }}
-                      className="w-full flex items-center gap-2 px-4 py-3 text-sm text-red-400 hover:text-red-300 hover:bg-red-900/30 rounded-md border border-red-800/50 transition-colors"
+                      className="shrink-0 px-4 py-2 text-xs font-medium text-red-500 rounded border border-red-700/60 bg-transparent hover:bg-red-900/20 transition-colors"
                     >
-                      <AlertTriangle className="w-4 h-4" />
-                      Clear Cues for Current Video
+                      Factory Reset
                     </button>
-                    <p className="text-[10px] text-red-400/70 mt-2">
-                      Removes all cues from &quot;{currentVideoName}&quot; only.
-                    </p>
                   </div>
-                )}
-
-                <div className="p-4 bg-red-900/20 border border-red-800/40 rounded-lg">
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const ok = await showConfirm({
-                        title: 'Clear All Cues',
-                        message: 'Remove every cue from every video? Your configuration will be preserved.',
-                        confirmLabel: 'Clear All',
-                        variant: 'danger',
-                        icon: 'trash',
-                      });
-                      if (ok) onClearAllCues();
-                    }}
-                    className="w-full flex items-center gap-2 px-4 py-3 text-sm text-red-400 hover:text-red-300 hover:bg-red-900/30 rounded-md border border-red-800/50 transition-colors"
-                  >
-                    <AlertTriangle className="w-4 h-4" />
-                    Clear All Cues
-                  </button>
-                  <p className="text-[10px] text-red-400/70 mt-2">
-                    Removes all annotations from all videos. Configuration is preserved.
-                  </p>
-                </div>
-
-                <div className="p-4 bg-red-950/40 border border-red-800/60 rounded-lg">
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const ok = await showConfirm({
-                        title: 'Factory Reset',
-                        message: 'Delete all cues and reset your configuration to defaults? This cannot be undone.',
-                        confirmLabel: 'Factory Reset',
-                        variant: 'danger',
-                        icon: 'reset',
-                      });
-                      if (ok) {
-                        onClearAllData();
-                        onClose();
-                      }
-                    }}
-                    className="w-full flex items-center gap-2 px-4 py-3 text-sm text-red-500 hover:text-red-400 hover:bg-red-900/50 rounded-md border border-red-700/60 transition-colors font-medium"
-                  >
-                    <AlertTriangle className="w-4 h-4" />
-                    Factory Reset (All Data)
-                  </button>
-                  <p className="text-[10px] text-red-500/70 mt-2">
-                    ⚠️ Deletes all cues and resets your configuration to defaults. Cannot be undone.
-                  </p>
                 </div>
               </div>
             </div>

@@ -33,6 +33,7 @@ export function AppShell() {
     createNewProject,
     openProject,
     updateVideo,
+    deleteCurrentProject,
   } = useProject();
 
   const { toasts, addToast, removeToast } = useToast();
@@ -337,6 +338,11 @@ export function AppShell() {
           onSwitchProject={handleOpenSwitcher}
           onVideoLoaded={handleVideoLoaded}
           onUnsavedChangesChange={setUnsavedChanges}
+          onDeleteProject={async () => {
+            await deleteCurrentProject();
+            setAppState({ screen: 'home' });
+            setUnsavedChanges(false);
+          }}
           onSave={() => {
             // Save will be handled by App component
             setUnsavedChanges(false);

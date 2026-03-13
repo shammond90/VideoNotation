@@ -317,6 +317,8 @@ export interface ConfigTemplate {
   id: string;
   name: string;
   category?: string;
+  /** When true this template is used by "Reset Configuration" in the Data tab. */
+  isDefault?: boolean;
   data: TemplateData;
   createdAt: string;
   updatedAt: string;

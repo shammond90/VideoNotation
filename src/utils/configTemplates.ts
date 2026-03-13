@@ -79,6 +79,21 @@ export async function renameConfigTemplate(id: string, newName: string): Promise
   }
 }
 
+/** Return the template flagged as default, or undefined if none is set. */
+export async function getDefaultTemplate(): Promise<ConfigTemplate | undefined> {
+  const templates = await loadConfigTemplates();
+  return templates.find((t) => t.isDefault);
+}
+
+/** Mark a template as the default (clears previous default). Pass null to clear. */
+export async function setDefaultTemplate(id: string | null): Promise<void> {
+  const templates = await loadConfigTemplates();
+  for (const t of templates) {
+    t.isDefault = t.id === id ? true : undefined;
+  }
+  await saveConfigTemplates(templates);
+}
+
 /** Export a single template as a JSON download (.cuetation-template.json). */
 export function exportTemplateToJSON(template: ConfigTemplate): void {
   const blob = new Blob([JSON.stringify(template, null, 2)], { type: 'application/json' });

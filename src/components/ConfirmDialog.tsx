@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Trash2, RotateCcw, Archive, AlertCircle } from 'lucide-react';
 
 export type ConfirmVariant = 'danger' | 'warning' | 'neutral';
@@ -14,6 +14,8 @@ export interface ConfirmDialogProps {
   variant?: ConfirmVariant;
   /** Optional icon override. Defaults based on variant. */
   icon?: 'trash' | 'reset' | 'archive' | 'alert' | 'warning';
+  /** If set, the user must type this exact string before the confirm button enables. */
+  requireText?: string;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -49,11 +51,20 @@ export function ConfirmDialog({
   cancelLabel = 'Cancel',
   variant = 'danger',
   icon,
+  requireText,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
   const confirmRef = useRef<HTMLButtonElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
+  const [typedText, setTypedText] = useState('');
+
+  // Reset typed text when dialog opens/closes
+  useEffect(() => {
+    if (!isOpen) setTypedText('');
+  }, [isOpen]);
+
+  const isConfirmDisabled = requireText ? typedText !== requireText : false;
 
   // Focus the cancel button when the dialog opens (safe default)
   useEffect(() => {
@@ -120,6 +131,31 @@ export function ConfirmDialog({
           </p>
         )}
 
+        {/* Type-to-confirm input */}
+        {requireText && (
+          <div className="mt-4" style={{ marginLeft: 52 }}>
+            <label className="block text-xs mb-1.5" style={{ color: 'var(--text-dim, #666)' }}>
+              Type <span className="font-mono font-semibold" style={{ color: 'var(--text, #e5e5e5)' }}>{requireText}</span> to confirm
+            </label>
+            <input
+              type="text"
+              value={typedText}
+              onChange={(e) => setTypedText(e.target.value)}
+              placeholder={requireText}
+              autoComplete="off"
+              spellCheck={false}
+              className="w-full px-3 py-1.5 text-sm rounded-md outline-none"
+              style={{
+                background: 'var(--bg-panel, #1e1e24)',
+                color: 'var(--text, #e5e5e5)',
+                border: '1px solid var(--border-hi, #3a3a42)',
+              }}
+              onFocus={(e) => { e.currentTarget.style.borderColor = variant === 'danger' ? '#dc2626' : 'var(--amber, #bf5700)'; }}
+              onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--border-hi, #3a3a42)'; }}
+            />
+          </div>
+        )}
+
         {/* Buttons */}
         <div className="flex items-center justify-end gap-2 mt-6">
           <button
@@ -141,13 +177,14 @@ export function ConfirmDialog({
             ref={confirmRef}
             type="button"
             onClick={onConfirm}
-            className="px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors"
+            disabled={isConfirmDisabled}
+            className="px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             style={{
-              background: style.bg,
-              border: `1px solid ${style.border}`,
+              background: isConfirmDisabled ? 'var(--bg-panel, #1e1e24)' : style.bg,
+              border: `1px solid ${isConfirmDisabled ? 'var(--border, #2a2a30)' : style.border}`,
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = style.hoverBg; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = style.bg; }}
+            onMouseEnter={(e) => { if (!isConfirmDisabled) e.currentTarget.style.background = style.hoverBg; }}
+            onMouseLeave={(e) => { if (!isConfirmDisabled) e.currentTarget.style.background = style.bg; }}
           >
             {confirmLabel}
           </button>
