@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect, useLayoutEffect, useMemo } from 'react';
+import { useState, useRef, useCallback, useEffect, useLayoutEffect, useMemo, type MutableRefObject } from 'react';
 import { Search, X, Download, Upload, Clock, Filter, ChevronUp, ChevronDown, ChevronRight, Navigation, Flag } from 'lucide-react';
 import { formatTime, parseTime } from '../utils/formatTime';
 import { CueForm } from './CueForm';
@@ -7,11 +7,10 @@ import { SlideEditPanel } from './SlideEditPanel';
 import { ExpandedCueView } from './ExpandedCueView';
 import { FlagNotePopover } from './FlagNotePopover';
 import type { Annotation, CueFields, ColumnConfig, CueStatus, FieldDefinition } from '../types';
-import { RESERVED_CUE_TYPES, LOOP_CUE_TYPE, CUE_STATUS_COLORS, CUE_STATUSES, CUE_STATUS_LABELS } from '../types';
+import { RESERVED_CUE_TYPES, CUE_STATUS_COLORS, CUE_STATUSES, CUE_STATUS_LABELS } from '../types';
 import { useCueGrouping, type GroupedItem } from '../hooks/useCueGrouping';
 
-/** Default colour for LOOP cue type (amber). */
-const LOOP_CUE_COLOR = '#f59e0b';
+
 
 /** Design tokens for Title / Scene headers */
 const TITLE_COLOR = '#5c6bc0';
@@ -52,6 +51,12 @@ interface AnnotationPanelProps {
   onSetFlag: (id: string, flagged: boolean, flagNote?: string) => void;
   onDuplicate: (id: string) => Annotation | null;
   onReorderTieGroup: (cueIds: string[]) => void;
+  /* Create-overlay props (passed from App) */
+  isCreating?: boolean;
+  createTimestamp?: number;
+  onCreateSave?: (cue: CueFields, overrideTimestamp?: number) => void;
+  onCreateCancel?: () => void;
+  createSaveRef?: MutableRefObject<(() => void) | null>;
 }
 
 /** Show a non-empty cue field as a tiny label:value chip */
@@ -288,6 +293,11 @@ export function AnnotationPanel({
   onSetFlag,
   onDuplicate,
   onReorderTieGroup,
+  isCreating,
+  createTimestamp,
+  onCreateSave,
+  onCreateCancel,
+  createSaveRef,
 }: AnnotationPanelProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -329,7 +339,6 @@ export function AnnotationPanel({
   // Helper: get display name for a cue type (short code if enabled, otherwise full name)
   const getCueTypeDisplayName = useCallback(
     (cueType: string): string => {
-      if (cueType === LOOP_CUE_TYPE) return '⟳ LOOP';
       if (showShortCodes && cueTypeShortCodes[cueType]) {
         return cueTypeShortCodes[cueType];
       }
@@ -341,7 +350,6 @@ export function AnnotationPanel({
   // Helper: get colour for a cue type (LOOP uses distinctive amber)
   const getCueColor = useCallback(
     (cueType: string): string => {
-      if (cueType === LOOP_CUE_TYPE) return LOOP_CUE_COLOR;
       return cueTypeColors[cueType] || '#6b7280';
     },
     [cueTypeColors],
@@ -396,7 +404,7 @@ export function AnnotationPanel({
 
     // Apply cue type filter — types NOT in the set are hidden (LOOP/TITLE/SCENE always pass)
     if (typeFilter.size < cueTypes.length) {
-      anns = anns.filter((a) => a.cue.type === LOOP_CUE_TYPE || a.cue.type === 'TITLE' || a.cue.type === 'SCENE' || typeFilter.has(a.cue.type));
+      anns = anns.filter((a) => a.cue.type === 'TITLE' || a.cue.type === 'SCENE' || typeFilter.has(a.cue.type));
     }
 
     // Apply status filter
@@ -487,10 +495,10 @@ export function AnnotationPanel({
     setInlineEditValue('');
   }, []);
 
-  // Jump nav keyboard shortcut (G)
+  // Jump nav keyboard shortcut (J)
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'g' || e.key === 'G') {
+      if (e.key === 'j' || e.key === 'J') {
         const tag = (e.target as HTMLElement).tagName;
         if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
         if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -1296,7 +1304,7 @@ export function AnnotationPanel({
   };
 
   return (
-    <div className="flex flex-col h-full rounded-lg border" style={{ background: 'var(--bg-raised)', borderColor: 'var(--border)' }}>
+    <div className="flex flex-col h-full flex-1 min-h-0 rounded-lg border relative overflow-hidden" style={{ background: 'var(--bg-raised)', borderColor: 'var(--border)' }}>
       {/* Header */}
       <div className="p-4 border-b" style={{ borderColor: 'var(--border)' }}>
         <div className="flex items-center justify-between mb-3">
@@ -1314,7 +1322,7 @@ export function AnnotationPanel({
                 type="button"
                 onClick={() => setJumpNavOpen((p) => !p)}
                 className="p-1 rounded transition-colors" style={{ color: jumpNavOpen ? 'var(--amber)' : 'var(--text-mid)' }} onMouseEnter={e=>{e.currentTarget.style.background="var(--bg-hover)";e.currentTarget.style.color="var(--text)"}} onMouseLeave={e=>{e.currentTarget.style.background="";e.currentTarget.style.color=jumpNavOpen?'var(--amber)':'var(--text-mid)'}}
-                title="Jump navigation (G)"
+                title="Jump navigation (J)"
               >
                 <Navigation className="w-4 h-4" />
               </button>
@@ -1848,23 +1856,42 @@ export function AnnotationPanel({
         />
       )}
 
-      {/* Slide-in edit panel */}
+      {/* Full-width edit overlay */}
       {slideEditId && (() => {
         const ann = annotations.find((a) => a.id === slideEditId);
         if (!ann) return null;
         return (
           <SlideEditPanel
+            mode="edit"
+            title="Edit Cue"
             annotation={ann}
             allAnnotations={annotations}
             cueTypes={cueTypes}
             cueTypeFields={cueTypeFields}
             fieldDefinitions={fieldDefs}
             mandatoryFields={mandatoryFields}
-            onSave={(id, cue, newTimestamp) => { onEdit(id, cue, newTimestamp); setSlideEditId(null); }}
+            onSave={(id, cue, newTimestamp) => { onEdit(id as string, cue as CueFields, newTimestamp); setSlideEditId(null); }}
             onClose={() => setSlideEditId(null)}
           />
         );
       })()}
+
+      {/* Full-width create overlay */}
+      {isCreating && onCreateSave && onCreateCancel && (
+        <SlideEditPanel
+          mode="create"
+          title="New Cue"
+          timestamp={createTimestamp}
+          allAnnotations={annotations}
+          cueTypes={cueTypes}
+          cueTypeFields={cueTypeFields}
+          fieldDefinitions={fieldDefs}
+          mandatoryFields={mandatoryFields}
+          onSave={(cue, overrideTimestamp) => { onCreateSave(cue as CueFields, overrideTimestamp as number | undefined); }}
+          onClose={onCreateCancel}
+          saveRef={createSaveRef}
+        />
+      )}
 
       {/* Flag note popover */}
       {flagNoteTarget && (

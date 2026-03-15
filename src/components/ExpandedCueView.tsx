@@ -15,8 +15,7 @@ const STANDARD_ROW_FIELDS = new Set(['type', 'cueNumber', 'timestamp']);
 const SKIP_FIELDS = new Set([
   ...STANDARD_ROW_FIELDS,
   'standbyTime', 'warningTime', // Timers, not display fields
-  'autofollow', 'followCueNumber', // System autofollow fields
-  'loopTargetTimestamp', 'loopTargetCueNumber', // Loop system fields
+  'linkCueId', // Internal UUID reference
 ]);
 
 export function ExpandedCueView({ annotation, columns, onEdit }: ExpandedCueViewProps) {

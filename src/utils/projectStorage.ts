@@ -110,6 +110,21 @@ export async function deleteProject(projectId: string): Promise<void> {
 }
 
 /**
+ * Delete all projects.
+ * Used for Factory Reset to return the app to a clean state.
+ */
+export async function deleteAllProjects(): Promise<void> {
+  const db = await getDB();
+  const allProjects = await db.getAll(PROJECTS_STORE);
+  // Delete each project (to clean up video handles)
+  for (const project of allProjects) {
+    await deleteVideoHandle(project.id).catch(() => {});
+  }
+  // Clear the projects store
+  await db.clear(PROJECTS_STORE);
+}
+
+/**
  * Update video reference for a project.
  * All four fields are set together, or all set to null.
  */

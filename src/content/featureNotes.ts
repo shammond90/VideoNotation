@@ -26,9 +26,7 @@ export const featureNotes = `
 - **Cue Status** — Mark cues as Provisional, Confirmed, or Cut
 - **Cue Flagging** — Flag cues with optional notes for review
 - **Tie Groups** — Group cues at the same timecode with drag-reorder
-- **Autofollow** — Link cues that automatically follow another cue
 - **Linked Cues** — Bidirectional linking between cues of the same type
-- **Loop Cues** — Special LOOP type for jump-back-to-timestamp markers
 
 ## Cue Sheet
 - **Chronological Cue Sheet** — Sorted by timestamp with title/scene grouping

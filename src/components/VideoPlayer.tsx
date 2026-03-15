@@ -11,7 +11,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { formatTime } from '../utils/formatTime';
-import type { VideoPlayerState, VideoPlayerActions, LoopRegion } from '../hooks/useVideoPlayer';
+import type { VideoPlayerState, VideoPlayerActions } from '../hooks/useVideoPlayer';
 
 export interface ScrubberTitleMarker {
   timestamp: number;
@@ -34,7 +34,6 @@ interface VideoPlayerProps {
   state: VideoPlayerState;
   actions: VideoPlayerActions;
   onVideoError: () => void;
-  loopRegion?: LoopRegion | null;
   showVideoTimecode?: boolean;
   videoTimecodePosition?: { x: number; y: number };
   onVideoTimecodePositionChange?: (pos: { x: number; y: number }) => void;
@@ -46,7 +45,7 @@ interface VideoPlayerProps {
 const SPEEDS = [1, 1.5, 2, 4, 8];
 
 export const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
-  ({ src, state, actions, onVideoError, loopRegion, showVideoTimecode, videoTimecodePosition, onVideoTimecodePositionChange, titleMarkers, sceneMarkers, sceneBands }, ref) => {
+  ({ src, state, actions, onVideoError, showVideoTimecode, videoTimecodePosition, onVideoTimecodePositionChange, titleMarkers, sceneMarkers, sceneBands }, ref) => {
     const progressRef = useRef<HTMLDivElement>(null);
     const videoContainerRef = useRef<HTMLDivElement>(null);
     const [isDragging, setIsDragging] = useState(false);
@@ -210,20 +209,6 @@ export const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
               className="absolute top-0 left-0 h-full rounded-full"
               style={{ width: `${state.duration ? (state.buffered / state.duration) * 100 : 0}%`, background: 'var(--bg-hover)' }}
             />
-            {/* Loop region overlay */}
-            {loopRegion && state.duration > 0 && (
-              <div
-                className="absolute top-0 h-full"
-                style={{
-                  background: 'rgba(191,87,0,0.25)',
-                  borderLeft: '1px solid rgba(191,87,0,0.6)',
-                  borderRight: '1px solid rgba(191,87,0,0.6)',
-                  left: `${(loopRegion.toTime / state.duration) * 100}%`,
-                  width: `${((loopRegion.fromTime - loopRegion.toTime) / state.duration) * 100}%`,
-                }}
-                title={`Loop: ${formatTime(loopRegion.toTime)} → ${formatTime(loopRegion.fromTime)}`}
-              />
-            )}
             {/* Scene bands */}
             {sceneBands && state.duration > 0 && sceneBands.map((band, i) => {
               const start = (band.startTime / state.duration) * 100;

@@ -1,7 +1,6 @@
 import ExcelJS from 'exceljs';
 import { formatTime } from './formatTime';
 import type { Annotation, ExportTemplateColumn, ExportColorOverrides } from '../types';
-import { LOOP_CUE_TYPE } from '../types';
 
 /** Options for the XLSX export. */
 export interface XlsxExportOptions {
@@ -80,9 +79,8 @@ export async function exportAnnotationsToXlsx(options: XlsxExportOptions): Promi
     videoName,
   } = options;
 
-  // Sort chronologically, exclude LOOP cues
+  // Sort chronologically
   let sorted = [...annotations]
-    .filter((a) => a.cue.type !== LOOP_CUE_TYPE)
     .sort((a, b) => a.timestamp - b.timestamp);
   if (!includeSkipped) {
     sorted = sorted.filter((a) => !skippedIds.has(a.id));

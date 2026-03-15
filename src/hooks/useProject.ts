@@ -6,6 +6,7 @@ import {
   loadProject,
   saveProject,
   deleteProject,
+  deleteAllProjects,
   updateProjectVideo,
   updateProjectMetadata,
 } from '../utils/projectStorage';
@@ -33,6 +34,7 @@ export interface UseProjectReturn {
   ) => Promise<Project>;
   updateCurrentProject: (updates: Partial<Project>) => Promise<void>;
   deleteCurrentProject: () => Promise<void>;
+  deleteAllProjects: () => Promise<void>;
   updateVideo: (
     videoRef: {
       filename: string;
@@ -168,6 +170,21 @@ export function useProject(): UseProjectReturn {
     }
   }, [currentProject]);
 
+  // Delete all projects (used for Factory Reset)
+  const deleteAllProjectsFn = useCallback(async () => {
+    try {
+      setError(null);
+      await deleteAllProjects();
+      setProjects([]);
+      setCurrentProject(null);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to delete all projects';
+      setError(message);
+      console.error(message);
+      throw err;
+    }
+  }, []);
+
   // Update video reference
   const updateVideo = useCallback(
     async (
@@ -243,6 +260,7 @@ export function useProject(): UseProjectReturn {
     createNewProject,
     updateCurrentProject,
     deleteCurrentProject,
+    deleteAllProjects: deleteAllProjectsFn,
     updateVideo,
     updateMetadata,
   };

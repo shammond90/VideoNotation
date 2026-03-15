@@ -34,6 +34,7 @@ export function AppShell() {
     openProject,
     updateVideo,
     deleteCurrentProject,
+    deleteAllProjects,
   } = useProject();
 
   const { toasts, addToast, removeToast } = useToast();
@@ -330,6 +331,7 @@ export function AppShell() {
     return (
       <>
         <App
+          key={currentProject.id}
           projectId={currentProject.id}
           projectName={currentProject.name}
           videoFilename={currentProject.video_filename}
@@ -343,6 +345,7 @@ export function AppShell() {
             setAppState({ screen: 'home' });
             setUnsavedChanges(false);
           }}
+          onDeleteAllProjects={deleteAllProjects}
           onSave={() => {
             // Save will be handled by App component
             setUnsavedChanges(false);

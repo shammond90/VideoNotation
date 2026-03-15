@@ -1,5 +1,5 @@
 // Reserved cue types that always exist and cannot be deleted
-export const RESERVED_CUE_TYPES = ['TITLE', 'SCENE', 'LOOP'] as const;
+export const RESERVED_CUE_TYPES = ['TITLE', 'SCENE'] as const;
 
 // ── Cue Status ──
 export type CueStatus = 'provisional' | 'confirmed' | 'tbc' | 'cut';
@@ -17,8 +17,7 @@ export const CUE_STATUS_COLORS: Record<CueStatus, string> = {
   cut: 'var(--red)',
 };
 
-// Special system cue type for loop playback — not user-configurable
-export const LOOP_CUE_TYPE = 'LOOP';
+
 
 // Default cue types shipped with the app
 export const DEFAULT_CUE_TYPES = [
@@ -59,11 +58,8 @@ export interface CueFields {
   cueingNotes: string;       // Cueing Notes
   standbyTime: string;       // Standby time (seconds before cue)
   warningTime: string;       // Warning time (seconds before cue)
-  autofollow: string;        // Whether this cue auto-follows another ('true' or '')
-  followCueNumber: string;   // The parent cue# this follows (e.g. "105")
   linkCueNumber: string;     // Bidirectional link to another cue# of the same type
-  loopTargetTimestamp: string;  // LOOP type: the timestamp (seconds) to jump back to
-  loopTargetCueNumber: string;  // LOOP type: the cue# reference for the jump target
+  linkCueId: string;          // UUID of the linked cue (stable reference)
 }
 
 export const CUE_FIELD_KEYS: (keyof CueFields)[] = [
@@ -73,9 +69,8 @@ export const CUE_FIELD_KEYS: (keyof CueFields)[] = [
   'spotFrame', 'spotIntensity', 'spotTime',
   'cueSheetNotes', 'final', 'dress', 'tech', 'cueingNotes',
   'standbyTime', 'warningTime',
-  'autofollow', 'followCueNumber',
   'linkCueNumber',
-  'loopTargetTimestamp', 'loopTargetCueNumber',
+  'linkCueId',
 ];
 
 export const CUE_FIELD_LABELS: Record<keyof CueFields, string> = {
@@ -103,11 +98,8 @@ export const CUE_FIELD_LABELS: Record<keyof CueFields, string> = {
   cueingNotes: 'Cueing Notes',
   standbyTime: 'Standby Time',
   warningTime: 'Warning Time',
-  autofollow: 'Auto-Follow',
-  followCueNumber: 'Follow Cue#',
   linkCueNumber: 'Link Cue#',
-  loopTargetTimestamp: 'Loop Target Time',
-  loopTargetCueNumber: 'Loop Target Cue#',
+  linkCueId: 'Link Cue ID',
 };
 
 // ── Field Definition System ──
@@ -132,11 +124,8 @@ export interface FieldDefinition {
 export const TIER1_FIELD_DEFINITIONS: FieldDefinition[] = [
   { key: 'type', label: 'Type', tier: 1, inputType: 'text', sizeHint: 'small', archived: false, defaultLabel: 'Type' },
   { key: 'cueNumber', label: 'Cue #', tier: 1, inputType: 'text', sizeHint: 'small', archived: false, defaultLabel: 'Cue #' },
-  { key: 'autofollow', label: 'Auto-Follow', tier: 1, inputType: 'text', sizeHint: 'small', archived: false, defaultLabel: 'Auto-Follow' },
-  { key: 'followCueNumber', label: 'Follow Cue#', tier: 1, inputType: 'text', sizeHint: 'small', archived: false, defaultLabel: 'Follow Cue#' },
   { key: 'linkCueNumber', label: 'Link Cue#', tier: 1, inputType: 'text', sizeHint: 'small', archived: false, defaultLabel: 'Link Cue#' },
-  { key: 'loopTargetTimestamp', label: 'Loop Target Time', tier: 1, inputType: 'text', sizeHint: 'small', archived: false, defaultLabel: 'Loop Target Time' },
-  { key: 'loopTargetCueNumber', label: 'Loop Target Cue#', tier: 1, inputType: 'text', sizeHint: 'small', archived: false, defaultLabel: 'Loop Target Cue#' },
+  { key: 'linkCueId', label: 'Link Cue ID', tier: 1, inputType: 'text', sizeHint: 'small', archived: false, defaultLabel: 'Link Cue ID' },
   { key: 'standbyTime', label: 'Standby Time', tier: 1, inputType: 'text', sizeHint: 'small', archived: false, defaultLabel: 'Standby Time' },
   { key: 'warningTime', label: 'Warning Time', tier: 1, inputType: 'text', sizeHint: 'small', archived: false, defaultLabel: 'Warning Time' },
 ];
@@ -228,11 +217,8 @@ export const EMPTY_CUE_FIELDS: CueFields = {
   cueingNotes: '',
   standbyTime: '',
   warningTime: '',
-  autofollow: '',
-  followCueNumber: '',
   linkCueNumber: '',
-  loopTargetTimestamp: '',
-  loopTargetCueNumber: '',
+  linkCueId: '',
 };
 
 export interface Annotation {
@@ -392,12 +378,8 @@ export const EDITABLE_FIELD_KEYS: string[] = [
   'presets', 'colourPalette',
   'spotFrame', 'spotIntensity', 'spotTime',
   'cueSheetNotes', 'final', 'dress', 'tech', 'cueingNotes',
-  'addAutofollow',
   'linkCueNumber',
 ];
-
-/** Column keys that become available when 'addAutofollow' is in a cue type's fields. */
-export const AUTOFOLLOW_COLUMN_KEYS: string[] = ['followCueNumber'];
 
 /** Column keys that become available when 'linkCueNumber' is in a cue type's fields. */
 export const LINK_COLUMN_KEYS: string[] = ['linkCueNumber'];
@@ -406,7 +388,6 @@ export const LINK_COLUMN_KEYS: string[] = ['linkCueNumber'];
 export const EDITABLE_FIELD_LABELS: Record<string, string> = {
   ...CUE_FIELD_LABELS,
   ...VIRTUAL_COLUMN_LABELS,
-  addAutofollow: 'Add Autofollow',
 };
 
 /** Default field subset for TITLE / SCENE cue types. */
@@ -424,16 +405,10 @@ export function getDefaultColumnsForTitleScene(): ColumnConfig[] {
   }));
 }
 
-/** Default field subset for LOOP cue type (minimal — most handled by the LOOP form). */
-export const LOOP_DEFAULT_FIELDS: string[] = [
-  'timestamp', 'cueNumber', 'what',
-];
+
 
 /** Return the default visible fields for a given cue type. */
 export function getDefaultFieldsForType(cueType: string): string[] {
-  if (cueType === LOOP_CUE_TYPE) {
-    return [...LOOP_DEFAULT_FIELDS];
-  }
   if ((RESERVED_CUE_TYPES as readonly string[]).includes(cueType)) {
     return [...TITLE_SCENE_DEFAULT_FIELDS];
   }
@@ -452,7 +427,6 @@ export const DEFAULT_CUE_TYPE_COLORS: Record<string, string> = {
   RAIL:     '#f97316', // orange
   'SPOT 1': '#ef4444', // red
   'SPOT 2': '#ec4899', // pink
-  LOOP:     '#f59e0b', // amber (loop region)
 };
 
 export const DEFAULT_VISIBLE_COLUMNS: ColumnConfig[] = [
@@ -461,13 +435,12 @@ export const DEFAULT_VISIBLE_COLUMNS: ColumnConfig[] = [
   // timestamp is second (index 1) — controls the timestamp pill on cards
   { key: 'timestamp', label: 'Timestamp', visible: true },
   // Then the rest
-  ...CUE_FIELD_KEYS.filter((k) => k !== 'type' && k !== 'standbyTime' && k !== 'warningTime' && k !== 'autofollow' && k !== 'followCueNumber' && k !== 'linkCueNumber').map((key) => ({
+  ...CUE_FIELD_KEYS.filter((k) => k !== 'type' && k !== 'standbyTime' && k !== 'warningTime' && k !== 'linkCueNumber' && k !== 'linkCueId').map((key) => ({
     key: key as ColumnKey,
     label: CUE_FIELD_LABELS[key],
     visible: ['cueNumber', 'cueTime', 'duration', 'when', 'what'].includes(key),
   })),
   { key: 'timeInTitle', label: 'Time in Title', visible: false },
-  { key: 'followCueNumber' as ColumnKey, label: 'Follow Cue#', visible: false },
   { key: 'linkCueNumber' as ColumnKey, label: 'Link Cue#', visible: false },
 ];
 

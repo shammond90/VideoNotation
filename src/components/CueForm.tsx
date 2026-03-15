@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo, useCallback, type MutableRefObject } from 'react';
 import type { CueFields, Annotation, FieldDefinition } from '../types';
-import { EMPTY_CUE_FIELDS, LOOP_CUE_TYPE, getDefaultFieldsForType, getFieldLabel, getFieldDef } from '../types';
+import { EMPTY_CUE_FIELDS, getDefaultFieldsForType, getFieldLabel, getFieldDef } from '../types';
 import { formatTime, parseTime } from '../utils/formatTime';
 import { SearchableDropdown } from './SearchableDropdown';
 
@@ -20,6 +20,8 @@ interface CueFormProps {
   onCancel: () => void;
   /** Optional ref that will be populated with a function to trigger save from outside */
   saveRef?: MutableRefObject<(() => void) | null>;
+  /** When true, form fills its parent height (no max-height cap). Used in overlay panels. */
+  fillHeight?: boolean;
 }
 
 const inputClass =
@@ -48,6 +50,7 @@ function Field({
   inputMode,
   mandatory,
   hasError,
+  autoFocus,
 }: {
   label: string;
   name: string;
@@ -59,7 +62,15 @@ function Field({
   inputMode?: 'text' | 'numeric' | 'decimal';
   mandatory?: boolean;
   hasError?: boolean;
+  autoFocus?: boolean;
 }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (autoFocus) {
+      const timer = setTimeout(() => inputRef.current?.focus(), 80);
+      return () => clearTimeout(timer);
+    }
+  }, [autoFocus]);
   return (
     <div className={className}>
       <label className={labelClass}>
@@ -67,6 +78,7 @@ function Field({
         {mandatory && <span className="text-red-400 ml-0.5">*</span>}
       </label>
       <input
+        ref={inputRef}
         type="text"
         inputMode={inputMode}
         value={value}
@@ -268,6 +280,7 @@ export function CueForm({
   onSave,
   onCancel,
   saveRef,
+  fillHeight = false,
 }: CueFormProps) {
   const [fields, setFields] = useState<CueFields>(initialValues ?? { ...EMPTY_CUE_FIELDS });
   const [timestampStr, setTimestampStr] = useState(() => secondsToTimecodeStr(timestamp));
@@ -291,10 +304,10 @@ export function CueForm({
   // Ordered list of "body" fields — excludes fields handled by dedicated UI sections
   const orderedBodyFields = useMemo(() => {
     // Fields rendered separately: type (always shown), cueNumber, oldCueNumber (in type row),
-    // timestamp / timeInTitle (top row), addAutofollow, linkCueNumber (special sections)
+    // timestamp / timeInTitle (top row), linkCueNumber (special section)
     const excludedFromBody = new Set([
       'type', 'cueNumber', 'oldCueNumber', 'timestamp', 'timeInTitle',
-      'addAutofollow', 'linkCueNumber',
+      'linkCueNumber',
     ]);
     const typeFields = cueTypeFields?.[fields.type];
     if (typeFields) {
@@ -310,93 +323,19 @@ export function CueForm({
     return new Set(mandatoryFields?.[fields.type] ?? []);
   }, [mandatoryFields, fields.type]);
 
-  // ── Autofollow state ──
-  const autofollowEnabled = showField('addAutofollow');
-  const [isAutofollow, setIsAutofollow] = useState(fields.autofollow === 'true');
-  const [followCueNum, setFollowCueNum] = useState(fields.followCueNumber);
-  // The suffix part — derive from cueNumber if it starts with followCueNumber + '.'
-  const [autofollowSuffix, setAutofollowSuffix] = useState(() => {
-    if (fields.autofollow === 'true' && fields.followCueNumber && fields.cueNumber.startsWith(fields.followCueNumber + '.')) {
-      return fields.cueNumber.slice(fields.followCueNumber.length + 1);
-    }
-    return '';
-  });
-
-  // Available cue numbers for the Follow Cue# dropdown (all cue#s except this one)
-  const followCueOptions = useMemo(() => {
-    if (!allAnnotations) return [];
+  // ── Duplicate Cue# warning ──
+  const duplicateCueWarning = useMemo(() => {
+    const num = fields.cueNumber.trim();
+    if (!num || !allAnnotations) return null;
     const editId = initialValues ? allAnnotations.find((a) => a.cue === initialValues)?.id : undefined;
-    const seen = new Set<string>();
-    return allAnnotations
-      .filter((a) => a.cue.cueNumber && a.id !== editId && !seen.has(a.cue.cueNumber) && (seen.add(a.cue.cueNumber), true))
-      .map((a) => a.cue.cueNumber);
-  }, [allAnnotations, initialValues]);
-
-  // Look up the parent annotation to get its follow time
-  const parentAnnotation = useMemo(() => {
-    if (!isAutofollow || !followCueNum || !allAnnotations) return null;
-    return allAnnotations.find((a) => a.cue.cueNumber === followCueNum) ?? null;
-  }, [isAutofollow, followCueNum, allAnnotations]);
-
-  // For edit mode, show the current time diff; for create, show parent's follow field
-  const followTimeDisplay = useMemo(() => {
-    if (!parentAnnotation) return '';
-    if (!isCreate) {
-      const diff = editedTimestamp - parentAnnotation.timestamp;
-      return diff >= 0 ? diff.toFixed(2) : parentAnnotation.cue.follow ?? '';
-    }
-    return parentAnnotation.cue.follow ?? '';
-  }, [parentAnnotation, isCreate, editedTimestamp]);
-
-  // Autofollow validation error
-  const [autofollowError, setAutofollowError] = useState<string | null>(null);
+    const dupe = allAnnotations.find((a) => a.cue.cueNumber === num && a.id !== editId);
+    return dupe ? `Cue# "${num}" is already used by another cue` : null;
+  }, [fields.cueNumber, allAnnotations, initialValues]);
 
   // ── Link Cue# state ──
   const linkEnabled = showField('linkCueNumber');
   const [linkCueNum, setLinkCueNum] = useState(fields.linkCueNumber);
-
-  // ── Loop type state ──
-  const isLoopType = fields.type === LOOP_CUE_TYPE;
-  const isLoopFrom = isLoopType && fields.cueNumber !== 'LOOP TO';
-  const isLoopTo = isLoopType && fields.cueNumber === 'LOOP TO';
-  const [loopTargetCueNum, setLoopTargetCueNum] = useState(fields.loopTargetCueNumber);
-  const [loopTargetTimestampStr, setLoopTargetTimestampStr] = useState(() =>
-    fields.loopTargetTimestamp ? secondsToTimecodeStr(parseFloat(fields.loopTargetTimestamp)) : '00:00:00;00',
-  );
-  const [loopError, setLoopError] = useState<string | null>(null);
-
-  // Find Loop From annotation for displaying trigger point in LOOP TO edit
-  const loopFromAnnotation = useMemo(() => {
-    if (!isLoopTo || !allAnnotations) return null;
-    return allAnnotations.find((a) => a.cue.type === LOOP_CUE_TYPE && a.cue.cueNumber === 'LOOP FROM') ?? null;
-  }, [isLoopTo, allAnnotations]);
-
-  // Available cue#s for the loop Jump-to dropdown: all cues with timestamp before current annotateTimestamp
-  const loopTargetCueOptions = useMemo(() => {
-    if (!isLoopType || !allAnnotations) return [];
-    const seen = new Set<string>();
-    return allAnnotations
-      .filter((a) =>
-        a.cue.cueNumber &&
-        a.cue.type !== LOOP_CUE_TYPE &&
-        a.timestamp < timestamp &&
-        !seen.has(a.cue.cueNumber) &&
-        (seen.add(a.cue.cueNumber), true),
-      )
-      .sort((a, b) => a.timestamp - b.timestamp)
-      .map((a) => a.cue.cueNumber);
-  }, [isLoopType, allAnnotations, timestamp]);
-
-  // When the loop target cue# changes, auto-fill the timestamp
-  useEffect(() => {
-    if (!isLoopType || !loopTargetCueNum || !allAnnotations) return;
-    const target = allAnnotations.find(
-      (a) => a.cue.cueNumber === loopTargetCueNum && a.cue.type !== LOOP_CUE_TYPE,
-    );
-    if (target) {
-      setLoopTargetTimestampStr(secondsToTimecodeStr(target.timestamp));
-    }
-  }, [isLoopType, loopTargetCueNum, allAnnotations]);
+  const [linkCueId, setLinkCueId] = useState(fields.linkCueId);
 
   // Available cue numbers for Link Cue# dropdown — same type only, sorted, prefix-filtered by SearchableDropdown
   const linkCueOptions = useMemo(() => {
@@ -419,6 +358,17 @@ export function CueForm({
       })
       .map((a) => a.cue.cueNumber);
   }, [linkEnabled, allAnnotations, fields.type, initialValues]);
+
+  // Handle link cue selection — resolve cue number to UUID
+  const handleLinkCueChange = useCallback((cueNum: string) => {
+    setLinkCueNum(cueNum);
+    if (cueNum && allAnnotations) {
+      const match = allAnnotations.find((a) => a.cue.type === fields.type && a.cue.cueNumber === cueNum);
+      setLinkCueId(match?.id ?? '');
+    } else {
+      setLinkCueId('');
+    }
+  }, [allAnnotations, fields.type]);
 
   // Compute time in title
   const computedTimeInTitle = useMemo(() => {
@@ -515,49 +465,6 @@ export function CueForm({
   };
 
   const handleSubmitDirect = () => {
-    // ── LOOP type: simplified save ──
-    if (isLoopType) {
-      if (isLoopFrom) {
-        // LOOP FROM save (create or edit)
-        const effectiveFromTs = isCreate ? timestamp : editedTimestamp;
-        const targetSeconds = parseTime(loopTargetTimestampStr);
-        if (typeof targetSeconds !== 'number' || targetSeconds >= effectiveFromTs) {
-          setLoopError('Jump-to time must be earlier than the Loop From time');
-          return;
-        }
-        setLoopError(null);
-        const loopFields: CueFields = {
-          ...EMPTY_CUE_FIELDS,
-          type: LOOP_CUE_TYPE,
-          cueNumber: 'LOOP FROM',
-          duration: '1',
-          loopTargetTimestamp: String(targetSeconds),
-          loopTargetCueNumber: loopTargetCueNum,
-          what: `→ ${secondsToTimecodeStr(targetSeconds)}${loopTargetCueNum ? ' (Cue#' + loopTargetCueNum + ')' : ''}`,
-        };
-        if (isCreate) {
-          onSave(loopFields);
-        } else {
-          onSave(loopFields, editedTimestamp);
-        }
-      } else {
-        // LOOP TO save (edit only)
-        setLoopError(null);
-        const loopToFields: CueFields = {
-          ...EMPTY_CUE_FIELDS,
-          type: LOOP_CUE_TYPE,
-          cueNumber: 'LOOP TO',
-          loopTargetTimestamp: fields.loopTargetTimestamp,
-          loopTargetCueNumber: fields.loopTargetCueNumber,
-          what: loopFromAnnotation
-            ? `← ${secondsToTimecodeStr(loopFromAnnotation.timestamp)}`
-            : fields.what,
-        };
-        onSave(loopToFields, editedTimestamp);
-      }
-      return;
-    }
-
     // ── Mandatory field validation ──
     if (mandatoryKeys.size > 0) {
       const fieldsRecord = fields as unknown as Record<string, string>;
@@ -575,47 +482,21 @@ export function CueForm({
     setValidationErrors(new Set());
     setValidationMessage(null);
 
-    // Build final cue fields with autofollow data merged in
+    // Build final cue fields
     const finalFields = { ...fields };
-    if (autofollowEnabled && isAutofollow && followCueNum) {
-      finalFields.autofollow = 'true';
-      finalFields.followCueNumber = followCueNum;
-      finalFields.cueNumber = followCueNum + '.' + autofollowSuffix;
-    } else {
-      finalFields.autofollow = '';
-      finalFields.followCueNumber = '';
-    }
 
     // Merge Link Cue#
     if (linkEnabled) {
       finalFields.linkCueNumber = linkCueNum;
+      finalFields.linkCueId = linkCueId;
     }
 
     const hasContent = Object.values(finalFields).some((v) => v.trim() !== '');
     if (hasContent) {
-      // For autofollow cues, handle timestamp logic
-      if (finalFields.autofollow === 'true' && parentAnnotation) {
-        if (!isCreate) {
-          // Edit mode: validate timestamp is not before parent
-          if (editedTimestamp < parentAnnotation.timestamp) {
-            setAutofollowError('An Autofollow cue cannot be before the Cue it follows');
-            return;
-          }
-          setAutofollowError(null);
-          // In edit mode, use the user-edited timestamp; useAnnotations will back-propagate follow to parent
-          onSave(finalFields, editedTimestamp);
-        } else {
-          // Create mode: compute timestamp from parent's follow time
-          const parentFollow = parseFloat(parentAnnotation.cue.follow) || 0;
-          const saveTimestamp = parentAnnotation.timestamp + parentFollow;
-          onSave(finalFields, saveTimestamp);
-        }
+      if (isCreate) {
+        onSave(finalFields);
       } else {
-        if (isCreate) {
-          onSave(finalFields);
-        } else {
-          onSave(finalFields, editedTimestamp);
-        }
+        onSave(finalFields, editedTimestamp);
       }
     }
   };
@@ -637,7 +518,7 @@ export function CueForm({
     <form
       onSubmit={handleSubmit}
       onKeyDown={handleKeyDown}
-      className="rounded-lg p-4 mt-3 max-h-[60vh] overflow-y-auto annotation-scroll"
+      className={`rounded-lg p-4 mt-3 ${fillHeight ? 'flex flex-col flex-1 min-h-0 overflow-y-auto annotation-scroll' : 'max-h-[60vh] overflow-y-auto annotation-scroll'}`}
       style={{ background: 'var(--bg-card)', border: '1px solid rgba(191,87,0,0.3)' }}
     >
       {/* Header */}
@@ -651,8 +532,8 @@ export function CueForm({
         <span className="ml-auto text-[10px]" style={{ color: 'var(--text-dim)' }}>Ctrl+Enter to save</span>
       </div>
 
-      {/* Timestamp + Time in Title (only if selected for this type, hidden for LOOP) */}
-      {!isLoopType && (showField('timestamp') || showField('timeInTitle')) && (
+      {/* Timestamp + Time in Title (only if selected for this type) */}
+      {(showField('timestamp') || showField('timeInTitle')) && (
         <div className={`grid ${gridColsClass(+showField('timestamp') + +showField('timeInTitle'))} gap-2 mb-2`}>
           {showField('timestamp') && (
             <div>
@@ -679,10 +560,10 @@ export function CueForm({
         </div>
       )}
 
-      {/* Type (always shown) + Cue # (hidden when autofollow active or LOOP) + Old Cue # */}
+      {/* Type (always shown) + Cue # + Old Cue # */}
       {(() => {
-        const showCueNumHere = !isLoopType && showField('cueNumber') && !(autofollowEnabled && isAutofollow);
-        const showOldCueNum = !isLoopType && showField('oldCueNumber');
+        const showCueNumHere = showField('cueNumber');
+        const showOldCueNum = showField('oldCueNumber');
         const typeRow = [
           true, // type is always shown
           showCueNumHere,
@@ -697,12 +578,12 @@ export function CueForm({
                 options={cueTypes}
                 value={fields.type}
                 onChange={(val) => handleChange('type', val)}
-                placeholder="\u2014 Select Type \u2014"
+                placeholder="Cue Type"
                 autoFocus={isCreate}
               />
             </div>
             {showCueNumHere && (
-              <Field label={getFieldLabel('cueNumber', fieldDefs)} name="cueNumber" value={fields.cueNumber} onChange={handleChange} placeholder="e.g. 101" />
+              <Field label={getFieldLabel('cueNumber', fieldDefs)} name="cueNumber" value={fields.cueNumber} onChange={handleChange} placeholder="e.g. 101" autoFocus={!isCreate} />
             )}
             {showOldCueNum && (
               <Field label={getFieldLabel('oldCueNumber', fieldDefs)} name="oldCueNumber" value={fields.oldCueNumber} onChange={handleChange} />
@@ -711,155 +592,10 @@ export function CueForm({
         );
       })()}
 
-      {/* ── LOOP type: simplified form ── */}
-      {isLoopType && (
-        <div className="space-y-3">
-          {/* Editable timestamp in edit mode */}
-          {!isCreate && (
-            <div>
-              <label className={labelClass}>
-                {isLoopFrom ? 'Loop From Timestamp (HH:MM:SS;FF)' : 'Loop To Timestamp (HH:MM:SS;FF)'}
-              </label>
-              <TimecodeInput
-                value={timestampStr}
-                onChange={handleTimestampChange}
-                className={`${inputClass} font-mono text-center`}
-              />
-            </div>
-          )}
-
-          {/* Loop From (read-only in create mode) */}
-          {isCreate && isLoopFrom && (
-            <div>
-              <label className={labelClass}>Loop From (trigger point)</label>
-              <input
-                type="text"
-                value={secondsToTimecodeStr(timestamp)}
-                readOnly
-                className={`${readOnlyClass} font-mono text-center`}
-                tabIndex={-1}
-              />
-            </div>
-          )}
-
-          {/* Trigger Point shown on LOOP TO — Loop From's timestamp */}
-          {isLoopTo && loopFromAnnotation && (
-            <div>
-              <label className={labelClass}>Trigger Point (Loop From)</label>
-              <input
-                type="text"
-                value={secondsToTimecodeStr(loopFromAnnotation.timestamp)}
-                readOnly
-                className={`${readOnlyClass} font-mono text-center`}
-                tabIndex={-1}
-              />
-            </div>
-          )}
-
-          {/* Jump to Cue# — only for LOOP FROM */}
-          {isLoopFrom && (
-            <div>
-              <label className={labelClass}>Jump to Cue#</label>
-              <SearchableDropdown
-                options={loopTargetCueOptions}
-                value={loopTargetCueNum}
-                onChange={(val) => setLoopTargetCueNum(val)}
-                placeholder="— Select Cue# —"
-              />
-            </div>
-          )}
-
-          {/* Jump to Timestamp — only for LOOP FROM */}
-          {isLoopFrom && (
-            <div>
-              <label className={labelClass}>Jump to Timestamp (HH:MM:SS;FF)</label>
-              <TimecodeInput
-                value={loopTargetTimestampStr}
-                onChange={(val) => setLoopTargetTimestampStr(val)}
-                className={`${inputClass} font-mono text-center`}
-              />
-            </div>
-          )}
-
-          {/* Loop error */}
-          {loopError && (
-            <div className="px-2 py-1.5 bg-red-900/40 border border-red-500/50 rounded text-red-300 text-xs">
-              {loopError}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── Normal fields (hidden when LOOP type) ── */}
-      {!isLoopType && (<>
-      {/* ── Autofollow Section ── */}
-      {autofollowEnabled && (
-        <div className="mb-2 rounded-md p-2" style={{ border: '1px solid var(--border)' }}>
-          <label className="flex items-center gap-2 cursor-pointer select-none mb-1">
-            <input
-              type="checkbox"
-              checked={isAutofollow}
-              onChange={(e) => {
-                setIsAutofollow(e.target.checked);
-                if (!e.target.checked) {
-                  setFollowCueNum('');
-                  setAutofollowSuffix('');
-                }
-              }}
-              className="accent-[var(--amber)]"
-            />
-            <span className="text-xs font-medium" style={{ color: 'var(--text-mid)' }}>Auto-Follow</span>
-          </label>
-          {isAutofollow && (
-            <div className="mt-1 space-y-2">
-              {/* Follow Cue# (searchable dropdown) */}
-              <div>
-                <label className={labelClass}>Follow Cue#</label>
-                <SearchableDropdown
-                  options={followCueOptions}
-                  value={followCueNum}
-                  onChange={(val) => setFollowCueNum(val)}
-                  placeholder="— Select Cue# —"
-                />
-              </div>
-              {/* Follow Time (read-only) */}
-              <div>
-                <label className={labelClass}>Follow Time</label>
-                <input
-                  type="text"
-                  value={followTimeDisplay}
-                  readOnly
-                  className={`${readOnlyClass} font-mono`}
-                  tabIndex={-1}
-                />
-              </div>
-              {/* Cue# with locked prefix */}
-              {showField('cueNumber') && (
-                <div>
-                  <label className={labelClass}>Cue# (Autofollow)</label>
-                  <div className="flex">
-                    <span className="inline-flex items-center text-xs border border-r-0 rounded-l px-2 py-1.5 font-mono select-none" style={{ background: 'var(--bg)', color: 'var(--text-mid)', borderColor: 'var(--border)' }}>
-                      {followCueNum ? followCueNum + '.' : '?.'}
-                    </span>
-                    <input
-                      type="text"
-                      value={autofollowSuffix}
-                      onChange={(e) => setAutofollowSuffix(e.target.value)}
-                      placeholder="1"
-                      className={`${inputClass} rounded-l-none font-mono`}
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Autofollow validation error */}
-      {autofollowError && (
-        <div className="mb-2 px-2 py-1.5 bg-red-900/40 border border-red-500/50 rounded text-red-300 text-xs">
-          {autofollowError}
+      {/* Duplicate Cue# soft warning */}
+      {duplicateCueWarning && (
+        <div className="mb-2 px-2 py-1.5 bg-yellow-900/40 border border-yellow-500/50 rounded text-yellow-300 text-xs">
+          {duplicateCueWarning}
         </div>
       )}
 
@@ -870,7 +606,7 @@ export function CueForm({
           <SearchableDropdown
             options={linkCueOptions}
             value={linkCueNum}
-            onChange={(val) => setLinkCueNum(val)}
+            onChange={handleLinkCueChange}
             placeholder="— Select Cue# to link —"
             filterMode="prefix"
           />
@@ -1044,7 +780,6 @@ export function CueForm({
         }
         return elements;
       })()}
-      </>)}{/* end !isLoopType */}
 
       {/* Mandatory field validation error */}
       {validationMessage && (

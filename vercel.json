@@ -1,0 +1,5 @@
+{
+  "rewrites": [
+    { "source": "/video-window", "destination": "/index.html" }
+  ]
+}

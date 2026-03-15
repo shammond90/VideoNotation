@@ -1,38 +1,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import type { Annotation, CueFields, CueStatus } from '../types';
-import { LOOP_CUE_TYPE } from '../types';
-import { formatTime } from '../utils/formatTime';
 import { loadAnnotations, saveAnnotations } from '../utils/storage';
 import { recalculateAllDurations } from '../utils/duration';
-
-/**
- * Propagate timestamp changes to autofollow children.
- * When a parent cue's timestamp or follow time changes,
- * all cues whose followCueNumber matches the parent's cueNumber
- * get their timestamps recalculated: parentTimestamp + parseFloat(parentFollow).
- * This propagates recursively (depth-first) in case of chained autofollows.
- */
-function propagateAutofollow(annotations: Annotation[], parent: Annotation): Annotation[] {
-  const parentCueNum = parent.cue.cueNumber;
-  if (!parentCueNum) return annotations;
-
-  const parentFollow = parseFloat(parent.cue.follow) || 0;
-  const childTimestamp = parent.timestamp + parentFollow;
-
-  let result = annotations;
-  for (let i = 0; i < result.length; i++) {
-    const a = result[i];
-    if (a.cue.autofollow === 'true' && a.cue.followCueNumber === parentCueNum) {
-      if (a.timestamp !== childTimestamp) {
-        const updated = { ...a, timestamp: childTimestamp, updatedAt: new Date().toISOString() };
-        result = [...result.slice(0, i), updated, ...result.slice(i + 1)];
-        // Recursively propagate to any children of this child
-        result = propagateAutofollow(result, updated);
-      }
-    }
-  }
-  return result;
-}
 
 /** Silent migration: ensure every annotation has the new F2.7/F2.13/F2.14 fields */
 function migrateAnnotation(a: any): Annotation {
@@ -106,11 +75,11 @@ export function useAnnotations(fileName: string, fileSize: number, videoDuration
         };
         createdAnnotation = newAnnotation;
         let withNew = sortAnnotations([...prev, newAnnotation]);
-        // Bidirectional link sync on create
-        if (cue.linkCueNumber && cue.cueNumber) {
+        // Bidirectional link sync on create — use UUID-based linkCueId
+        if (cue.linkCueId) {
           withNew = withNew.map((a) =>
-            a.cue.type === cue.type && a.cue.cueNumber === cue.linkCueNumber
-              ? { ...a, cue: { ...a.cue, linkCueNumber: cue.cueNumber }, updatedAt: new Date().toISOString() }
+            a.id === cue.linkCueId
+              ? { ...a, cue: { ...a.cue, linkCueId: newAnnotation.id, linkCueNumber: cue.cueNumber }, updatedAt: new Date().toISOString() }
               : a,
           );
         }
@@ -140,113 +109,34 @@ export function useAnnotations(fileName: string, fileSize: number, videoDuration
 
         const updatedCue = modified.find((a) => a.id === id);
 
-        // ── Back-propagate follow time to parent when autofollow cue timestamp changes ──
-        if (
-          updatedCue &&
-          updatedCue.cue.autofollow === 'true' &&
-          updatedCue.cue.followCueNumber &&
-          typeof newTimestamp === 'number'
-        ) {
-          const parentIdx = modified.findIndex(
-            (a) => a.cue.cueNumber === updatedCue.cue.followCueNumber,
-          );
-          if (parentIdx !== -1) {
-            const parent = modified[parentIdx];
-            const newFollow = (newTimestamp - parent.timestamp).toFixed(2).replace(/\.?0+$/, '');
-            modified = [
-              ...modified.slice(0, parentIdx),
-              {
-                ...parent,
-                cue: { ...parent.cue, follow: newFollow },
-                updatedAt: new Date().toISOString(),
-              },
-              ...modified.slice(parentIdx + 1),
-            ];
-          }
-        }
-
-        // ── Autofollow propagation ──
-        // After updating, cascade timestamp changes to any cues that follow the updated cue
-        if (updatedCue) {
-          modified = propagateAutofollow(modified, updatedCue);
-        }
-
-        // ── Bidirectional Link Cue# sync ──
+        // ── Bidirectional Link sync (UUID-based) ──
         if (updatedCue) {
           const oldCue = prev.find((a) => a.id === id);
-          const oldLink = oldCue?.cue.linkCueNumber ?? '';
-          const newLink = updatedCue.cue.linkCueNumber ?? '';
-          const cueType = updatedCue.cue.type;
+          const oldLinkId = oldCue?.cue.linkCueId ?? '';
+          const newLinkId = updatedCue.cue.linkCueId ?? '';
           const cueNum = updatedCue.cue.cueNumber;
 
           // If the old link changed or was removed, clear the old partner's link
-          if (oldLink && oldLink !== newLink) {
+          if (oldLinkId && oldLinkId !== newLinkId) {
             modified = modified.map((a) =>
-              a.cue.type === cueType && a.cue.cueNumber === oldLink && a.cue.linkCueNumber === cueNum
-                ? { ...a, cue: { ...a.cue, linkCueNumber: '' }, updatedAt: new Date().toISOString() }
+              a.id === oldLinkId
+                ? { ...a, cue: { ...a.cue, linkCueId: '', linkCueNumber: '' }, updatedAt: new Date().toISOString() }
                 : a,
             );
           }
 
-          // If there's a new link, set the partner's linkCueNumber to this cue's number
-          if (newLink && cueNum) {
+          // If there's a new link, set the partner's linkCueId/linkCueNumber to this cue
+          if (newLinkId) {
             modified = modified.map((a) =>
-              a.cue.type === cueType && a.cue.cueNumber === newLink
-                ? { ...a, cue: { ...a.cue, linkCueNumber: cueNum }, updatedAt: new Date().toISOString() }
+              a.id === newLinkId
+                ? { ...a, cue: { ...a.cue, linkCueId: id, linkCueNumber: cueNum }, updatedAt: new Date().toISOString() }
                 : a,
             );
           }
-        }
 
-        // ── Loop sync: bidirectional LOOP FROM ↔ LOOP TO ──
-        if (updatedCue?.cue.type === LOOP_CUE_TYPE) {
-          if (updatedCue.cue.cueNumber === 'LOOP TO' && typeof newTimestamp === 'number') {
-            // LOOP TO timestamp changed → update LOOP FROM's loopTargetTimestamp and what
-            const loopFromIdx = modified.findIndex(
-              (a) => a.cue.type === LOOP_CUE_TYPE && a.cue.cueNumber === 'LOOP FROM',
-            );
-            if (loopFromIdx !== -1) {
-              const loopFrom = modified[loopFromIdx];
-              const targetCueNum = loopFrom.cue.loopTargetCueNumber;
-              modified = [
-                ...modified.slice(0, loopFromIdx),
-                {
-                  ...loopFrom,
-                  cue: {
-                    ...loopFrom.cue,
-                    loopTargetTimestamp: String(newTimestamp),
-                    what: `→ ${formatTime(newTimestamp)}${targetCueNum ? ' (Cue#' + targetCueNum + ')' : ''}`,
-                  },
-                  updatedAt: new Date().toISOString(),
-                },
-                ...modified.slice(loopFromIdx + 1),
-              ];
-            }
-          } else if (updatedCue.cue.cueNumber === 'LOOP FROM') {
-            // LOOP FROM updated → sync LOOP TO's timestamp and what
-            const targetTs = parseFloat(updatedCue.cue.loopTargetTimestamp);
-            const loopToIdx = modified.findIndex(
-              (a) => a.cue.type === LOOP_CUE_TYPE && a.cue.cueNumber === 'LOOP TO',
-            );
-            if (loopToIdx !== -1) {
-              const loopTo = modified[loopToIdx];
-              const updates: Partial<typeof loopTo> = { updatedAt: new Date().toISOString() };
-              const cueUpdates: Partial<typeof loopTo.cue> = {
-                what: `← ${formatTime(updatedCue.timestamp)}`,
-              };
-              if (!isNaN(targetTs)) {
-                updates.timestamp = targetTs;
-              }
-              modified = [
-                ...modified.slice(0, loopToIdx),
-                {
-                  ...loopTo,
-                  ...updates,
-                  cue: { ...loopTo.cue, ...cueUpdates },
-                },
-                ...modified.slice(loopToIdx + 1),
-              ];
-            }
+          // If cueNumber was renamed, update the partner's display linkCueNumber too
+          if (oldCue && oldCue.cue.cueNumber !== cueNum && newLinkId) {
+            // Already handled above — the partner's linkCueNumber is set to the new cueNum
           }
         }
 
@@ -265,18 +155,12 @@ export function useAnnotations(fileName: string, fileSize: number, videoDuration
         const toDelete = prev.find((a) => a.id === id);
         let remaining = prev.filter((a) => a.id !== id);
 
-        // When deleting a LOOP cue, also remove its partner (LOOP FROM ↔ LOOP TO)
-        if (toDelete?.cue.type === LOOP_CUE_TYPE) {
-          remaining = remaining.filter((a) => a.cue.type !== LOOP_CUE_TYPE);
-        }
 
-        // Clear bidirectional link partner if any
-        if (toDelete?.cue.linkCueNumber && toDelete.cue.cueNumber) {
+        // Clear bidirectional link partner if any (UUID-based)
+        if (toDelete?.cue.linkCueId) {
           remaining = remaining.map((a) =>
-            a.cue.type === toDelete.cue.type &&
-            a.cue.cueNumber === toDelete.cue.linkCueNumber &&
-            a.cue.linkCueNumber === toDelete.cue.cueNumber
-              ? { ...a, cue: { ...a.cue, linkCueNumber: '' }, updatedAt: new Date().toISOString() }
+            a.id === toDelete.cue.linkCueId
+              ? { ...a, cue: { ...a.cue, linkCueId: '', linkCueNumber: '' }, updatedAt: new Date().toISOString() }
               : a,
           );
         }
@@ -363,33 +247,28 @@ export function useAnnotations(fileName: string, fileSize: number, videoDuration
 
   /**
    * Compute the set of annotation IDs that are "skipped" due to linked cue ranges.
-   * When two cues of the same type are linked (A.linkCueNumber === B.cueNumber),
+   * When two cues of the same type are linked (A.linkCueId === B.id),
    * all cues of that same type whose timestamps fall strictly between A and B are skipped.
    */
   const skippedIds = useMemo(() => {
     const ids = new Set<string>();
-    // Build a map of cueNumber→annotation for quick lookup
-    const byCueNum = new Map<string, Annotation[]>();
+    // Build a map of id→annotation for quick lookup
+    const byId = new Map<string, Annotation>();
     for (const a of annotations) {
-      if (!a.cue.cueNumber) continue;
-      const key = `${a.cue.type}::${a.cue.cueNumber}`;
-      const arr = byCueNum.get(key);
-      if (arr) arr.push(a);
-      else byCueNum.set(key, [a]);
+      byId.set(a.id, a);
     }
 
     // For each annotation with a link, find the linked pair and mark everything between as skipped
     const processed = new Set<string>();
     for (const a of annotations) {
-      if (!a.cue.linkCueNumber || !a.cue.cueNumber) continue;
-      const pairKey = [a.cue.type, a.cue.cueNumber, a.cue.linkCueNumber].sort().join('::');
+      if (!a.cue.linkCueId) continue;
+      const pairKey = [a.id, a.cue.linkCueId].sort().join('::');
       if (processed.has(pairKey)) continue;
       processed.add(pairKey);
 
-      // Find the partner
-      const partnerArr = byCueNum.get(`${a.cue.type}::${a.cue.linkCueNumber}`);
-      if (!partnerArr || partnerArr.length === 0) continue;
-      const partner = partnerArr[0];
+      // Find the partner by UUID
+      const partner = byId.get(a.cue.linkCueId);
+      if (!partner) continue;
 
       const lo = Math.min(a.timestamp, partner.timestamp);
       const hi = Math.max(a.timestamp, partner.timestamp);
@@ -404,11 +283,6 @@ export function useAnnotations(fileName: string, fileSize: number, videoDuration
       }
     }
     return ids;
-  }, [annotations]);
-
-  /** The single active LOOP FROM annotation, if any. */
-  const loopAnnotation = useMemo(() => {
-    return annotations.find((a) => a.cue.type === LOOP_CUE_TYPE && a.cue.cueNumber === 'LOOP FROM') ?? null;
   }, [annotations]);
 
   // ── F2.13 — Set cue status ──
@@ -493,7 +367,6 @@ export function useAnnotations(fileName: string, fileSize: number, videoDuration
     annotations,
     activeId,
     skippedIds,
-    loopAnnotation,
     addAnnotation,
     updateAnnotation,
     deleteAnnotation,

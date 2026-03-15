@@ -1,7 +1,7 @@
 import React, { useState, useRef, useMemo, useCallback, useEffect } from 'react';
-import { X, Plus, Trash2, GripVertical, Download, Upload, Lock, Pencil, Check, AlertTriangle, ChevronDown, ChevronRight, Save, FileUp, Info, UserCircle, RotateCcw, Archive, Star } from 'lucide-react';
+import { X, Plus, Trash2, GripVertical, Download, Lock, Pencil, Check, AlertTriangle, ChevronDown, ChevronRight, Save, FileUp, Info, UserCircle, RotateCcw, Archive, Star, Tag, List, LayoutGrid, Eye, Keyboard, Bookmark, FolderOpen } from 'lucide-react';
 import type { ColumnConfig, Project, AppConfig, FieldDefinition, ConfigTemplate, TemplateData, Toast } from '../types';
-import { RESERVED_CUE_TYPES, LOOP_CUE_TYPE, EDITABLE_FIELD_KEYS, AUTOFOLLOW_COLUMN_KEYS, LINK_COLUMN_KEYS, getDefaultFieldsForType, getFieldLabel, extractTemplateData, FACTORY_DEFAULT_TEMPLATE } from '../types';
+import { RESERVED_CUE_TYPES, EDITABLE_FIELD_KEYS, LINK_COLUMN_KEYS, getDefaultFieldsForType, getFieldLabel, extractTemplateData, FACTORY_DEFAULT_TEMPLATE } from '../types';
 import { loadConfigTemplates, saveConfigTemplate, deleteConfigTemplate, renameConfigTemplate, exportTemplateToJSON, importTemplateFromJSON, getDefaultTemplate, setDefaultTemplate } from '../utils/configTemplates';
 import { loadProjects, deleteProject as deleteProjectFromStorage, updateProjectMetadata, exportProjectToJSON } from '../utils/projectStorage';
 import {
@@ -120,6 +120,10 @@ interface ConfigurationModalProps {
   projectName?: string;
   /** Total annotation count across all videos in the current project. */
   annotationCount?: number;
+  /** Callback to navigate to home screen. */
+  onGoHome?: () => void;
+  /** Callback to delete all projects (used for Factory Reset). */
+  onDeleteAllProjects?: () => Promise<void>;
 }
 
 // ── Sortable column item ──
@@ -544,7 +548,7 @@ export function ConfigurationModal({
   onReorderColumns,
   onAddCueTypeColumns,
   onRemoveCueTypeColumns,
-  onExportConfig,
+  onExportConfig: _onExportConfig,
   onImportConfig,
   onRecoverCurrentVideoCues,
   onRecoverConfig,
@@ -564,10 +568,65 @@ export function ConfigurationModal({
   addToast,
   projectName,
   annotationCount,
+  onGoHome,
+  onDeleteAllProjects,
 }: ConfigurationModalProps) {
   const { confirmState, showConfirm } = useConfirm();
   const [newTypeName, setNewTypeName] = useState('');
-  const [activeTab, setActiveTab] = useState<'types' | 'fields' | 'columns' | 'view' | 'templates' | 'savefiles' | 'data' | 'projects' | 'info'>('types');
+  const [activeTab, setActiveTab] = useState<'types' | 'fields' | 'columns' | 'view' | 'hotkeys' | 'templates' | 'savefiles' | 'data' | 'projects' | 'info'>('types');
+
+  type TabKey = typeof activeTab;
+  const tabMeta: Record<TabKey, { title: string; desc: string; icon: React.ReactNode; group: 'setup' | 'manage' | 'info' }> = {
+    types:     { title: 'Cue Types',  desc: 'Define the cue types available when creating or editing a cue. Reserved types cannot be deleted. Types in use cannot be deleted until their cues are reassigned.', icon: <Tag className="w-3.5 h-3.5" />, group: 'setup' },
+    fields:    { title: 'Fields',     desc: 'Create custom fields, rename existing fields, or archive fields you no longer need. Reserved and in-use fields cannot be archived. Archived fields preserve existing cue data.', icon: <List className="w-3.5 h-3.5" />, group: 'setup' },
+    columns:   { title: 'Columns',    desc: 'Choose which fields appear as columns in the abridged cue list. Drag to reorder. Toggle visibility with the checkbox. Add type-specific overrides to show different columns per cue type.', icon: <LayoutGrid className="w-3.5 h-3.5" />, group: 'setup' },
+    view:      { title: 'View',       desc: 'Control how cues are displayed in the cue sheet. Changes apply immediately.', icon: <Eye className="w-3.5 h-3.5" />, group: 'setup' },
+    hotkeys:   { title: 'HotKeys',    desc: 'Keyboard shortcuts active while on the cue sheet. Shortcuts are disabled when typing in text fields.', icon: <Keyboard className="w-3.5 h-3.5" />, group: 'setup' },
+    templates: { title: 'Templates',  desc: 'Save and load configuration templates capturing Cue Types, Fields, Columns, and View settings. Export as .cuetation-template.json to share between installations.', icon: <Bookmark className="w-3.5 h-3.5" />, group: 'manage' },
+    savefiles: { title: 'Save Files', desc: 'Manage backup snapshots. Cue backups are created automatically at the configured interval while you are active, and when the tab is backgrounded or the page is closed.', icon: <RotateCcw className="w-3.5 h-3.5" />, group: 'manage' },
+    data:      { title: 'Data',       desc: 'Destructive actions scoped to the current project, or to the entire application. All actions require confirmation before executing.', icon: <AlertTriangle className="w-3.5 h-3.5" />, group: 'manage' },
+    projects:  { title: 'Projects',   desc: 'Manage all projects. Edit metadata or delete unused projects.', icon: <FolderOpen className="w-3.5 h-3.5" />, group: 'manage' },
+    info:      { title: 'Info',       desc: 'View feature notes and the user guide for Cuetation.', icon: <Info className="w-3.5 h-3.5" />, group: 'info' },
+  };
+
+  const sidebarItem = (tab: TabKey) => {
+    const meta = tabMeta[tab];
+    const isActive = activeTab === tab;
+    return (
+      <button
+        key={tab}
+        type="button"
+        onClick={() => {
+          if (tab === 'templates') refreshTemplates();
+          if (tab === 'savefiles') setRecoveryTick((prev) => prev + 1);
+          setActiveTab(tab);
+        }}
+        className="flex items-center gap-2.5 w-full text-left transition-colors"
+        style={{
+          padding: '9px 16px',
+          borderLeft: `2px solid ${isActive ? 'var(--amber)' : 'transparent'}`,
+          background: isActive ? 'var(--amber-dim)' : 'transparent',
+        }}
+        onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = 'var(--bg-hover)'; }}
+        onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
+      >
+        <span
+          className="flex items-center justify-center flex-shrink-0 rounded"
+          style={{
+            width: 22, height: 22,
+            background: isActive ? 'var(--amber-dim)' : 'var(--bg-input)',
+            border: `1px solid ${isActive ? 'var(--amber-glow)' : 'var(--border)'}`,
+            color: isActive ? 'var(--amber)' : 'var(--text-dim)',
+          }}
+        >
+          {meta.icon}
+        </span>
+        <span className="text-xs font-medium" style={{ color: isActive ? 'var(--amber)' : 'var(--text-mid)' }}>
+          {meta.title}
+        </span>
+      </button>
+    );
+  };
   const [showFeatureNotes, setShowFeatureNotes] = useState(false);
   const [showUserGuide, setShowUserGuide] = useState(false);
   const [editingType, setEditingType] = useState<string | null>(null);
@@ -653,14 +712,11 @@ export function ConfigurationModal({
     // When viewing a specific type override, filter to only columns whose field is enabled for that type
     if (columnView !== 'default') {
       const typeFields = cueTypeFields[columnView] ?? getDefaultFieldsForType(columnView);
-      const hasAutofollow = typeFields.includes('addAutofollow');
       const hasLinking = typeFields.includes('linkCueNumber');
       // 'type' column is always shown; other columns shown only if their field is enabled for this type
       // Visibility (checked/unchecked) is controlled separately
       return base.filter((col) => {
         if (col.key === 'type') return true;
-        // Autofollow columns are shown when addAutofollow is enabled for this type
-        if (hasAutofollow && AUTOFOLLOW_COLUMN_KEYS.includes(col.key)) return true;
         // Link columns are shown when linkCueNumber is enabled for this type
         if (hasLinking && LINK_COLUMN_KEYS.includes(col.key)) return true;
         return typeFields.includes(col.key);
@@ -730,136 +786,94 @@ export function ConfigurationModal({
   };
 
   const typesWithOverrides = Object.keys(cueTypeColumns);
-  const allTypesForOverride = [...new Set([...cueTypes, LOOP_CUE_TYPE])];
+  const allTypesForOverride = [...new Set([...cueTypes])];
   const typesAvailableForOverride = allTypesForOverride.filter((t) => !cueTypeColumns[t]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)]">
-          <h2 className="text-lg font-semibold text-[var(--text)]">Configuration</h2>
+      <div
+        className="flex flex-col overflow-hidden rounded-xl border shadow-2xl"
+        style={{
+          width: 900,
+          maxWidth: '100%',
+          height: '85vh',
+          background: 'var(--bg-raised)',
+          borderColor: 'var(--border-hi)',
+          boxShadow: '0 24px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.03)',
+        }}
+      >
+        {/* ─── HEADER ─── */}
+        <div
+          className="flex items-center gap-3 flex-shrink-0"
+          style={{ padding: '16px 22px', borderBottom: '1px solid var(--border)' }}
+        >
+          <span style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontSize: 18, color: 'var(--text)', letterSpacing: '0.01em' }}>
+            Cue<em style={{ fontStyle: 'italic', color: 'var(--amber)' }}>tation</em>
+          </span>
+          <span style={{ width: 1, height: 14, background: 'var(--border)' }} />
+          <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-dim)', letterSpacing: '0.06em', textTransform: 'uppercase' as const }}>Configuration</span>
+          <span
+            className="ml-auto"
+            style={{ fontSize: 9, fontWeight: 600, letterSpacing: '.06em', color: 'var(--text-dim)', background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 3, padding: '3px 7px' }}
+          >
+            v0.9.1
+          </span>
           <button
             type="button"
             onClick={onClose}
-            className="p-1 text-[var(--text-mid)] hover:text-[var(--text)] hover:bg-[var(--bg-panel)] rounded-md transition-colors"
+            className="flex items-center justify-center flex-shrink-0 transition-colors"
+            style={{
+              width: 28, height: 28, borderRadius: '50%',
+              border: '1px solid var(--border-hi)', background: 'var(--bg-card)',
+              color: 'var(--text-dim)', fontSize: 13,
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--text-mid)'; e.currentTarget.style.color = 'var(--text-mid)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-hi)'; e.currentTarget.style.color = 'var(--text-dim)'; }}
           >
-            <X className="w-5 h-5" />
+            <X className="w-3.5 h-3.5" />
           </button>
         </div>
 
-        {/* Tabs */}
-        <div className="flex border-b border-[var(--border)]">
-          <button
-            type="button"
-            onClick={() => setActiveTab('types')}
-            className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors ${
-              activeTab === 'types'
-                ? 'text-[var(--amber-hi)] border-b-2 border-[var(--amber-hi)] bg-[var(--bg-panel)]/30'
-                : 'text-[var(--text-mid)] hover:text-[var(--text)]'
-            }`}
+        {/* ─── BODY ─── */}
+        <div className="flex flex-1 min-h-0">
+          {/* SIDEBAR */}
+          <div
+            className="flex flex-col flex-shrink-0 overflow-y-auto annotation-scroll"
+            style={{
+              width: 176,
+              background: 'var(--bg-card)',
+              borderRight: '1px solid var(--border)',
+              padding: '8px 0 12px',
+            }}
           >
-            Cue Types
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('fields')}
-            className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors ${
-              activeTab === 'fields'
-                ? 'text-[var(--amber-hi)] border-b-2 border-[var(--amber-hi)] bg-[var(--bg-panel)]/30'
-                : 'text-[var(--text-mid)] hover:text-[var(--text)]'
-            }`}
-          >
-            Fields
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('columns')}
-            className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors ${
-              activeTab === 'columns'
-                ? 'text-[var(--amber-hi)] border-b-2 border-[var(--amber-hi)] bg-[var(--bg-panel)]/30'
-                : 'text-[var(--text-mid)] hover:text-[var(--text)]'
-            }`}
-          >
-            Columns
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('view')}
-            className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors ${
-              activeTab === 'view'
-                ? 'text-[var(--amber-hi)] border-b-2 border-[var(--amber-hi)] bg-[var(--bg-panel)]/30'
-                : 'text-[var(--text-mid)] hover:text-[var(--text)]'
-            }`}
-          >
-            View
-          </button>
-          <button
-            type="button"
-            onClick={() => { refreshTemplates(); setActiveTab('templates'); }}
-            className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors ${
-              activeTab === 'templates'
-                ? 'text-[var(--amber-hi)] border-b-2 border-[var(--amber-hi)] bg-[var(--bg-panel)]/30'
-                : 'text-[var(--text-mid)] hover:text-[var(--text)]'
-            }`}
-          >
-            Templates
-          </button>
-          <button
-            type="button"
-            onClick={() => { setRecoveryTick((prev) => prev + 1); setActiveTab('savefiles'); }}
-            className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors ${
-              activeTab === 'savefiles'
-                ? 'text-[var(--amber-hi)] border-b-2 border-[var(--amber-hi)] bg-[var(--bg-panel)]/30'
-                : 'text-[var(--text-mid)] hover:text-[var(--text)]'
-            }`}
-          >
-            Save Files
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('data')}
-            className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors ${
-              activeTab === 'data'
-                ? 'text-[var(--amber-hi)] border-b-2 border-[var(--amber-hi)] bg-[var(--bg-panel)]/30'
-                : 'text-[var(--text-mid)] hover:text-[var(--text)]'
-            }`}
-          >
-            Data
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('projects')}
-            className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors ${
-              activeTab === 'projects'
-                ? 'text-[var(--amber-hi)] border-b-2 border-[var(--amber-hi)] bg-[var(--bg-panel)]/30'
-                : 'text-[var(--text-mid)] hover:text-[var(--text)]'
-            }`}
-          >
-            Projects
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('info')}
-            className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors ${
-              activeTab === 'info'
-                ? 'text-[var(--amber-hi)] border-b-2 border-[var(--amber-hi)] bg-[var(--bg-panel)]/30'
-                : 'text-[var(--text-mid)] hover:text-[var(--text)]'
-            }`}
-          >
-            Info
-          </button>
-        </div>
+            <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: '.1em', textTransform: 'uppercase' as const, color: 'var(--text-dim)', padding: '6px 16px 5px' }}>Setup</span>
+            {sidebarItem('types')}
+            {sidebarItem('fields')}
+            {sidebarItem('columns')}
+            {sidebarItem('view')}
+            {sidebarItem('hotkeys')}
+            <div style={{ height: 1, background: 'var(--border)', margin: '7px 14px' }} />
+            <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: '.1em', textTransform: 'uppercase' as const, color: 'var(--text-dim)', padding: '14px 16px 5px' }}>Manage</span>
+            {sidebarItem('templates')}
+            {sidebarItem('savefiles')}
+            {sidebarItem('data')}
+            {sidebarItem('projects')}
+            <div style={{ height: 1, background: 'var(--border)', margin: '7px 14px' }} />
+            {sidebarItem('info')}
+          </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto annotation-scroll p-6">
+          {/* CONTENT AREA */}
+          <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+            {/* Content header */}
+            <div className="flex-shrink-0" style={{ padding: '20px 24px 16px', borderBottom: '1px solid var(--border)' }}>
+              <h3 className="text-base font-semibold" style={{ color: 'var(--text)', letterSpacing: '-0.02em', marginBottom: 5 }}>{tabMeta[activeTab].title}</h3>
+              <p style={{ fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.6, fontWeight: 300, maxWidth: 540 }}>{tabMeta[activeTab].desc}</p>
+            </div>
+
+            {/* Scrollable content */}
+            <div className="flex-1 overflow-y-auto annotation-scroll" style={{ padding: '20px 24px' }}>
           {activeTab === 'types' && (
             <div className="space-y-4">
-              <p className="text-xs text-[var(--text-mid)]">
-                Define the cue types available in the dropdown when creating or editing a cue.
-                Types that are in use cannot be deleted. You can rename any type.
-              </p>
-
               {/* Add new type */}
               <div className="flex gap-2">
                 <input
@@ -888,7 +902,7 @@ export function ConfigurationModal({
 
               {/* Type list */}
               <div className="space-y-1.5">
-                {[...cueTypes, ...(cueTypes.includes(LOOP_CUE_TYPE) ? [] : [LOOP_CUE_TYPE])].map((type) => {
+                {cueTypes.map((type) => {
                   const isReserved = (RESERVED_CUE_TYPES as readonly string[]).includes(type);
                   const isInUse = usedCueTypes.has(type);
                   const isLocked = isReserved || isInUse;
@@ -1005,7 +1019,7 @@ export function ConfigurationModal({
                           <button
                             type="button"
                             onClick={() => handleStartEdit(type)}
-                            className={`p-1 text-[var(--text-dim)] hover:text-[var(--text-mid)] hover:bg-[var(--bg-hover)] rounded transition-colors ${type === LOOP_CUE_TYPE ? 'hidden' : ''}`}
+                            className={`p-1 text-[var(--text-dim)] hover:text-[var(--text-mid)] hover:bg-[var(--bg-hover)] rounded transition-colors`}
                             title={`Rename ${type}`}
                           >
                             <Pencil className="w-3.5 h-3.5" />
@@ -1144,11 +1158,6 @@ export function ConfigurationModal({
 
             return (
               <div className="space-y-4">
-                <p className="text-xs text-[var(--text-mid)]">
-                  Create custom fields, rename existing fields, or archive fields you no longer need.
-                  Reserved and in-use fields cannot be archived. Archived fields preserve existing cue data.
-                </p>
-
                 {/* Add new custom field */}
                 <div className="p-3 bg-[var(--bg-card)]/60 border border-[var(--border-hi)]/30 rounded-md space-y-2">
                   <span className="text-[10px] uppercase tracking-wider text-[var(--text-dim)]">Create Custom Field</span>
@@ -1405,12 +1414,6 @@ export function ConfigurationModal({
 
           {activeTab === 'columns' && (
             <div className="space-y-4">
-              <p className="text-xs text-[var(--text-mid)]">
-                Choose which fields appear in the abridged cue list.
-                Drag to reorder. Toggle visibility with the checkbox.
-                You can also add cue-type-specific column selections.
-              </p>
-
               {/* Column view selector */}
               <div className="flex items-center gap-2">
                 <label className="text-xs text-[var(--text-mid)]">Viewing columns for:</label>
@@ -1491,10 +1494,6 @@ export function ConfigurationModal({
 
           {activeTab === 'view' && (
             <div className="space-y-4">
-              <p className="text-xs text-[var(--text-mid)]">
-                Control how cues are displayed in the cue sheet.
-              </p>
-
               {/* Cue Sheet View selector */}
               <div className="px-3 py-3 bg-[var(--bg-panel-a50)] rounded-md border border-[var(--border-hi-a50)]">
                 <span className="text-sm text-[var(--text)] font-medium">Cue Sheet View</span>
@@ -1609,13 +1608,75 @@ export function ConfigurationModal({
             </div>
           )}
 
+          {activeTab === 'hotkeys' && (
+            <div>
+              {/* Video Playback */}
+              <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: '.1em', textTransform: 'uppercase' as const, color: 'var(--text-dim)', marginBottom: 10 }}>Video Playback</div>
+              {([
+                { key: 'Space', action: 'Play / Pause', hi: true },
+                { key: '←', action: 'Seek back 5 seconds', hi: false },
+                { key: '→', action: 'Seek forward 5 seconds', hi: false },
+                { key: ',', action: 'Previous frame', hi: false },
+                { key: '.', action: 'Next frame', hi: false },
+                { key: '+', action: 'Increase playback speed', hi: false },
+                { key: '−', action: 'Decrease playback speed', hi: false },
+              ] as const).map(({ key, action, hi }) => (
+                <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+                  <kbd
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 10, fontWeight: 500, fontFamily: "'DM Mono', monospace",
+                      minWidth: 80, padding: '3px 9px', borderRadius: 4, whiteSpace: 'nowrap' as const,
+                      background: 'var(--bg-card)',
+                      color: hi ? 'var(--amber)' : 'var(--text-mid)',
+                      border: `1px solid ${hi ? 'var(--amber)' : 'var(--border-hi)'}`,
+                    }}
+                  >{key}</kbd>
+                  <span style={{ fontSize: 12, color: 'var(--text-mid)', flex: 1, fontWeight: 300 }}>{action}</span>
+                </div>
+              ))}
+
+              {/* Cue Annotation */}
+              <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: '.1em', textTransform: 'uppercase' as const, color: 'var(--text-dim)', marginBottom: 10, marginTop: 18 }}>Cue Annotation</div>
+              {([
+                { key: 'Enter', action: 'Open cue form / Add cue', hi: true },
+                { key: 'Ctrl+Enter', action: 'Save cue (when cue form is open)', hi: false },
+                { key: 'Escape', action: 'Close cue form without saving', hi: false },
+                { key: 'J', action: 'Toggle Jump Navigation menu', hi: false },
+              ] as const).map(({ key, action, hi }) => (
+                <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+                  <kbd
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 10, fontWeight: 500, fontFamily: "'DM Mono', monospace",
+                      minWidth: 80, padding: '3px 9px', borderRadius: 4, whiteSpace: 'nowrap' as const,
+                      background: 'var(--bg-card)',
+                      color: hi ? 'var(--amber)' : 'var(--text-mid)',
+                      border: `1px solid ${hi ? 'var(--amber)' : 'var(--border-hi)'}`,
+                    }}
+                  >{key}</kbd>
+                  <span style={{ fontSize: 12, color: 'var(--text-mid)', flex: 1, fontWeight: 300 }}>{action}</span>
+                </div>
+              ))}
+
+              {/* Global */}
+              <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: '.1em', textTransform: 'uppercase' as const, color: 'var(--text-dim)', marginBottom: 10, marginTop: 18 }}>Global</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '8px 0' }}>
+                <kbd
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 10, fontWeight: 500, fontFamily: "'DM Mono', monospace",
+                    minWidth: 80, padding: '3px 9px', borderRadius: 4, whiteSpace: 'nowrap' as const,
+                    background: 'var(--bg-card)', color: 'var(--text-mid)', border: '1px solid var(--border-hi)',
+                  }}
+                >Ctrl+S</kbd>
+                <span style={{ fontSize: 12, color: 'var(--text-mid)', flex: 1, fontWeight: 300 }}>Save project (works everywhere)</span>
+              </div>
+            </div>
+          )}
+
           {activeTab === 'templates' && (
             <div className="space-y-5">
-              <p className="text-xs text-[var(--text-mid)]">
-                Save and load configuration templates that capture Cue Types, Fields, Columns, and View settings.
-                Templates can be exported as <code>.cuetation-template.json</code> files to share between installations.
-              </p>
-
               {/* Save current config as template */}
               <div className="p-4 bg-[var(--bg-panel)]/30 border border-[var(--border-hi-a50)] rounded-lg space-y-3">
                 <h3 className="text-sm font-medium text-[var(--text)]">Save Current Configuration</h3>
@@ -1903,12 +1964,6 @@ export function ConfigurationModal({
 
           {activeTab === 'savefiles' && (
             <div className="space-y-5">
-              <p className="text-xs text-[var(--text-mid)]">
-                Manage backup snapshots. Cue backups are created automatically at the configured interval
-                while you are active, and when the tab is backgrounded or the page is closed. Configuration is
-                backed up when you close this modal.
-              </p>
-
               {/* Backup interval setting */}
               <div className="p-4 bg-[var(--bg-panel)]/30 border border-[var(--border-hi-a50)] rounded-lg space-y-2">
                 <h3 className="text-sm font-medium text-[var(--text)]">Cue Backup Interval</h3>
@@ -2275,8 +2330,9 @@ export function ConfigurationModal({
                           requireText: 'EVERYTHING',
                         });
                         if (ok) {
+                          await onDeleteAllProjects?.();
                           onClearAllData();
-                          onClose();
+                          onGoHome?.();
                         }
                       }}
                       className="shrink-0 px-4 py-2 text-xs font-medium text-red-500 rounded border border-red-700/60 bg-transparent hover:bg-red-900/20 transition-colors"
@@ -2292,70 +2348,82 @@ export function ConfigurationModal({
             <ProjectAdminTab liveConfig={liveConfig} />
           )}
           {activeTab === 'info' && (
-            <div className="space-y-6">
-              <h3 className="text-base font-semibold" style={{ color: 'var(--text)' }}>Application Info</h3>
-              <p className="text-sm" style={{ color: 'var(--text-mid)' }}>View feature notes and the user guide for Cuetation.</p>
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowFeatureNotes(true)}
-                  className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-md transition-colors"
-                  style={{ background: 'var(--bg-panel)', color: 'var(--text-mid)', border: '1px solid var(--border-hi)' }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text)'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-panel)'; e.currentTarget.style.color = 'var(--text-mid)'; }}
-                >
-                  <Info className="w-4 h-4" />
-                  Feature Notes
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowUserGuide(true)}
-                  className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-md transition-colors"
-                  style={{ background: 'var(--bg-panel)', color: 'var(--text-mid)', border: '1px solid var(--border-hi)' }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text)'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-panel)'; e.currentTarget.style.color = 'var(--text-mid)'; }}
-                >
-                  <Info className="w-4 h-4" />
-                  User Guide
-                </button>
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={() => setShowFeatureNotes(true)}
+                className="flex items-center gap-3.5 w-full text-left transition-colors"
+                style={{ padding: '15px 16px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--bg-card)', cursor: 'pointer' }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--border-hi)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; }}
+              >
+                <span className="flex items-center justify-center flex-shrink-0" style={{ width: 36, height: 36, borderRadius: 7, background: 'var(--bg-input)', border: '1px solid var(--border)', color: 'var(--text-mid)', fontSize: 16 }}>
+                  <Info className="w-4.5 h-4.5" />
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)', marginBottom: 2 }}>Feature Notes</p>
+                  <p style={{ fontSize: 11, color: 'var(--text-dim)', fontWeight: 300 }}>What's new and recently changed in Cuetation.</p>
+                </div>
+                <span style={{ color: 'var(--text-dim)', fontSize: 16, marginLeft: 'auto' }}>›</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowUserGuide(true)}
+                className="flex items-center gap-3.5 w-full text-left transition-colors"
+                style={{ padding: '15px 16px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--bg-card)', cursor: 'pointer' }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--border-hi)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; }}
+              >
+                <span className="flex items-center justify-center flex-shrink-0" style={{ width: 36, height: 36, borderRadius: 7, background: 'var(--bg-input)', border: '1px solid var(--border)', color: 'var(--text-mid)', fontSize: 16 }}>
+                  <Info className="w-4.5 h-4.5" />
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)', marginBottom: 2 }}>User Guide</p>
+                  <p style={{ fontSize: 11, color: 'var(--text-dim)', fontWeight: 300 }}>Full documentation for every feature.</p>
+                </div>
+                <span style={{ color: 'var(--text-dim)', fontSize: 16, marginLeft: 'auto' }}>›</span>
+              </button>
+              <div style={{ marginTop: 24, paddingTop: 18, borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>Cuetation · Phase 1 · Local-first build</span>
+                <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: '.06em', color: 'var(--text-dim)', background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 3, padding: '3px 7px' }}>v0.9.1</span>
               </div>
               <InfoModal isOpen={showFeatureNotes} onClose={() => setShowFeatureNotes(false)} title="Feature Notes" content={featureNotes} />
               <InfoModal isOpen={showUserGuide} onClose={() => setShowUserGuide(false)} title="User Guide" content={userGuide} />
             </div>
           )}
-        </div>
+            </div>
+          </div>{/* /content area */}
+        </div>{/* /body */}
 
-        {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-[var(--border)]">
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={onExportConfig}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-[var(--bg-panel)] text-[var(--text-mid)] rounded-md hover:bg-[var(--bg-hover)] transition-colors"
-            >
-              <Download className="w-3.5 h-3.5" />
-              Export Config
-            </button>
-            <button
-              type="button"
-              onClick={() => importRef.current?.click()}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-[var(--bg-panel)] text-[var(--text-mid)] rounded-md hover:bg-[var(--bg-hover)] transition-colors"
-            >
-              <Upload className="w-3.5 h-3.5" />
-              Import Config
-            </button>
-            <input
-              ref={importRef}
-              type="file"
-              accept=".json"
-              onChange={handleImportFile}
-              className="hidden"
-            />
-          </div>
+        {/* ─── FOOTER ─── */}
+        <div
+          className="flex items-center justify-end flex-shrink-0"
+          style={{ padding: '14px 22px', borderTop: '1px solid var(--border)', background: 'var(--bg-card)' }}
+        >
+          <input
+            ref={importRef}
+            type="file"
+            accept=".json"
+            onChange={handleImportFile}
+            className="hidden"
+          />
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-1.5 text-sm bg-[var(--amber)] text-white rounded-md hover:bg-[var(--amber)] transition-colors"
+            className="transition-colors"
+            style={{
+              background: 'var(--amber)',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 6,
+              padding: '10px 32px',
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+              letterSpacing: '0.01em',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--amber-hi)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--amber)'; }}
           >
             Done
           </button>

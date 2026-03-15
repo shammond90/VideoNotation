@@ -2,7 +2,6 @@ import { useCallback, useRef, useState, useEffect, useMemo } from 'react';
 import { VideoDropZone } from './components/VideoDropZone';
 import { VideoPlayer } from './components/VideoPlayer';
 import type { ScrubberTitleMarker, ScrubberSceneMarker, ScrubberSceneBand } from './components/VideoPlayer';
-import { CueForm } from './components/CueForm';
 import { AnnotationPanel } from './components/AnnotationPanel';
 import { ConfigurationModal } from './components/ConfigurationModal';
 import { ExportDialog } from './components/ExportDialog';
@@ -14,15 +13,15 @@ import { SCENE_BAND_COLORS } from './hooks/useCueGrouping';
 import { useConfiguration } from './hooks/useConfiguration';
 import { useToast } from './hooks/useToast';
 import { useVideoHandle } from './hooks/useVideoHandle';
+import { useBroadcastSync, supportsDualWindow, type SyncMessage } from './hooks/useBroadcastSync';
 import { exportAnnotationsToCSV, importAnnotationsFromCSV } from './utils/csv';
-import { formatTime } from './utils/formatTime';
 import { saveAnnotations, loadAnnotations, backupAnnotations, popRecoveryEvents, migrateNoVideoAnnotations, hasAnnotationData } from './utils/storage';
 import { updateProjectConfig, exportProjectToJSON, loadProjects } from './utils/projectStorage';
 import { supportsFileSystemAccess, pickVideoWithHandle } from './utils/videoHandleStorage';
 import { VideoReconnectBanner } from './components/VideoReconnectBanner';
 import type { CueFields } from './types';
-import { RESERVED_CUE_TYPES, LOOP_CUE_TYPE } from './types';
-import { Film, Settings, X as XIcon } from 'lucide-react';
+import { RESERVED_CUE_TYPES } from './types';
+import { Film, Settings, X as XIcon, ExternalLink } from 'lucide-react';
 
 interface AppProps {
   projectId?: string;
@@ -36,6 +35,7 @@ interface AppProps {
   onVideoHandleStored?: (handle: FileSystemFileHandle) => void;
   onUnsavedChangesChange?: (hasChanges: boolean) => void;
   onDeleteProject?: () => void;
+  onDeleteAllProjects?: () => Promise<void>;
   onSave?: () => void;
 }
 
@@ -51,6 +51,7 @@ export default function App({
   onVideoHandleStored,
   onUnsavedChangesChange,
   onDeleteProject,
+  onDeleteAllProjects,
   onSave,
 }: AppProps = {}) {
   const [videoFile, setVideoFile] = useState<File | null>(initialVideoFile || null);
@@ -87,7 +88,12 @@ export default function App({
   const previousUrlRef = useRef<string>('');
   const cuesDirtyRef = useRef(false);
   const isConfigOpenRef = useRef(false);
-  const loopRegionRef = useRef<import('./hooks/useVideoPlayer').LoopRegion | null>(null);
+
+  // ── Dual-window mode state ──
+  const [isDualWindow, setIsDualWindow] = useState(false);
+  const [popupTimecode, setPopupTimecode] = useState(0);
+  const popupRef = useRef<Window | null>(null);
+  const popupTimecodeRef = useRef(0);        // last timecode from popup (non-reactive, for keydown)
 
   // ── Persistent video handle (File System Access API) ──
   const {
@@ -136,7 +142,7 @@ export default function App({
     localStorage.setItem(`cuetation:panelWidth:${projectId ?? '__global__'}`, String(Math.round(panelWidthPx)));
   }, [panelWidthPx, projectId]);
 
-  const { state: playerState, actions: playerActions } = useVideoPlayer(videoRef, containerRef, videoSrc, loopRegionRef);
+  const { state: playerState, actions: playerActions } = useVideoPlayer(videoRef, containerRef, videoSrc);
   const {
     config,
     configLoaded,
@@ -181,7 +187,6 @@ export default function App({
     annotations,
     activeId,
     skippedIds,
-    loopAnnotation,
     addAnnotation,
     updateAnnotation,
     deleteAnnotation,
@@ -195,14 +200,6 @@ export default function App({
   } = useAnnotations(annotationScope.fileName, annotationScope.fileSize, playerState.duration);
   const annotationsRef = useRef(annotations);
   const { toasts, addToast, removeToast } = useToast();
-
-  // Compute and keep loop region ref in sync for the video player animation frame
-  const loopRegion = useMemo(() => {
-    if (!loopAnnotation) return null;
-    const targetTs = parseFloat(loopAnnotation.cue.loopTargetTimestamp);
-    if (isNaN(targetTs)) return null;
-    return { fromTime: loopAnnotation.timestamp, toTime: targetTs };
-  }, [loopAnnotation]);
 
   // ── Scrubber markers for scene/act grouping ──
   const scrubberMarkers = useMemo(() => {
@@ -231,10 +228,6 @@ export default function App({
     }
     return { titleMarkers, sceneMarkers, sceneBands };
   }, [annotations]);
-
-  useEffect(() => {
-    loopRegionRef.current = loopRegion;
-  }, [loopRegion]);
 
   useEffect(() => {
     const events = popRecoveryEvents();
@@ -502,19 +495,57 @@ export default function App({
     }
   }, []);
 
+  // ── BroadcastChannel (dual-window sync) ──
+  const onBroadcastMessage = useCallback((msg: SyncMessage) => {
+    switch (msg.type) {
+      case 'TIMECODE_UPDATE':
+        popupTimecodeRef.current = msg.seconds;
+        setPopupTimecode(msg.seconds);
+        break;
+      case 'PLAYBACK_STATE':
+        // Reflect to local state for UI (active cue tracking, etc.)
+        break;
+      case 'POPUP_READY':
+        // Popup loaded and video is playing
+        break;
+      case 'POPUP_CLOSING':
+        // Popup has been closed — bring video back to main window
+        setIsDualWindow(false);
+        popupRef.current = null;
+        break;
+    }
+  }, []);
+
+  const { send: broadcastSend } = useBroadcastSync(onBroadcastMessage);
+
+  // Sync showVideoTimecode config to popup when it changes
+  useEffect(() => {
+    if (isDualWindow) {
+      broadcastSend({ type: 'CONFIG_SHOW_TIMECODE', show: config.showVideoTimecode });
+    }
+  }, [config.showVideoTimecode, isDualWindow, broadcastSend]);
+
   // Toggle play/pause (Space)
   const handleTogglePlay = useCallback(() => {
+    if (isDualWindow) {
+      broadcastSend({ type: 'CMD_TOGGLE_PLAY' });
+      return;
+    }
     if (!videoSrc) return;
     playerActions.togglePlay();
-  }, [videoSrc, playerActions]);
+  }, [videoSrc, playerActions, isDualWindow, broadcastSend]);
 
   // Enter → pause & annotate
   const handleEnterAnnotate = useCallback(() => {
-    if (!videoSrc && !isNoVideoMode) return;
+    if (!videoSrc && !isNoVideoMode && !isDualWindow) return;
     if (isAnnotating) return; // Already annotating
 
-    // In video mode, pause and use current time
-    if (videoSrc) {
+    if (isDualWindow) {
+      // In dual-window mode, pause popup and use its timecode
+      broadcastSend({ type: 'CMD_PAUSE' });
+      setAnnotateTimestamp(popupTimecodeRef.current);
+    } else if (videoSrc) {
+      // In video mode, pause and use current time
       const video = videoRef.current;
       if (!video) return;
       video.pause();
@@ -525,57 +556,84 @@ export default function App({
     }
     
     setIsAnnotating(true);
-  }, [videoSrc, isNoVideoMode, isAnnotating, playerState.currentTime]);
+  }, [videoSrc, isNoVideoMode, isAnnotating, playerState.currentTime, isDualWindow, broadcastSend]);
 
   // Save cue — close form and resume playback
   const handleSaveCue = useCallback(
     (cue: CueFields, overrideTimestamp?: number) => {
       addAnnotation(typeof overrideTimestamp === 'number' ? overrideTimestamp : annotateTimestamp, cue);
 
-      // When saving a LOOP FROM, also create the LOOP TO at the target timestamp
-      if (cue.type === LOOP_CUE_TYPE && cue.loopTargetTimestamp) {
-        const targetTs = parseFloat(cue.loopTargetTimestamp);
-        if (!isNaN(targetTs)) {
-          const loopToCue: CueFields = {
-            ...cue,
-            cueNumber: 'LOOP TO',
-            duration: '',
-            what: `← ${formatTime(typeof overrideTimestamp === 'number' ? overrideTimestamp : annotateTimestamp)}`,
-          };
-          addAnnotation(targetTs, loopToCue);
-        }
-      }
-
       setIsAnnotating(false);
       addToast('Cue saved', 'success');
       // Resume playback after saving
-      try {
-        videoRef.current?.play().catch(() => {});
-      } catch {
-        // ignore
+      if (isDualWindow) {
+        broadcastSend({ type: 'CMD_PLAY' });
+      } else {
+        try {
+          videoRef.current?.play().catch(() => {});
+        } catch {
+          // ignore
+        }
       }
     },
-    [annotateTimestamp, addAnnotation, addToast],
+    [annotateTimestamp, addAnnotation, addToast, isDualWindow, broadcastSend],
   );
 
   // Cancel note — close form and resume playback
   const handleCancelNote = useCallback(() => {
     setIsAnnotating(false);
     // Resume playback
-    try {
-      videoRef.current?.play().catch(() => {});
-    } catch {
-      // ignore
+    if (isDualWindow) {
+      broadcastSend({ type: 'CMD_PLAY' });
+    } else {
+      try {
+        videoRef.current?.play().catch(() => {});
+      } catch {
+        // ignore
+      }
     }
-  }, []);
+  }, [isDualWindow, broadcastSend]);
 
   // Seek to annotation timestamp
   const handleSeek = useCallback(
     (time: number) => {
-      playerActions.seek(time);
+      if (isDualWindow) {
+        broadcastSend({ type: 'CMD_SEEK', seconds: time });
+        popupTimecodeRef.current = time;
+      } else {
+        playerActions.seek(time);
+      }
     },
-    [playerActions],
+    [playerActions, isDualWindow],
   );
+
+  // Pop out video into a separate window
+  const handlePopOutVideo = useCallback(() => {
+    if (!projectId || !videoSrc) return;
+
+    // Pause local video before handing off
+    videoRef.current?.pause();
+
+    const popup = window.open(
+      `/video-window?projectId=${encodeURIComponent(projectId)}&showTimecode=${config.showVideoTimecode ? '1' : '0'}`,
+      'cuetation-video',
+      'popup=1,width=1280,height=720,menubar=0,toolbar=0,location=0,status=0',
+    );
+
+    if (popup) {
+      popupRef.current = popup;
+      setIsDualWindow(true);
+    }
+  }, [projectId, videoSrc]);
+
+  // Bring video back from popup
+  const handleBringBack = useCallback(() => {
+    if (popupRef.current && !popupRef.current.closed) {
+      popupRef.current.close();
+    }
+    popupRef.current = null;
+    setIsDualWindow(false);
+  }, []);
 
   // Export — open the format chooser dialog
   const handleExport = useCallback(() => {
@@ -704,19 +762,36 @@ export default function App({
       switch (e.key) {
         case 'ArrowLeft':
           e.preventDefault();
-          handleSeek(playerState.currentTime - 5);
+          if (isDualWindow) {
+            broadcastSend({ type: 'CMD_SEEK', seconds: popupTimecodeRef.current - 5 });
+          } else {
+            handleSeek(playerState.currentTime - 5);
+          }
           break;
         case 'ArrowRight':
           e.preventDefault();
-          handleSeek(playerState.currentTime + 5);
+          if (isDualWindow) {
+            broadcastSend({ type: 'CMD_SEEK', seconds: popupTimecodeRef.current + 5 });
+          } else {
+            handleSeek(playerState.currentTime + 5);
+          }
           break;
         case ',':
           e.preventDefault();
-          playerActions.stepFrame(-1);
+          if (isDualWindow) {
+            // Approximate frame step backward (~1/24s)
+            broadcastSend({ type: 'CMD_SEEK', seconds: popupTimecodeRef.current - (1 / 24) });
+          } else {
+            playerActions.stepFrame(-1);
+          }
           break;
         case '.':
           e.preventDefault();
-          playerActions.stepFrame(1);
+          if (isDualWindow) {
+            broadcastSend({ type: 'CMD_SEEK', seconds: popupTimecodeRef.current + (1 / 24) });
+          } else {
+            playerActions.stepFrame(1);
+          }
           break;
         case '+':
         case '=':
@@ -725,8 +800,13 @@ export default function App({
             const speeds = [1, 1.5, 2, 4, 8];
             const idx = speeds.indexOf(playerState.playbackRate);
             if (idx < speeds.length - 1) {
-              playerActions.setSpeed(speeds[idx + 1]);
-              addToast(`Speed: ${speeds[idx + 1]}x`, 'info', 1500);
+              const next = speeds[idx + 1];
+              if (isDualWindow) {
+                broadcastSend({ type: 'CMD_SPEED', speed: next });
+              } else {
+                playerActions.setSpeed(next);
+              }
+              addToast(`Speed: ${next}x`, 'info', 1500);
             }
           }
           break;
@@ -736,8 +816,13 @@ export default function App({
             const speeds = [1, 1.5, 2, 4, 8];
             const idx = speeds.indexOf(playerState.playbackRate);
             if (idx > 0) {
-              playerActions.setSpeed(speeds[idx - 1]);
-              addToast(`Speed: ${speeds[idx - 1]}x`, 'info', 1500);
+              const prev = speeds[idx - 1];
+              if (isDualWindow) {
+                broadcastSend({ type: 'CMD_SPEED', speed: prev });
+              } else {
+                playerActions.setSpeed(prev);
+              }
+              addToast(`Speed: ${prev}x`, 'info', 1500);
             }
           }
           break;
@@ -746,7 +831,7 @@ export default function App({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleTogglePlay, handleEnterAnnotate, handleExplicitSave, playerActions, playerState.playbackRate, playerState.currentTime, addToast, isNoVideoMode, isConfigOpen, handleSeek]);
+  }, [handleTogglePlay, handleEnterAnnotate, handleExplicitSave, playerActions, playerState.playbackRate, playerState.currentTime, addToast, isNoVideoMode, isConfigOpen, handleSeek, isDualWindow, broadcastSend]);
 
   // Cleanup video URL on unmount
   useEffect(() => {
@@ -965,8 +1050,28 @@ export default function App({
         )
       ) : (
         <main ref={mainRef} className="flex-1 flex flex-col lg:flex-row gap-0 min-h-0 overflow-hidden" style={{ background: 'var(--bg)' }}>
-          {/* Left: Video + cue form */}
+          {/* Left: Video + cue form — hidden in dual-window mode */}
+          {!isDualWindow && (
+          <>
           <div ref={containerRef} className="flex flex-col min-w-0 min-h-0" style={{ flex: '1 1 0%', borderRight: 'none', background: '#0a0a0c' }}>
+            {/* Video panel header with Pop out button */}
+            {videoSrc && supportsDualWindow && (
+              <div className="flex items-center justify-between px-3 py-1.5" style={{ background: 'var(--bg-raised)', borderBottom: '1px solid var(--border)' }}>
+                <span className="text-[10px] font-mono uppercase tracking-wider" style={{ color: 'var(--text-dim)' }}>Video</span>
+                <button
+                  type="button"
+                  onClick={handlePopOutVideo}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs transition-colors"
+                  style={{ color: 'var(--text-mid)', background: 'transparent', border: '1px solid var(--border)', cursor: 'pointer', fontFamily: 'inherit' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.borderColor = 'var(--border-hi)'; e.currentTarget.style.color = 'var(--text)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-mid)'; }}
+                  title="Open video in a separate window for dual-monitor use"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Pop out video</span>
+                </button>
+              </div>
+            )}
             {!isNoVideoMode ? (
               <VideoPlayer
                 ref={videoRef}
@@ -974,7 +1079,6 @@ export default function App({
                 state={playerState}
                 actions={playerActions}
                 onVideoError={handleVideoError}
-                loopRegion={loopRegion}
                 showVideoTimecode={config.showVideoTimecode}
                 videoTimecodePosition={config.videoTimecodePosition}
                 onVideoTimecodePositionChange={setVideoTimecodePosition}
@@ -1020,43 +1124,6 @@ export default function App({
                   Upload video
                 </button>
               </div>
-            )}
-            {isAnnotating && (
-              <>
-                {/* Touch bar: Cancel / Save above the form */}
-                <div className="mt-2 flex gap-2">
-                  <button
-                    type="button"
-                    onClick={handleCancelNote}
-                    className="flex items-center justify-center gap-1.5 flex-1 px-3 py-2 rounded-lg transition-colors text-sm"
-                    style={{ background: 'var(--bg-panel)', color: 'var(--text-mid)', border: '1px solid var(--border)' }}
-                  >
-                    <kbd className="inline-flex items-center justify-center w-7 h-7 text-[11px] font-mono font-bold rounded" style={{ background: 'var(--bg-input)', color: 'var(--text-dim)', border: '1px solid var(--border-hi)' }}>Esc</kbd>
-                    <span className="text-xs">Cancel</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => cueFormSaveRef.current?.()}
-                    className="flex items-center justify-center gap-1.5 flex-1 px-3 py-2 rounded-lg transition-colors text-sm"
-                    style={{ background: 'var(--amber)', color: 'var(--text-inv)', border: 'none' }}
-                  >
-                    <kbd className="inline-flex items-center justify-center w-7 h-7 text-[11px] font-mono font-bold rounded" style={{ background: 'rgba(0,0,0,0.2)', color: 'var(--text-inv)', border: '1px solid rgba(0,0,0,0.3)' }}>C-↵</kbd>
-                    <span className="text-xs font-medium">Save Cue</span>
-                  </button>
-                </div>
-                <CueForm
-                  mode="create"
-                  timestamp={annotateTimestamp}
-                  allAnnotations={annotations}
-                  cueTypes={loopAnnotation ? config.cueTypes : [...config.cueTypes, LOOP_CUE_TYPE]}
-                  cueTypeFields={config.cueTypeFields}
-                  fieldDefinitions={config.fieldDefinitions}
-                  mandatoryFields={config.mandatoryFields}
-                  onSave={handleSaveCue}
-                  onCancel={handleCancelNote}
-                  saveRef={cueFormSaveRef}
-                />
-              </>
             )}
             {/* Clickable keyboard hints */}
             {!isAnnotating && videoSrc && (
@@ -1190,7 +1257,6 @@ export default function App({
               </div>
             )}
           </div>
-
           {/* Draggable splitter handle */}
           <div
             className="hidden lg:flex items-center justify-center shrink-0 cursor-col-resize group"
@@ -1206,16 +1272,41 @@ export default function App({
           >
             <div className="w-[2px] h-8 rounded-full transition-colors" style={{ background: 'var(--border-hi)' }} />
           </div>
+          </>
+          )}
 
-          {/* Right: Cue Sheet panel — constrained height so it scrolls independently */}
-          <div className="h-[calc(100vh-5rem)] overflow-hidden shrink-0" style={{ width: panelWidthPx }}>
+          {/* Right: Cue Sheet panel — full width in dual-window, constrained otherwise */}
+          <div className="h-[calc(100vh-5rem)] overflow-hidden flex flex-col" style={isDualWindow ? { flex: '1 1 0%' } : { width: panelWidthPx, flexShrink: 0 }}>
+            {/* Dual-window status bar */}
+            {isDualWindow && (
+              <div
+                className="flex items-center gap-2 px-4 flex-shrink-0"
+                style={{ height: 28, background: 'var(--bg-panel)', borderBottom: '1px solid var(--border)' }}
+              >
+                <span style={{ color: 'var(--amber)', fontSize: 14 }}>⬡</span>
+                <span className="text-xs" style={{ color: 'var(--text-dim)' }}>Video on external screen</span>
+                <span style={{ color: 'var(--text-dim)', fontSize: 10 }}>·</span>
+                <span className="text-xs" style={{ color: 'var(--text-dim)' }}>Keep this window focused for hotkeys</span>
+                <span style={{ color: 'var(--text-dim)', fontSize: 10 }}>·</span>
+                <button
+                  type="button"
+                  onClick={handleBringBack}
+                  className="text-xs underline"
+                  style={{ color: 'var(--amber)', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}
+                  onMouseEnter={e => { e.currentTarget.style.color = 'var(--amber-hi)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.color = 'var(--amber)'; }}
+                >
+                  Bring back
+                </button>
+              </div>
+            )}
             <AnnotationPanel
               projectId={projectId || ''}
               annotations={annotations}
               activeId={activeId}
               skippedIds={skippedIds}
               showSkippedCues={config.showSkippedCues}
-              currentTime={playerState.currentTime}
+              currentTime={isDualWindow ? popupTimecode : playerState.currentTime}
               isPlaying={playerState.isPlaying}
               cueTypeColors={config.cueTypeColors}
               cueTypeShortCodes={config.cueTypeShortCodes}
@@ -1242,6 +1333,11 @@ export default function App({
               onSetFlag={setAnnotationFlag}
               onDuplicate={duplicateAnnotation}
               onReorderTieGroup={reorderInTieGroup}
+              isCreating={isAnnotating}
+              createTimestamp={annotateTimestamp}
+              onCreateSave={handleSaveCue}
+              onCreateCancel={handleCancelNote}
+              createSaveRef={cueFormSaveRef}
             />
           </div>
         </main>
@@ -1375,6 +1471,8 @@ export default function App({
         addToast={addToast}
         projectName={projectName}
         annotationCount={annotations.length}
+        onGoHome={onGoHome}
+        onDeleteAllProjects={onDeleteAllProjects}
       />
 
       {/* Export Dialog — CSV vs XLSX chooser */}

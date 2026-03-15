@@ -98,22 +98,9 @@ When multiple cues share the **same timestamp**, they form a tie group. Reorder 
 
 ---
 
-## Autofollow & Linked Cues
+## Linked Cues
 
-### Autofollow
-Enable **Add Autofollow** in a cue type's field settings to add a **Follow Cue#** reference field.
-
-### Linked Cues
 Enable **Link Cue#** to create bidirectional links between cues of the same type.
-
----
-
-## Loop Cues
-
-The LOOP type includes:
-- **Loop Target Timestamp** — The time to jump back to
-- **Loop Target Cue#** — Reference for the jump target
-- Loop regions appear as amber bands on the video scrubber
 
 ---
 
@@ -228,6 +215,8 @@ All actions require confirmation.
 | Left / Right | Seek 5 seconds |
 | , / . | Step 1 frame |
 | + / - | Increase/decrease speed |
+| J | Toggle Jump Navigation menu |
+| Ctrl+S | Save project (works everywhere) |
 
 ---
 
