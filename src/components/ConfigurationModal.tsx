@@ -1239,7 +1239,7 @@ export function ConfigurationModal({
                 {/* Active fields list */}
                 <div className="space-y-1">
                   <span className="text-[10px] uppercase tracking-wider text-[var(--text-dim)]">Active Fields ({activeFields.length})</span>
-                  <div className="space-y-1 max-h-72 overflow-y-auto annotation-scroll">
+                  <div className="space-y-1 overflow-y-auto annotation-scroll" style={{ maxHeight: 'calc(85vh - 340px)' }}>
                     {activeFields.map((fd) => (
                       <div
                         key={fd.key}

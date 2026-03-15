@@ -29,7 +29,6 @@ export function VideoPopupWindow() {
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
   const [speed, setSpeed] = useState(1);
-  const [showControls, setShowControls] = useState(true);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [videoFilename, setVideoFilename] = useState<string | null>(null);
   const [mainWindowClosed, setMainWindowClosed] = useState(false);
@@ -43,7 +42,7 @@ export function VideoPopupWindow() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const progressRef = useRef<HTMLDivElement>(null);
-  const hideTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const tcOverlayRef = useRef<HTMLDivElement>(null);
   const animFrameRef = useRef<number>(0);
   const handleRef = useRef<FileSystemFileHandle | null>(null);
 
@@ -236,54 +235,99 @@ export function VideoPopupWindow() {
   }, [videoSrc]);
 
   // ── Controls auto-hide ──
-  const startHideCountdown = useCallback(() => {
-    clearTimeout(hideTimerRef.current);
-    hideTimerRef.current = setTimeout(() => {
-      if (videoRef.current && !videoRef.current.paused) {
-        setShowControls(false);
-      }
-    }, CONTROLS_HIDE_DELAY);
-  }, []);
+  // Pure React state + inline styles. All logic inlined in one stable effect.
+  // The timer ref survives re-renders. setState is stable. videoRef is stable.
+  // This effect runs ONCE per videoSrc. No callback deps to go stale.
+  const [controlsVisible, setControlsVisible] = useState(true);
+  const hideTimerRef = useRef(0);
 
-  const resetHideTimer = useCallback(() => {
-    setShowControls(true);
-    startHideCountdown();
-  }, [startHideCountdown]);
-
-  // Show controls on pause, start hide countdown on play
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !videoSrc) return;
 
-    const onPlay = () => {
-      startHideCountdown();
-    };
-    const onPause = () => {
-      clearTimeout(hideTimerRef.current);
-      setShowControls(true);
+    const clearTimer = () => {
+      if (hideTimerRef.current) {
+        window.clearTimeout(hideTimerRef.current);
+        hideTimerRef.current = 0;
+      }
     };
 
+    const show = () => {
+      clearTimer();
+      setControlsVisible(true);
+    };
+
+    const scheduleHide = () => {
+      clearTimer();
+      hideTimerRef.current = window.setTimeout(() => {
+        setControlsVisible(false);
+      }, CONTROLS_HIDE_DELAY);
+    };
+
+    const onPlay = () => {
+      show();
+      scheduleHide();
+    };
+
+    const onPause = () => {
+      show();
+    };
+
+    let lastMoveTime = 0;
+    const onMouseActivity = () => {
+      const now = Date.now();
+      if (now - lastMoveTime < 80) return;
+      lastMoveTime = now;
+      show();
+      if (!video.paused) {
+        scheduleHide();
+      }
+    };
+
+    // Listen on the video element for play/pause
     video.addEventListener('play', onPlay);
     video.addEventListener('pause', onPause);
+
+    // Listen on BOTH document and the container for mouse activity.
+    // document-level ensures events reach us even in fullscreen top layer.
+    // container-level is a belt-and-suspenders fallback.
+    const container = containerRef.current;
+    document.addEventListener('mousemove', onMouseActivity, true);
+    document.addEventListener('mousedown', onMouseActivity, true);
+    document.addEventListener('touchstart', onMouseActivity, true);
+    container?.addEventListener('mousemove', onMouseActivity);
+    container?.addEventListener('mousedown', onMouseActivity);
+
+    // Also re-show controls on any fullscreenchange event
+    const onFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+      show();
+      if (!video.paused) {
+        scheduleHide();
+      }
+    };
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+
+    // Set initial state
+    if (video.paused) {
+      show();
+    } else {
+      show();
+      scheduleHide();
+    }
+
     return () => {
       video.removeEventListener('play', onPlay);
       video.removeEventListener('pause', onPause);
+      document.removeEventListener('mousemove', onMouseActivity, true);
+      document.removeEventListener('mousedown', onMouseActivity, true);
+      document.removeEventListener('touchstart', onMouseActivity, true);
+      container?.removeEventListener('mousemove', onMouseActivity);
+      container?.removeEventListener('mousedown', onMouseActivity);
+      document.removeEventListener('fullscreenchange', onFullscreenChange);
+      clearTimer();
     };
-  }, [videoSrc, startHideCountdown]);
-
-  // Mouse / click reveal
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const onMove = () => resetHideTimer();
-    const onClick = () => resetHideTimer();
-    el.addEventListener('mousemove', onMove);
-    el.addEventListener('click', onClick);
-    return () => {
-      el.removeEventListener('mousemove', onMove);
-      el.removeEventListener('click', onClick);
-    };
-  }, [resetHideTimer]);
+  }, [videoSrc]);
 
   // ── Popup close: notify main window ──
   useEffect(() => {
@@ -343,38 +387,61 @@ export function VideoPopupWindow() {
     }
   }, []);
 
-  // Track fullscreenchange
-  useEffect(() => {
-    const onChange = () => setIsFullscreen(!!document.fullscreenElement);
-    document.addEventListener('fullscreenchange', onChange);
-    return () => document.removeEventListener('fullscreenchange', onChange);
+  // Track fullscreenchange is now handled inside the auto-hide effect above
+
+  // ── Draggable timecode (clamped to video edges, not container) ──
+  // With object-contain the video may be letterboxed. Compute the actual
+  // rendered video rect so the timecode stays within the visible picture.
+  const getVideoBounds = useCallback(() => {
+    const video = videoRef.current;
+    const container = containerRef.current;
+    if (!video || !container) return { left: 0, top: 0, right: container?.clientWidth ?? 0, bottom: container?.clientHeight ?? 0 };
+    const cw = container.clientWidth;
+    const ch = container.clientHeight;
+    const vw = video.videoWidth || cw;
+    const vh = video.videoHeight || ch;
+    const scale = Math.min(cw / vw, ch / vh);
+    const rw = vw * scale;
+    const rh = vh * scale;
+    return {
+      left: (cw - rw) / 2,
+      top: (ch - rh) / 2,
+      right: (cw + rw) / 2,
+      bottom: (ch + rh) / 2,
+    };
   }, []);
 
-  // ── Draggable timecode ──
   const handleTcMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
-    const el = containerRef.current;
-    if (!el) return;
-    const resolvedY = tcPos.y === -1 ? el.clientHeight - 60 : tcPos.y;
+    e.nativeEvent.stopImmediatePropagation();
+    const container = containerRef.current;
+    if (!container) return;
+    const resolvedY = tcPos.y === -1 ? container.clientHeight - 60 : tcPos.y;
     tcDragRef.current = { startX: e.clientX, startY: e.clientY, startPosX: tcPos.x, startPosY: resolvedY };
 
     const onMove = (ev: MouseEvent) => {
+      ev.stopImmediatePropagation();
       if (!tcDragRef.current) return;
       const dx = ev.clientX - tcDragRef.current.startX;
       const dy = ev.clientY - tcDragRef.current.startY;
+      const bounds = getVideoBounds();
+      const overlay = tcOverlayRef.current;
+      const ow = overlay?.offsetWidth ?? 160;
+      const oh = overlay?.offsetHeight ?? 32;
       setTcPos({
-        x: Math.max(0, tcDragRef.current.startPosX + dx),
-        y: Math.max(0, tcDragRef.current.startPosY + dy),
+        x: Math.max(bounds.left, Math.min(bounds.right - ow, tcDragRef.current.startPosX + dx)),
+        y: Math.max(bounds.top, Math.min(bounds.bottom - oh, tcDragRef.current.startPosY + dy)),
       });
     };
-    const onUp = () => {
+    const onUp = (ev: MouseEvent) => {
+      ev.stopImmediatePropagation();
       tcDragRef.current = null;
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
+      document.removeEventListener('mousemove', onMove, true);
+      document.removeEventListener('mouseup', onUp, true);
     };
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-  }, [tcPos]);
+    document.addEventListener('mousemove', onMove, true);
+    document.addEventListener('mouseup', onUp, true);
+  }, [tcPos, getVideoBounds]);
 
   // Clean up object URL
   useEffect(() => {
@@ -396,7 +463,12 @@ export function VideoPopupWindow() {
       if (!bar || !video) return;
       const rect = bar.getBoundingClientRect();
       const ratio = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width));
-      video.currentTime = ratio * video.duration;
+      const newTime = ratio * video.duration;
+      video.currentTime = newTime;
+      // Update state immediately during drag for responsive UI
+      setCurrentTime(newTime);
+      // Broadcast timecode update during scrubbing
+      send({ type: 'TIMECODE_UPDATE', seconds: newTime });
     };
     const onUp = () => {
       scrubbing.current = false;
@@ -405,7 +477,7 @@ export function VideoPopupWindow() {
     };
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
-  }, [handleSeek]);
+  }, [handleSeek, send]);
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
@@ -472,9 +544,10 @@ export function VideoPopupWindow() {
   return (
     <div
       ref={containerRef}
-      className="h-screen w-screen relative overflow-hidden select-none"
-      style={{ background: '#000', cursor: showControls ? 'default' : 'none' }}
+      className="h-screen w-screen relative select-none"
+      style={{ background: '#000', cursor: controlsVisible ? 'default' : 'none' }}
     >
+
       {/* Video fills window */}
       <video
         ref={videoRef}
@@ -487,6 +560,7 @@ export function VideoPopupWindow() {
       {/* Timecode overlay — visible when showTimecode enabled, draggable */}
       {showTimecode && (
       <div
+        ref={tcOverlayRef}
         className="absolute z-30 px-3 py-1.5 rounded-md cursor-move select-none"
         style={{
           left: tcPos.x,
@@ -518,14 +592,15 @@ export function VideoPopupWindow() {
         </div>
       )}
 
-      {/* Controls bar — auto-hides after 3s */}
+      {/* Controls bar — auto-hides after 3s (React state + inline styles) */}
       <div
-        className="absolute bottom-0 left-0 right-0 z-20 transition-opacity duration-200"
+        className="absolute bottom-0 left-0 right-0 z-20"
         style={{
           background: 'linear-gradient(transparent, rgba(0,0,0,0.85))',
           padding: '24px 16px 12px',
-          opacity: showControls ? 1 : 0,
-          pointerEvents: showControls ? 'auto' : 'none',
+          opacity: controlsVisible ? 1 : 0,
+          pointerEvents: controlsVisible ? 'auto' : 'none',
+          transition: 'opacity 0.2s ease',
         }}
       >
         {/* Seek bar */}

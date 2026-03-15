@@ -19,6 +19,7 @@ import { saveAnnotations, loadAnnotations, backupAnnotations, popRecoveryEvents,
 import { updateProjectConfig, exportProjectToJSON, loadProjects } from './utils/projectStorage';
 import { supportsFileSystemAccess, pickVideoWithHandle } from './utils/videoHandleStorage';
 import { VideoReconnectBanner } from './components/VideoReconnectBanner';
+import { GoToDialog } from './components/GoToDialog';
 import type { CueFields } from './types';
 import { RESERVED_CUE_TYPES } from './types';
 import { Film, Settings, X as XIcon, ExternalLink } from 'lucide-react';
@@ -70,6 +71,7 @@ export default function App({
   // Export dialog / XLSX builder state
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
   const [isXlsxBuilderOpen, setIsXlsxBuilderOpen] = useState(false);
+  const [isGoToOpen, setIsGoToOpen] = useState(false);
 
   // ── Resizable split panel state ──
   const PANEL_MIN_PX = 260;
@@ -510,11 +512,30 @@ export default function App({
         break;
       case 'POPUP_CLOSING':
         // Popup has been closed — bring video back to main window
+        // Force video re-initialization by cycling the src URL
         setIsDualWindow(false);
         popupRef.current = null;
         break;
     }
   }, []);
+
+  // After dual-window ends, re-create the video URL so the newly mounted <video>
+  // element gets fresh event listeners from useVideoPlayer (src change triggers reset)
+  const wasDualWindowRef = useRef(false);
+  useEffect(() => {
+    if (isDualWindow) {
+      wasDualWindowRef.current = true;
+    } else if (wasDualWindowRef.current && videoFile) {
+      wasDualWindowRef.current = false;
+      // Revoke old URL and create a fresh one to force useVideoPlayer re-init
+      if (previousUrlRef.current) {
+        URL.revokeObjectURL(previousUrlRef.current);
+      }
+      const freshUrl = URL.createObjectURL(videoFile);
+      previousUrlRef.current = freshUrl;
+      setVideoSrc(freshUrl);
+    }
+  }, [isDualWindow, videoFile]);
 
   const { send: broadcastSend } = useBroadcastSync(onBroadcastMessage);
 
@@ -600,11 +621,13 @@ export default function App({
       if (isDualWindow) {
         broadcastSend({ type: 'CMD_SEEK', seconds: time });
         popupTimecodeRef.current = time;
+        setPopupTimecode(time);
+        updateActiveAnnotation(time);
       } else {
         playerActions.seek(time);
       }
     },
-    [playerActions, isDualWindow],
+    [playerActions, isDualWindow, broadcastSend, updateActiveAnnotation],
   );
 
   // Pop out video into a separate window
@@ -759,21 +782,34 @@ export default function App({
       // Only handle shortcuts when not typing
       if (isTyping) return;
 
+      // G → Go To dialog
+      if (e.key === 'g' || e.key === 'G') {
+        e.preventDefault();
+        setIsGoToOpen(true);
+        return;
+      }
+
       switch (e.key) {
         case 'ArrowLeft':
           e.preventDefault();
-          if (isDualWindow) {
-            broadcastSend({ type: 'CMD_SEEK', seconds: popupTimecodeRef.current - 5 });
-          } else {
-            handleSeek(playerState.currentTime - 5);
+          {
+            const skipAmount = e.shiftKey || e.ctrlKey ? 1 : 5;
+            if (isDualWindow) {
+              broadcastSend({ type: 'CMD_SEEK', seconds: popupTimecodeRef.current - skipAmount });
+            } else {
+              handleSeek(playerState.currentTime - skipAmount);
+            }
           }
           break;
         case 'ArrowRight':
           e.preventDefault();
-          if (isDualWindow) {
-            broadcastSend({ type: 'CMD_SEEK', seconds: popupTimecodeRef.current + 5 });
-          } else {
-            handleSeek(playerState.currentTime + 5);
+          {
+            const skipAmount = e.shiftKey || e.ctrlKey ? 1 : 5;
+            if (isDualWindow) {
+              broadcastSend({ type: 'CMD_SEEK', seconds: popupTimecodeRef.current + skipAmount });
+            } else {
+              handleSeek(playerState.currentTime + skipAmount);
+            }
           }
           break;
         case ',':
@@ -1508,6 +1544,17 @@ export default function App({
 
       {/* Toast notifications */}
       <ToastContainer toasts={toasts} onRemove={removeToast} />
+
+      {/* Go To dialog */}
+      {isGoToOpen && (
+        <GoToDialog
+          annotations={annotations}
+          cueTypeShortCodes={config.cueTypeShortCodes}
+          cueTypes={config.cueTypes}
+          onSeek={(time) => handleSeek(time)}
+          onClose={() => setIsGoToOpen(false)}
+        />
+      )}
     </div>
   );
 }
