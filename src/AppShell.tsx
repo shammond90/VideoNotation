@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { Show, SignInButton, SignUpButton, UserButton } from '@clerk/react';
 import { useProject } from './hooks/useProject';
 import { useToast } from './hooks/useToast';
+import { useEnsureUser } from './hooks/useEnsureUser';
 import { HomeScreen } from './components/HomeScreen';
 import { CreateProjectForm } from './components/CreateProjectForm';
 import { ImportConflictModal } from './components/ImportConflictModal';
@@ -284,94 +286,144 @@ export function AppShell() {
   );
 
   // ────────────────────────────────────
-  // Render based on current screen
+  // Render based on auth + current screen
   // ────────────────────────────────────
 
-  if (appState.screen === 'home') {
-    return (
-      <>
-        <HomeScreen
-          onProjectSelected={handleProjectSelected}
-          onCreateProject={handleCreateProject}
-          onImportProject={handleImportProject}
-        />
-        <input
-          ref={importInputRef}
-          type="file"
-          accept=".json,.cuetation.json"
-          className="hidden"
-          onChange={handleImportFileSelected}
-        />
-        {importConflict && (
-          <ImportConflictModal
-            existingName={importConflict.parsed.project.name}
-            onCancel={handleImportConflictCancel}
-            onOverwrite={handleImportConflictOverwrite}
-            onRename={handleImportConflictRename}
+  const renderScreenContent = () => {
+    if (appState.screen === 'home') {
+      return (
+        <>
+          <HomeScreen
+            onProjectSelected={handleProjectSelected}
+            onCreateProject={handleCreateProject}
+            onImportProject={handleImportProject}
           />
-        )}
-        <ToastContainer toasts={toasts} onRemove={removeToast} />
-      </>
-    );
-  }
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".json,.cuetation.json"
+            className="hidden"
+            onChange={handleImportFileSelected}
+          />
+          {importConflict && (
+            <ImportConflictModal
+              existingName={importConflict.parsed.project.name}
+              onCancel={handleImportConflictCancel}
+              onOverwrite={handleImportConflictOverwrite}
+              onRename={handleImportConflictRename}
+            />
+          )}
+          <ToastContainer toasts={toasts} onRemove={removeToast} />
+        </>
+      );
+    }
 
-  if (appState.screen === 'create-project') {
-    return (
-      <>
-        <CreateProjectForm
-          onCancel={handleCreateProjectCancel}
-          onCreate={handleCreateProjectSubmit}
-        />
-        <ToastContainer toasts={toasts} onRemove={removeToast} />
-      </>
-    );
-  }
+    if (appState.screen === 'create-project') {
+      return (
+        <>
+          <CreateProjectForm
+            onCancel={handleCreateProjectCancel}
+            onCreate={handleCreateProjectSubmit}
+          />
+          <ToastContainer toasts={toasts} onRemove={removeToast} />
+        </>
+      );
+    }
 
-  if (appState.screen === 'cue-sheet' && currentProject) {
+    if (appState.screen === 'cue-sheet' && currentProject) {
+      return (
+        <>
+          <App
+            key={currentProject.id}
+            projectId={currentProject.id}
+            projectName={currentProject.name}
+            videoFilename={currentProject.video_filename}
+            videoFilesize={currentProject.video_filesize}
+            onGoHome={handleGoHome}
+            onSwitchProject={handleOpenSwitcher}
+            onVideoLoaded={handleVideoLoaded}
+            onUnsavedChangesChange={setUnsavedChanges}
+            onDeleteProject={async () => {
+              await deleteCurrentProject();
+              setAppState({ screen: 'home' });
+              setUnsavedChanges(false);
+            }}
+            onDeleteAllProjects={deleteAllProjects}
+            onSave={() => {
+              // Save will be handled by App component
+              setUnsavedChanges(false);
+            }}
+          />
+          <SavePromptModal
+            isOpen={savePromptOpen}
+            onSave={handleSaveAndNavigate}
+            onDiscard={handleDiscardChanges}
+            onCancel={() => setSavePromptOpen(false)}
+          />
+          <ProjectSwitcherModal
+            isOpen={switcherOpen}
+            currentProjectId={currentProject.id}
+            projects={projects}
+            onProjectSelected={handleSwitchToProject}
+            onClose={() => setSwitcherOpen(false)}
+          />
+        </>
+      );
+    }
+
     return (
-      <>
-        <App
-          key={currentProject.id}
-          projectId={currentProject.id}
-          projectName={currentProject.name}
-          videoFilename={currentProject.video_filename}
-          videoFilesize={currentProject.video_filesize}
-          onGoHome={handleGoHome}
-          onSwitchProject={handleOpenSwitcher}
-          onVideoLoaded={handleVideoLoaded}
-          onUnsavedChangesChange={setUnsavedChanges}
-          onDeleteProject={async () => {
-            await deleteCurrentProject();
-            setAppState({ screen: 'home' });
-            setUnsavedChanges(false);
-          }}
-          onDeleteAllProjects={deleteAllProjects}
-          onSave={() => {
-            // Save will be handled by App component
-            setUnsavedChanges(false);
-          }}
-        />
-        <SavePromptModal
-          isOpen={savePromptOpen}
-          onSave={handleSaveAndNavigate}
-          onDiscard={handleDiscardChanges}
-          onCancel={() => setSavePromptOpen(false)}
-        />
-        <ProjectSwitcherModal
-          isOpen={switcherOpen}
-          currentProjectId={currentProject.id}
-          projects={projects}
-          onProjectSelected={handleSwitchToProject}
-          onClose={() => setSwitcherOpen(false)}
-        />
-      </>
+      <div className="flex items-center justify-center h-screen bg-gray-900 text-gray-100">
+        <p>Loading...</p>
+      </div>
     );
-  }
+  };
 
   return (
-    <div className="flex items-center justify-center h-screen bg-gray-900 text-gray-100">
-      <p>Loading...</p>
-    </div>
+    <>
+      <Show when="signed-out">
+        <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center text-gray-100">
+          <div className="text-center space-y-6">
+            <h1 className="text-5xl font-bold tracking-tight">Cuetation</h1>
+            <p className="text-lg text-gray-400 max-w-md">
+              Video cue annotation for stage managers
+            </p>
+            <div className="flex gap-4 justify-center">
+              <SignInButton mode="modal">
+                <button className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium transition-colors">
+                  Sign in
+                </button>
+              </SignInButton>
+              <SignUpButton mode="modal">
+                <button className="px-6 py-2.5 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-medium transition-colors">
+                  Sign up
+                </button>
+              </SignUpButton>
+            </div>
+          </div>
+        </div>
+      </Show>
+      <Show when="signed-in">
+        <SignedInContent>
+          <div className="fixed top-3 right-3 z-50">
+            <UserButton />
+          </div>
+          {renderScreenContent()}
+        </SignedInContent>
+      </Show>
+    </>
   );
+}
+
+/**
+ * Wrapper that runs signed-in-only hooks (like Supabase user sync).
+ * Rendered only inside <Show when="signed-in"> so Clerk hooks are safe to call.
+ */
+function SignedInContent({ children }: { children: React.ReactNode }) {
+  try {
+    useEnsureUser();
+  } catch (e) {
+    console.error('[SignedInContent] useEnsureUser error:', e);
+  }
+  return <>{children}</>;
 }
 

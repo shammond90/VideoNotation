@@ -1,5 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { ClerkProvider } from '@clerk/react'
 import './index.css'
 
 // Simple client-side routing: /video-window renders the popup view,
@@ -20,7 +21,9 @@ async function renderApp() {
     const { AppShell } = await import('./AppShell');
     root.render(
       <StrictMode>
-        <AppShell />
+        <ClerkProvider>
+          <AppShell />
+        </ClerkProvider>
       </StrictMode>,
     );
   }
