@@ -5,7 +5,7 @@ import { RESERVED_CUE_TYPES, EDITABLE_FIELD_KEYS, LINK_COLUMN_KEYS, getDefaultFi
 import { loadConfigTemplates, saveConfigTemplate, deleteConfigTemplate, renameConfigTemplate, exportTemplateToJSON, importTemplateFromJSON, getDefaultTemplate, setDefaultTemplate } from '../utils/configTemplates';
 import { loadProjects, deleteProject as deleteProjectFromStorage, updateProjectMetadata, exportProjectToJSON } from '../utils/projectStorage';
 import { useTier } from '../hooks/useTier';
-import { TIER_DESCRIPTIONS, type SelectableTier, SELECTABLE_TIERS } from '../config/tierLimits';
+import { TIER_DESCRIPTIONS, SELECTABLE_TIERS } from '../config/tierLimits';
 import {
   listBackups,
   restoreBackup,
@@ -2405,14 +2405,16 @@ export function ConfigurationModal({
                       <button
                         key={t}
                         type="button"
-                        onClick={() => {
+                        onClick={async () => {
                           if (!isActive) {
-                            showConfirm({
+                            const confirmed = await showConfirm({
                               title: `Switch to ${desc.title}?`,
                               message: `This will change your experience level to ${desc.title}. Feature access and limits will be updated.`,
                               confirmLabel: 'Switch',
-                              onConfirm: async () => { await updateTier(t); },
                             });
+                            if (confirmed) {
+                              await updateTier(t);
+                            }
                           }
                         }}
                         className="flex-1 rounded-md text-left transition-all"
