@@ -7,6 +7,8 @@ import './index.css'
 // everything else renders the main app.
 const isPopup = window.location.pathname === '/video-window';
 
+const CLERK_PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+
 async function renderApp() {
   const root = createRoot(document.getElementById('root')!);
 
@@ -21,7 +23,7 @@ async function renderApp() {
     const { AppShell } = await import('./AppShell');
     root.render(
       <StrictMode>
-        <ClerkProvider>
+        <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY}>
           <AppShell />
         </ClerkProvider>
       </StrictMode>,
