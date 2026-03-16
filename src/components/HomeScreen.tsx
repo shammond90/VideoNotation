@@ -1,6 +1,8 @@
 ﻿import { useEffect } from 'react';
 import type { Project } from '../types/index';
 import { useProject } from '../hooks/useProject';
+import { useTier } from '../hooks/useTier';
+import { canCreateProject } from '../config/tierLimits';
 
 interface HomeScreenProps {
   onProjectSelected: (projectId: string) => void;
@@ -17,6 +19,8 @@ export function HomeScreen({
   onImportProject,
 }: HomeScreenProps) {
   const { projects, isLoading, error, loadAllProjects } = useProject();
+  const { tier, limits } = useTier();
+  const atProjectLimit = !canCreateProject(tier, projects.length);
 
   useEffect(() => {
     loadAllProjects();
@@ -77,23 +81,26 @@ export function HomeScreen({
           </button>
           <button
             onClick={onCreateProject}
+            disabled={atProjectLimit}
             style={{
               padding: '8px 16px',
-              background: 'var(--amber)',
-              color: 'var(--text-inv)',
+              background: atProjectLimit ? 'var(--surface-hi)' : 'var(--amber)',
+              color: atProjectLimit ? 'var(--text-dim)' : 'var(--text-inv)',
               border: 'none',
               borderRadius: 'var(--r-sm)',
               fontSize: 13,
               fontWeight: 500,
-              cursor: 'pointer',
+              cursor: atProjectLimit ? 'not-allowed' : 'pointer',
               display: 'flex',
               alignItems: 'center',
               gap: 6,
               transition: 'all 0.15s',
               fontFamily: 'inherit',
+              opacity: atProjectLimit ? 0.6 : 1,
             }}
-            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--amber-hi)'; (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-1px)'; (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 4px 16px var(--amber-glow)'; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--amber)'; (e.currentTarget as HTMLButtonElement).style.transform = ''; (e.currentTarget as HTMLButtonElement).style.boxShadow = ''; }}
+            onMouseEnter={e => { if (!atProjectLimit) { (e.currentTarget as HTMLButtonElement).style.background = 'var(--amber-hi)'; (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-1px)'; (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 4px 16px var(--amber-glow)'; } }}
+            onMouseLeave={e => { if (!atProjectLimit) { (e.currentTarget as HTMLButtonElement).style.background = 'var(--amber)'; (e.currentTarget as HTMLButtonElement).style.transform = ''; (e.currentTarget as HTMLButtonElement).style.boxShadow = ''; } }}
+            title={atProjectLimit ? `Project limit reached (${limits.maxProjects} max for ${tier})` : undefined}
           >
             + New Project
           </button>
@@ -104,8 +111,13 @@ export function HomeScreen({
       <div style={{ height: 1, background: 'var(--border)', margin: '24px 40px 0' }} />
 
       {/* Sort bar */}
-      <div className="font-mono" style={{ padding: '14px 40px', fontSize: 12, color: 'var(--text-dim)' }}>
-        {projects.length} project{projects.length !== 1 ? 's' : ''}
+      <div className="font-mono" style={{ padding: '14px 40px', fontSize: 12, color: 'var(--text-dim)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span>{projects.length} project{projects.length !== 1 ? 's' : ''}</span>
+        {limits.maxProjects > 0 && (
+          <span style={{ color: atProjectLimit ? 'var(--amber)' : 'var(--text-dim)' }}>
+            {projects.length}/{limits.maxProjects} used
+          </span>
+        )}
       </div>
 
       {/* Empty state */}
@@ -116,16 +128,18 @@ export function HomeScreen({
           </p>
           <button
             onClick={onCreateProject}
+            disabled={atProjectLimit}
             style={{
               padding: '10px 20px',
-              background: 'var(--amber)',
-              color: 'var(--text-inv)',
+              background: atProjectLimit ? 'var(--surface-hi)' : 'var(--amber)',
+              color: atProjectLimit ? 'var(--text-dim)' : 'var(--text-inv)',
               border: 'none',
               borderRadius: 'var(--r-sm)',
               fontSize: 13,
               fontWeight: 500,
-              cursor: 'pointer',
+              cursor: atProjectLimit ? 'not-allowed' : 'pointer',
               fontFamily: 'inherit',
+              opacity: atProjectLimit ? 0.6 : 1,
             }}
           >
             + New Project

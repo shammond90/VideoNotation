@@ -22,6 +22,8 @@ import { VideoReconnectBanner } from './components/VideoReconnectBanner';
 import { GoToDialog } from './components/GoToDialog';
 import type { CueFields } from './types';
 import { RESERVED_CUE_TYPES } from './types';
+import { useTier } from './hooks/useTier';
+import { canCreateCue, canAddCustomField, canAddCustomCueType } from './config/tierLimits';
 import { Film, Settings, X as XIcon, ExternalLink } from 'lucide-react';
 
 interface AppProps {
@@ -202,6 +204,7 @@ export default function App({
   } = useAnnotations(annotationScope.fileName, annotationScope.fileSize, playerState.duration);
   const annotationsRef = useRef(annotations);
   const { toasts, addToast, removeToast } = useToast();
+  const { tier, limits } = useTier();
 
   // ── Scrubber markers for scene/act grouping ──
   const scrubberMarkers = useMemo(() => {
@@ -582,6 +585,16 @@ export default function App({
   // Save cue — close form and resume playback
   const handleSaveCue = useCallback(
     (cue: CueFields, overrideTimestamp?: number) => {
+      // Enforce cue limit for current tier
+      if (!canCreateCue(tier, annotations.length)) {
+        addToast(
+          `Cue limit reached (${limits.maxCuesPerProject} max for ${tier}). Upgrade your experience level to add more.`,
+          'error',
+        );
+        setIsAnnotating(false);
+        return;
+      }
+
       addAnnotation(typeof overrideTimestamp === 'number' ? overrideTimestamp : annotateTimestamp, cue);
 
       setIsAnnotating(false);
@@ -597,7 +610,7 @@ export default function App({
         }
       }
     },
-    [annotateTimestamp, addAnnotation, addToast, isDualWindow, broadcastSend],
+    [annotateTimestamp, addAnnotation, addToast, isDualWindow, broadcastSend, tier, limits, annotations.length],
   );
 
   // Cancel note — close form and resume playback
@@ -614,6 +627,40 @@ export default function App({
       }
     }
   }, [isDualWindow, broadcastSend]);
+
+  // ── Tier-gated wrappers for cue type / field creation ──
+
+  const handleAddCueType = useCallback(
+    (name: string) => {
+      const customCount = config.cueTypes.filter(
+        (t) => !(RESERVED_CUE_TYPES as readonly string[]).includes(t),
+      ).length;
+      if (!canAddCustomCueType(tier, customCount)) {
+        addToast(
+          `Cue type limit reached (${limits.maxCustomCueTypes} max for ${tier}). Upgrade your level to add more.`,
+          'error',
+        );
+        return;
+      }
+      addCueType(name);
+    },
+    [addCueType, config.cueTypes, tier, limits, addToast],
+  );
+
+  const handleAddFieldDefinition = useCallback(
+    (def: Parameters<typeof addFieldDefinition>[0]) => {
+      const customCount = config.fieldDefinitions.filter((f) => f.tier === 3 && !f.archived).length;
+      if (!canAddCustomField(tier, customCount)) {
+        addToast(
+          `Custom field limit reached (${limits.maxCustomFields} max for ${tier}). Upgrade your level to add more.`,
+          'error',
+        );
+        return null;
+      }
+      return addFieldDefinition(def);
+    },
+    [addFieldDefinition, config.fieldDefinitions, tier, limits, addToast],
+  );
 
   // Seek to annotation timestamp
   const handleSeek = useCallback(
@@ -1091,7 +1138,7 @@ export default function App({
           <>
           <div ref={containerRef} className="flex flex-col min-w-0 min-h-0" style={{ flex: '1 1 0%', borderRight: 'none', background: '#0a0a0c' }}>
             {/* Video panel header with Pop out button */}
-            {videoSrc && supportsDualWindow && (
+            {videoSrc && supportsDualWindow && limits.allowDualWindow && (
               <div className="flex items-center justify-between px-3 py-1.5" style={{ background: 'var(--bg-raised)', borderBottom: '1px solid var(--border)' }}>
                 <span className="text-[10px] font-mono uppercase tracking-wider" style={{ color: 'var(--text-dim)' }}>Video</span>
                 <button
@@ -1472,7 +1519,7 @@ export default function App({
         currentVideoSize={videoFile?.size}
         cueBackupIntervalMinutes={config.cueBackupIntervalMinutes}
         onSetCueBackupInterval={setCueBackupInterval}
-        onAddCueType={addCueType}
+        onAddCueType={handleAddCueType}
         onRemoveCueType={removeCueType}
         onRenameCueType={handleRenameCueType}
         onSetCueTypeColor={setCueTypeColor}
@@ -1496,7 +1543,7 @@ export default function App({
           setIsConfigOpen(false);
         }}
         onApplyTemplate={applyTemplate}
-        onAddField={addFieldDefinition}
+        onAddField={handleAddFieldDefinition}
         onUpdateField={updateFieldDefinition}
         onArchiveField={archiveFieldDefinition}
         onRestoreField={restoreFieldDefinition}
@@ -1519,6 +1566,7 @@ export default function App({
         onExportXLSX={handleExportXLSX}
         onExportProject={handleExportProject}
         annotationCount={annotations.length}
+        allowXlsx={limits.allowXlsxExport}
       />
 
       {/* XLSX Template Builder */}

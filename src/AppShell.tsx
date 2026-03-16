@@ -3,8 +3,10 @@ import { Show, SignInButton, SignUpButton, UserButton } from '@clerk/react';
 import { useProject } from './hooks/useProject';
 import { useToast } from './hooks/useToast';
 import { useEnsureUser } from './hooks/useEnsureUser';
+import { TierProvider, useTier } from './hooks/useTier';
 import { HomeScreen } from './components/HomeScreen';
 import { CreateProjectForm } from './components/CreateProjectForm';
+import { LevelSelectScreen } from './components/LevelSelectScreen';
 import { ImportConflictModal } from './components/ImportConflictModal';
 import { ProjectSwitcherModal } from './components/ProjectSwitcherModal';
 import { ToastContainer } from './components/ToastContainer';
@@ -424,6 +426,32 @@ function SignedInContent({ children }: { children: React.ReactNode }) {
   } catch (e) {
     console.error('[SignedInContent] useEnsureUser error:', e);
   }
+  return (
+    <TierProvider>
+      <TierGate>{children}</TierGate>
+    </TierProvider>
+  );
+}
+
+/**
+ * If the user's tier is 'starter' (hasn't chosen a level yet), show the
+ * LevelSelectScreen instead of the normal app content.
+ */
+function TierGate({ children }: { children: React.ReactNode }) {
+  const { tier, isLoading } = useTier();
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen" style={{ background: 'var(--bg)', color: 'var(--text-mid)' }}>
+        <span className="font-mono text-sm tracking-widest uppercase opacity-60">Loading…</span>
+      </div>
+    );
+  }
+
+  if (tier === 'starter') {
+    return <LevelSelectScreen />;
+  }
+
   return <>{children}</>;
 }
 

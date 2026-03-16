@@ -8,6 +8,8 @@ interface ExportDialogProps {
   onExportXLSX: () => void;
   onExportProject: () => void;
   annotationCount: number;
+  /** When false, the XLSX option is hidden (tier-gated). */
+  allowXlsx?: boolean;
 }
 
 export function ExportDialog({
@@ -17,6 +19,7 @@ export function ExportDialog({
   onExportXLSX,
   onExportProject,
   annotationCount,
+  allowXlsx = true,
 }: ExportDialogProps) {
   const [step, setStep] = useState<'choose' | 'cues'>('choose');
 
@@ -130,6 +133,7 @@ export function ExportDialog({
               <p className="text-[10px]" style={{ color: 'var(--text-dim)' }}>Plain comma-separated values</p>
             </div>
           </button>
+          {allowXlsx && (
           <button
             type="button"
             onClick={() => { onExportXLSX(); setStep('choose'); }}
@@ -144,6 +148,7 @@ export function ExportDialog({
               <p className="text-[10px]" style={{ color: 'var(--text-dim)' }}>Formatted spreadsheet with template builder</p>
             </div>
           </button>
+          )}
         </div>
       </div>
     </div>

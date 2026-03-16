@@ -4,6 +4,8 @@ import type { ColumnConfig, Project, AppConfig, FieldDefinition, ConfigTemplate,
 import { RESERVED_CUE_TYPES, EDITABLE_FIELD_KEYS, LINK_COLUMN_KEYS, getDefaultFieldsForType, getFieldLabel, extractTemplateData, FACTORY_DEFAULT_TEMPLATE } from '../types';
 import { loadConfigTemplates, saveConfigTemplate, deleteConfigTemplate, renameConfigTemplate, exportTemplateToJSON, importTemplateFromJSON, getDefaultTemplate, setDefaultTemplate } from '../utils/configTemplates';
 import { loadProjects, deleteProject as deleteProjectFromStorage, updateProjectMetadata, exportProjectToJSON } from '../utils/projectStorage';
+import { useTier } from '../hooks/useTier';
+import { TIER_DESCRIPTIONS, type SelectableTier, SELECTABLE_TIERS } from '../config/tierLimits';
 import {
   listBackups,
   restoreBackup,
@@ -572,21 +574,29 @@ export function ConfigurationModal({
   onDeleteAllProjects,
 }: ConfigurationModalProps) {
   const { confirmState, showConfirm } = useConfirm();
+  const { limits, tier, updateTier } = useTier();
   const [newTypeName, setNewTypeName] = useState('');
   const [activeTab, setActiveTab] = useState<'types' | 'fields' | 'columns' | 'view' | 'hotkeys' | 'templates' | 'savefiles' | 'data' | 'projects' | 'info'>('types');
 
   type TabKey = typeof activeTab;
-  const tabMeta: Record<TabKey, { title: string; desc: string; icon: React.ReactNode; group: 'setup' | 'manage' | 'info' }> = {
+  const tabMeta: Record<TabKey, { title: string; desc: string; icon: React.ReactNode; group: 'setup' | 'manage' | 'info'; requiresAdvanced?: boolean }> = {
     types:     { title: 'Cue Types',  desc: 'Define the cue types available when creating or editing a cue. Reserved types cannot be deleted. Types in use cannot be deleted until their cues are reassigned.', icon: <Tag className="w-3.5 h-3.5" />, group: 'setup' },
-    fields:    { title: 'Fields',     desc: 'Create custom fields, rename existing fields, or archive fields you no longer need. Reserved and in-use fields cannot be archived. Archived fields preserve existing cue data.', icon: <List className="w-3.5 h-3.5" />, group: 'setup' },
+    fields:    { title: 'Fields',     desc: 'Create custom fields, rename existing fields, or archive fields you no longer need. Reserved and in-use fields cannot be archived. Archived fields preserve existing cue data.', icon: <List className="w-3.5 h-3.5" />, group: 'setup', requiresAdvanced: true },
     columns:   { title: 'Columns',    desc: 'Choose which fields appear as columns in the abridged cue list. Drag to reorder. Toggle visibility with the checkbox. Add type-specific overrides to show different columns per cue type.', icon: <LayoutGrid className="w-3.5 h-3.5" />, group: 'setup' },
     view:      { title: 'View',       desc: 'Control how cues are displayed in the cue sheet. Changes apply immediately.', icon: <Eye className="w-3.5 h-3.5" />, group: 'setup' },
     hotkeys:   { title: 'HotKeys',    desc: 'Keyboard shortcuts active while on the cue sheet. Shortcuts are disabled when typing in text fields.', icon: <Keyboard className="w-3.5 h-3.5" />, group: 'setup' },
-    templates: { title: 'Templates',  desc: 'Save and load configuration templates capturing Cue Types, Fields, Columns, and View settings. Export as .cuetation-template.json to share between installations.', icon: <Bookmark className="w-3.5 h-3.5" />, group: 'manage' },
+    templates: { title: 'Templates',  desc: 'Save and load configuration templates capturing Cue Types, Fields, Columns, and View settings. Export as .cuetation-template.json to share between installations.', icon: <Bookmark className="w-3.5 h-3.5" />, group: 'manage', requiresAdvanced: true },
     savefiles: { title: 'Save Files', desc: 'Manage backup snapshots. Cue backups are created automatically at the configured interval while you are active, and when the tab is backgrounded or the page is closed.', icon: <RotateCcw className="w-3.5 h-3.5" />, group: 'manage' },
     data:      { title: 'Data',       desc: 'Destructive actions scoped to the current project, or to the entire application. All actions require confirmation before executing.', icon: <AlertTriangle className="w-3.5 h-3.5" />, group: 'manage' },
     projects:  { title: 'Projects',   desc: 'Manage all projects. Edit metadata or delete unused projects.', icon: <FolderOpen className="w-3.5 h-3.5" />, group: 'manage' },
     info:      { title: 'Info',       desc: 'View feature notes and the user guide for Cuetation.', icon: <Info className="w-3.5 h-3.5" />, group: 'info' },
+  };
+
+  /** Tabs hidden for Beginner tier (require allowAdvancedConfig). */
+  const isTabVisible = (tab: TabKey) => {
+    const meta = tabMeta[tab];
+    if (meta.requiresAdvanced && !limits.allowAdvancedConfig) return false;
+    return true;
   };
 
   const sidebarItem = (tab: TabKey) => {
@@ -848,13 +858,13 @@ export function ConfigurationModal({
           >
             <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: '.1em', textTransform: 'uppercase' as const, color: 'var(--text-dim)', padding: '6px 16px 5px' }}>Setup</span>
             {sidebarItem('types')}
-            {sidebarItem('fields')}
+            {isTabVisible('fields') && sidebarItem('fields')}
             {sidebarItem('columns')}
             {sidebarItem('view')}
             {sidebarItem('hotkeys')}
             <div style={{ height: 1, background: 'var(--border)', margin: '7px 14px' }} />
             <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: '.1em', textTransform: 'uppercase' as const, color: 'var(--text-dim)', padding: '14px 16px 5px' }}>Manage</span>
-            {sidebarItem('templates')}
+            {isTabVisible('templates') && sidebarItem('templates')}
             {sidebarItem('savefiles')}
             {sidebarItem('data')}
             {sidebarItem('projects')}
@@ -1527,6 +1537,7 @@ export function ConfigurationModal({
               </div>
 
               {/* Theatre Mode toggle */}
+              {limits.allowTheatreMode && (
               <label className="flex items-center gap-3 px-3 py-3 bg-[var(--bg-panel-a50)] rounded-md border border-[var(--border-hi-a50)] cursor-pointer select-none hover:bg-[var(--bg-panel)]">
                 <input
                   type="checkbox"
@@ -1541,6 +1552,7 @@ export function ConfigurationModal({
                   </p>
                 </div>
               </label>
+              )}
 
               {/* Show short codes toggle */}
               <label className="flex items-center gap-3 px-3 py-3 bg-[var(--bg-panel-a50)] rounded-md border border-[var(--border-hi-a50)] cursor-pointer select-none hover:bg-[var(--bg-panel)]">
@@ -2383,6 +2395,41 @@ export function ConfigurationModal({
                 </div>
                 <span style={{ color: 'var(--text-dim)', fontSize: 16, marginLeft: 'auto' }}>›</span>
               </button>
+              <div style={{ marginTop: 24, paddingTop: 18, borderTop: '1px solid var(--border)' }}>
+                <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)', marginBottom: 8 }}>Experience Level</p>
+                <div className="flex gap-2">
+                  {SELECTABLE_TIERS.map((t) => {
+                    const desc = TIER_DESCRIPTIONS[t];
+                    const isActive = tier === t;
+                    return (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => {
+                          if (!isActive) {
+                            showConfirm({
+                              title: `Switch to ${desc.title}?`,
+                              message: `This will change your experience level to ${desc.title}. Feature access and limits will be updated.`,
+                              confirmLabel: 'Switch',
+                              onConfirm: async () => { await updateTier(t); },
+                            });
+                          }
+                        }}
+                        className="flex-1 rounded-md text-left transition-all"
+                        style={{
+                          padding: '10px 12px',
+                          background: isActive ? 'var(--surface-hi)' : 'var(--bg-card)',
+                          border: isActive ? '2px solid var(--amber)' : '1px solid var(--border)',
+                          cursor: isActive ? 'default' : 'pointer',
+                        }}
+                      >
+                        <span className="block text-xs font-medium" style={{ color: isActive ? 'var(--amber)' : 'var(--text)' }}>{desc.title}</span>
+                        <span className="block text-[10px] mt-0.5" style={{ color: 'var(--text-dim)' }}>{desc.subtitle}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
               <div style={{ marginTop: 24, paddingTop: 18, borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>Cuetation · Phase 1 · Local-first build</span>
                 <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: '.06em', color: 'var(--text-dim)', background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 3, padding: '3px 7px' }}>v0.9.1</span>
