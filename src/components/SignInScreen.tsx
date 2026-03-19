@@ -1,5 +1,5 @@
 /**
- * Custom sign-in screen using Clerk's useSignIn hook.
+ * Custom sign-in screen using Clerk's useSignIn hook (Core 3 API).
  * Supports email+password and Google OAuth.
  * Matches the Cuetation dark design system.
  */
@@ -13,7 +13,7 @@ interface SignInScreenProps {
 }
 
 export function SignInScreen({ onForgotPassword, onSwitchToSignUp }: SignInScreenProps) {
-  const { signIn, setActive, isLoaded } = useSignIn();
+  const { signIn } = useSignIn();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -22,42 +22,42 @@ export function SignInScreen({ onForgotPassword, onSwitchToSignUp }: SignInScree
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!isLoaded || !signIn) return;
     setLoading(true);
     setError(null);
 
     try {
-      const result = await signIn.create({
-        identifier: email,
-        password,
-      });
-      if (result.status === 'complete') {
-        await setActive({ session: result.createdSessionId });
-        // Clerk's <Show when="signed-in"> will automatically render the app
+      const { error: pwError } = await signIn.password({ identifier: email, password });
+      if (pwError) {
+        setError(pwError.message || 'Incorrect email or password.');
+        return;
       }
+      const { error: finalizeError } = await signIn.finalize();
+      if (finalizeError) {
+        setError(finalizeError.message || 'Sign-in failed.');
+      }
+      // Clerk's <Show when="signed-in"> will automatically render the app
     } catch (err: unknown) {
       console.error('Sign-in error:', err);
-      const clerkErr = err as { errors?: Array<{ message: string; code?: string }> };
-      const msg = clerkErr.errors?.[0]?.message;
-      setError(msg || 'Incorrect email or password.');
+      setError(err instanceof Error ? err.message : 'Incorrect email or password.');
     } finally {
       setLoading(false);
     }
   }
 
   async function handleGoogle() {
-    if (!isLoaded || !signIn) return;
     setError(null);
     try {
-      await signIn.authenticateWithRedirect({
+      const { error: ssoError } = await signIn.sso({
         strategy: 'oauth_google',
         redirectUrl: '/sso-callback',
-        redirectUrlComplete: '/',
+        redirectCallbackUrl: '/',
       });
+      if (ssoError) {
+        setError(ssoError.message || 'Google sign-in failed. Is the social connection enabled?');
+      }
     } catch (err: unknown) {
       console.error('Google OAuth error:', err);
-      const clerkErr = err as { errors?: Array<{ message: string }> };
-      setError(clerkErr.errors?.[0]?.message || 'Google sign-in failed. Is the social connection enabled?');
+      setError(err instanceof Error ? err.message : 'Google sign-in failed.');
     }
   }
 

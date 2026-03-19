@@ -1,5 +1,5 @@
 /**
- * Custom sign-up screen using Clerk's useSignUp hook.
+ * Custom sign-up screen using Clerk's useSignUp hook (Core 3 API).
  * Supports email+password (with verification) and Google OAuth.
  * Matches the Cuetation dark design system.
  */
@@ -12,7 +12,7 @@ interface SignUpScreenProps {
 }
 
 export function SignUpScreen({ onSwitchToSignIn }: SignUpScreenProps) {
-  const { signUp, setActive, isLoaded } = useSignUp();
+  const { signUp } = useSignUp();
 
   const [stage, setStage] = useState<'form' | 'verify'>('form');
   const [name, setName] = useState('');
@@ -25,23 +25,29 @@ export function SignUpScreen({ onSwitchToSignIn }: SignUpScreenProps) {
   // Email + password sign-up
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!isLoaded || !signUp) return;
     setLoading(true);
     setError(null);
 
     try {
       const [firstName, ...rest] = name.trim().split(' ');
-      await signUp.create({
-        firstName,
-        lastName: rest.join(' ') || undefined,
+      const { error: pwError } = await signUp.password({
         emailAddress: email,
         password,
+        firstName,
+        lastName: rest.join(' ') || undefined,
       });
-      await signUp.prepareEmailAddressVerification({ strategy: 'email_code' });
+      if (pwError) {
+        setError(pwError.message || 'Something went wrong');
+        return;
+      }
+      const { error: codeError } = await signUp.verifications.sendEmailCode();
+      if (codeError) {
+        setError(codeError.message || 'Failed to send verification email');
+        return;
+      }
       setStage('verify');
     } catch (err: unknown) {
-      const clerkErr = err as { errors?: Array<{ message: string }> };
-      setError(clerkErr.errors?.[0]?.message || 'Something went wrong');
+      setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
       setLoading(false);
     }
@@ -50,19 +56,23 @@ export function SignUpScreen({ onSwitchToSignIn }: SignUpScreenProps) {
   // Verification code
   async function handleVerify(e: React.FormEvent) {
     e.preventDefault();
-    if (!isLoaded || !signUp) return;
     setLoading(true);
     setError(null);
 
     try {
-      const result = await signUp.attemptEmailAddressVerification({ code });
-      if (result.status === 'complete') {
-        await setActive({ session: result.createdSessionId });
-        // Clerk's <Show when="signed-in"> handles the rest
+      const { error: verifyError } = await signUp.verifications.verifyEmailCode({ code });
+      if (verifyError) {
+        setError(verifyError.message || 'Invalid code');
+        return;
       }
+      const { error: finalizeError } = await signUp.finalize();
+      if (finalizeError) {
+        setError(finalizeError.message || 'Sign-up failed.');
+        return;
+      }
+      // Clerk's <Show when="signed-in"> handles the rest
     } catch (err: unknown) {
-      const clerkErr = err as { errors?: Array<{ message: string }> };
-      setError(clerkErr.errors?.[0]?.message || 'Invalid code');
+      setError(err instanceof Error ? err.message : 'Invalid code');
     } finally {
       setLoading(false);
     }
@@ -70,18 +80,19 @@ export function SignUpScreen({ onSwitchToSignIn }: SignUpScreenProps) {
 
   // Google OAuth
   async function handleGoogle() {
-    if (!isLoaded || !signUp) return;
     setError(null);
     try {
-      await signUp.authenticateWithRedirect({
+      const { error: ssoError } = await signUp.sso({
         strategy: 'oauth_google',
         redirectUrl: '/sso-callback',
-        redirectUrlComplete: '/',
+        redirectCallbackUrl: '/',
       });
+      if (ssoError) {
+        setError(ssoError.message || 'Google sign-up failed. Is the social connection enabled?');
+      }
     } catch (err: unknown) {
       console.error('Google OAuth error:', err);
-      const clerkErr = err as { errors?: Array<{ message: string }> };
-      setError(clerkErr.errors?.[0]?.message || 'Google sign-up failed. Is the social connection enabled?');
+      setError(err instanceof Error ? err.message : 'Google sign-up failed.');
     }
   }
 

@@ -17,8 +17,8 @@ export function SSOCallback() {
     hasRun.current = true;
 
     handleRedirectCallback({
-      afterSignInUrl: '/',
-      afterSignUpUrl: '/',
+      signInFallbackRedirectUrl: '/',
+      signUpFallbackRedirectUrl: '/',
     });
   }, [handleRedirectCallback]);
 

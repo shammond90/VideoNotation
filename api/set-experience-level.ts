@@ -9,7 +9,7 @@
  *   SUPABASE_URL              — project URL (server-side)
  *   SUPABASE_SERVICE_ROLE_KEY — bypasses RLS, server-side only
  */
-import { createClerkClient } from '@clerk/backend';
+import { verifyToken } from '@clerk/backend';
 import { createClient } from '@supabase/supabase-js';
 
 const VALID_LEVELS = ['beginner', 'advanced', 'expert'] as const;
@@ -26,7 +26,6 @@ export default async function handler(req: Request): Promise<Response> {
     return new Response('Server misconfigured', { status: 500 });
   }
 
-  const clerk = createClerkClient({ secretKey: clerkSecretKey });
   const sessionToken = req.headers.get('Authorization')?.replace('Bearer ', '');
 
   if (!sessionToken) {
@@ -35,8 +34,8 @@ export default async function handler(req: Request): Promise<Response> {
 
   let userId: string;
   try {
-    const session = await clerk.verifyToken(sessionToken);
-    userId = session.sub;
+    const payload = await verifyToken(sessionToken, { secretKey: clerkSecretKey });
+    userId = payload.sub;
   } catch {
     return new Response('Invalid token', { status: 401 });
   }

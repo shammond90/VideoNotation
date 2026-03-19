@@ -1,5 +1,5 @@
 /**
- * Forgot password screen using Clerk's useSignIn hook.
+ * Forgot password screen using Clerk's useSignIn hook (Core 3 API).
  * Sends a reset code via email, then lets user enter new password.
  */
 import { useSignIn } from '@clerk/react';
@@ -11,7 +11,7 @@ interface ForgotPasswordScreenProps {
 }
 
 export function ForgotPasswordScreen({ onBackToSignIn }: ForgotPasswordScreenProps) {
-  const { signIn, setActive, isLoaded } = useSignIn();
+  const { signIn } = useSignIn();
 
   const [stage, setStage] = useState<'email' | 'reset'>('email');
   const [email, setEmail] = useState('');
@@ -23,19 +23,23 @@ export function ForgotPasswordScreen({ onBackToSignIn }: ForgotPasswordScreenPro
   // Step 1: Request reset code
   async function handleRequestCode(e: React.FormEvent) {
     e.preventDefault();
-    if (!isLoaded || !signIn) return;
     setLoading(true);
     setError(null);
 
     try {
-      await signIn.create({
-        strategy: 'reset_password_email_code',
-        identifier: email,
-      });
+      const { error: createError } = await signIn.create({ identifier: email });
+      if (createError) {
+        setError(createError.message || 'Something went wrong');
+        return;
+      }
+      const { error: sendError } = await signIn.resetPasswordEmailCode.sendCode();
+      if (sendError) {
+        setError(sendError.message || 'Failed to send reset code');
+        return;
+      }
       setStage('reset');
     } catch (err: unknown) {
-      const clerkErr = err as { errors?: Array<{ message: string }> };
-      setError(clerkErr.errors?.[0]?.message || 'Something went wrong');
+      setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
       setLoading(false);
     }
@@ -44,23 +48,30 @@ export function ForgotPasswordScreen({ onBackToSignIn }: ForgotPasswordScreenPro
   // Step 2: Submit code + new password
   async function handleResetPassword(e: React.FormEvent) {
     e.preventDefault();
-    if (!isLoaded || !signIn) return;
     setLoading(true);
     setError(null);
 
     try {
-      const result = await signIn.attemptFirstFactor({
-        strategy: 'reset_password_email_code',
-        code,
+      const { error: verifyError } = await signIn.resetPasswordEmailCode.verifyCode({ code });
+      if (verifyError) {
+        setError(verifyError.message || 'Invalid code');
+        return;
+      }
+      const { error: pwError } = await signIn.resetPasswordEmailCode.submitPassword({
         password: newPassword,
       });
-      if (result.status === 'complete') {
-        await setActive({ session: result.createdSessionId });
-        // Clerk's <Show when="signed-in"> will take over
+      if (pwError) {
+        setError(pwError.message || 'Failed to set new password');
+        return;
       }
+      const { error: finalizeError } = await signIn.finalize();
+      if (finalizeError) {
+        setError(finalizeError.message || 'Sign-in failed');
+        return;
+      }
+      // Clerk's <Show when="signed-in"> will take over
     } catch (err: unknown) {
-      const clerkErr = err as { errors?: Array<{ message: string }> };
-      setError(clerkErr.errors?.[0]?.message || 'Invalid code or password');
+      setError(err instanceof Error ? err.message : 'Invalid code or password');
     } finally {
       setLoading(false);
     }
