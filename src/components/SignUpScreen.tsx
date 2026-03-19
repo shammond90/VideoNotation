@@ -82,10 +82,11 @@ export function SignUpScreen({ onSwitchToSignIn }: SignUpScreenProps) {
   async function handleGoogle() {
     setError(null);
     try {
+      const origin = window.location.origin;
       const { error: ssoError } = await signUp.sso({
         strategy: 'oauth_google',
-        redirectUrl: '/sso-callback',
-        redirectCallbackUrl: '/',
+        redirectUrl: `${origin}/sso-callback`,
+        redirectCallbackUrl: `${origin}/`,
       });
       if (ssoError) {
         setError(ssoError.message || 'Google sign-up failed. Is the social connection enabled?');

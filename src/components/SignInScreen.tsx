@@ -47,10 +47,11 @@ export function SignInScreen({ onForgotPassword, onSwitchToSignUp }: SignInScree
   async function handleGoogle() {
     setError(null);
     try {
+      const origin = window.location.origin;
       const { error: ssoError } = await signIn.sso({
         strategy: 'oauth_google',
-        redirectUrl: '/sso-callback',
-        redirectCallbackUrl: '/',
+        redirectUrl: `${origin}/sso-callback`,
+        redirectCallbackUrl: `${origin}/`,
       });
       if (ssoError) {
         setError(ssoError.message || 'Google sign-in failed. Is the social connection enabled?');
