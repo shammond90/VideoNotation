@@ -1,6 +1,5 @@
 {
   "rewrites": [
-    { "source": "/video-window", "destination": "/index.html" },
-    { "source": "/sso-callback", "destination": "/index.html" }
+    { "source": "/video-window", "destination": "/index.html" }
   ]
 }

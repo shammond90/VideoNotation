@@ -1,9 +1,9 @@
 /**
  * Custom sign-up screen using Clerk's useSignUp hook (Core 3 API).
- * Supports email+password (with verification) and Google OAuth.
+ * Email+password is handled inline; Google OAuth uses Clerk's built-in modal.
  * Matches the Cuetation dark design system.
  */
-import { useSignUp } from '@clerk/react';
+import { useSignUp, SignUpButton } from '@clerk/react';
 import { useState } from 'react';
 import { AuthLayout } from './AuthLayout';
 
@@ -78,25 +78,6 @@ export function SignUpScreen({ onSwitchToSignIn }: SignUpScreenProps) {
     }
   }
 
-  // Google OAuth
-  async function handleGoogle() {
-    setError(null);
-    try {
-      const origin = window.location.origin;
-      const { error: ssoError } = await signUp.sso({
-        strategy: 'oauth_google',
-        redirectUrl: `${origin}/sso-callback`,
-        redirectCallbackUrl: `${origin}/`,
-      });
-      if (ssoError) {
-        setError(ssoError.message || 'Google sign-up failed. Is the social connection enabled?');
-      }
-    } catch (err: unknown) {
-      console.error('Google OAuth error:', err);
-      setError(err instanceof Error ? err.message : 'Google sign-up failed.');
-    }
-  }
-
   // ── Verify stage ──
   if (stage === 'verify') {
     return (
@@ -165,21 +146,22 @@ export function SignUpScreen({ onSwitchToSignIn }: SignUpScreenProps) {
         Create an account
       </h1>
 
-      {/* Google OAuth */}
-      <button
-        onClick={handleGoogle}
-        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded font-mono text-sm cursor-pointer transition-colors"
-        style={{
-          background: 'var(--bg-input)',
-          border: '1px solid var(--border-hi)',
-          color: 'var(--text)',
-        }}
-        onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
-        onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--bg-input)')}
-      >
-        <GoogleIcon />
-        Continue with Google
-      </button>
+      {/* Google OAuth — Clerk handles the entire flow via modal */}
+      <SignUpButton mode="modal">
+        <button
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded font-mono text-sm cursor-pointer transition-colors"
+          style={{
+            background: 'var(--bg-input)',
+            border: '1px solid var(--border-hi)',
+            color: 'var(--text)',
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
+          onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--bg-input)')}
+        >
+          <GoogleIcon />
+          Continue with Google
+        </button>
+      </SignUpButton>
 
       {/* Divider */}
       <div className="flex items-center gap-3 my-5">

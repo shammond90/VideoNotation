@@ -1,9 +1,9 @@
 /**
  * Custom sign-in screen using Clerk's useSignIn hook (Core 3 API).
- * Supports email+password and Google OAuth.
+ * Email+password is handled inline; Google OAuth uses Clerk's built-in modal.
  * Matches the Cuetation dark design system.
  */
-import { useSignIn } from '@clerk/react';
+import { useSignIn, SignInButton } from '@clerk/react';
 import { useState } from 'react';
 import { AuthLayout } from './AuthLayout';
 
@@ -44,24 +44,6 @@ export function SignInScreen({ onForgotPassword, onSwitchToSignUp }: SignInScree
     }
   }
 
-  async function handleGoogle() {
-    setError(null);
-    try {
-      const origin = window.location.origin;
-      const { error: ssoError } = await signIn.sso({
-        strategy: 'oauth_google',
-        redirectUrl: `${origin}/sso-callback`,
-        redirectCallbackUrl: `${origin}/`,
-      });
-      if (ssoError) {
-        setError(ssoError.message || 'Google sign-in failed. Is the social connection enabled?');
-      }
-    } catch (err: unknown) {
-      console.error('Google OAuth error:', err);
-      setError(err instanceof Error ? err.message : 'Google sign-in failed.');
-    }
-  }
-
   return (
     <AuthLayout>
       <h1
@@ -71,21 +53,22 @@ export function SignInScreen({ onForgotPassword, onSwitchToSignUp }: SignInScree
         Sign in
       </h1>
 
-      {/* Google OAuth */}
-      <button
-        onClick={handleGoogle}
-        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded font-mono text-sm cursor-pointer transition-colors"
-        style={{
-          background: 'var(--bg-input)',
-          border: '1px solid var(--border-hi)',
-          color: 'var(--text)',
-        }}
-        onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
-        onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--bg-input)')}
-      >
-        <GoogleIcon />
-        Continue with Google
-      </button>
+      {/* Google OAuth — Clerk handles the entire flow via modal */}
+      <SignInButton mode="modal">
+        <button
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded font-mono text-sm cursor-pointer transition-colors"
+          style={{
+            background: 'var(--bg-input)',
+            border: '1px solid var(--border-hi)',
+            color: 'var(--text)',
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
+          onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--bg-input)')}
+        >
+          <GoogleIcon />
+          Continue with Google
+        </button>
+      </SignInButton>
 
       {/* Divider */}
       <div className="flex items-center gap-3 my-5">
