@@ -1,0 +1,193 @@
+/**
+ * Custom sign-in screen using Clerk's useSignIn hook.
+ * Supports email+password and Google OAuth.
+ * Matches the Cuetation dark design system.
+ */
+import { useSignIn } from '@clerk/react';
+import { useState } from 'react';
+import { AuthLayout } from './AuthLayout';
+
+interface SignInScreenProps {
+  onForgotPassword: () => void;
+  onSwitchToSignUp: () => void;
+}
+
+export function SignInScreen({ onForgotPassword, onSwitchToSignUp }: SignInScreenProps) {
+  const { signIn, setActive, isLoaded } = useSignIn();
+
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!isLoaded || !signIn) return;
+    setLoading(true);
+    setError(null);
+
+    try {
+      const result = await signIn.create({
+        identifier: email,
+        password,
+      });
+      if (result.status === 'complete') {
+        await setActive({ session: result.createdSessionId });
+        // Clerk's <Show when="signed-in"> will automatically render the app
+      }
+    } catch {
+      // Deliberately vague — don't confirm which field is wrong
+      setError('Incorrect email or password.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleGoogle() {
+    if (!isLoaded || !signIn) return;
+    await signIn.authenticateWithRedirect({
+      strategy: 'oauth_google',
+      redirectUrl: '/sso-callback',
+      redirectUrlComplete: '/',
+    });
+  }
+
+  return (
+    <AuthLayout>
+      <h1
+        className="font-display text-center mb-6"
+        style={{ fontSize: 22, fontWeight: 400, color: 'var(--text)' }}
+      >
+        Sign in
+      </h1>
+
+      {/* Google OAuth */}
+      <button
+        onClick={handleGoogle}
+        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded font-mono text-sm cursor-pointer transition-colors"
+        style={{
+          background: 'var(--bg-input)',
+          border: '1px solid var(--border-hi)',
+          color: 'var(--text)',
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
+        onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--bg-input)')}
+      >
+        <GoogleIcon />
+        Continue with Google
+      </button>
+
+      {/* Divider */}
+      <div className="flex items-center gap-3 my-5">
+        <div className="flex-1 h-px" style={{ background: 'var(--border)' }} />
+        <span className="font-mono text-xs" style={{ color: 'var(--text-dim)' }}>
+          or
+        </span>
+        <div className="flex-1 h-px" style={{ background: 'var(--border)' }} />
+      </div>
+
+      {/* Email + password form */}
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <input
+          type="email"
+          placeholder="Email address"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+          autoComplete="email"
+          className="w-full px-3 py-2.5 rounded font-mono text-sm outline-none transition-colors"
+          style={{
+            background: 'var(--bg-input)',
+            border: '1px solid var(--border)',
+            color: 'var(--text)',
+          }}
+          onFocus={(e) => (e.currentTarget.style.borderColor = 'var(--border-focus)')}
+          onBlur={(e) => (e.currentTarget.style.borderColor = 'var(--border)')}
+        />
+        <input
+          type="password"
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+          autoComplete="current-password"
+          className="w-full px-3 py-2.5 rounded font-mono text-sm outline-none transition-colors"
+          style={{
+            background: 'var(--bg-input)',
+            border: '1px solid var(--border)',
+            color: 'var(--text)',
+          }}
+          onFocus={(e) => (e.currentTarget.style.borderColor = 'var(--border-focus)')}
+          onBlur={(e) => (e.currentTarget.style.borderColor = 'var(--border)')}
+        />
+
+        {error && (
+          <p className="font-mono text-xs" style={{ color: 'var(--red)' }}>
+            {error}
+          </p>
+        )}
+
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full px-4 py-2.5 rounded font-mono text-sm font-medium cursor-pointer transition-colors"
+          style={{
+            background: 'var(--amber)',
+            color: 'var(--text-inv)',
+            border: 'none',
+            opacity: loading ? 0.6 : 1,
+          }}
+        >
+          {loading ? 'Signing in…' : 'Sign in'}
+        </button>
+      </form>
+
+      {/* Links */}
+      <div className="mt-5 text-center space-y-2">
+        <button
+          onClick={onForgotPassword}
+          className="font-mono text-xs cursor-pointer transition-colors"
+          style={{ color: 'var(--text-mid)', background: 'none', border: 'none' }}
+          onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--amber)')}
+          onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-mid)')}
+        >
+          Forgot password?
+        </button>
+        <p className="font-mono text-xs" style={{ color: 'var(--text-dim)' }}>
+          Don't have an account?{' '}
+          <button
+            onClick={onSwitchToSignUp}
+            className="cursor-pointer transition-colors"
+            style={{ color: 'var(--amber)', background: 'none', border: 'none', font: 'inherit' }}
+          >
+            Sign up
+          </button>
+        </p>
+      </div>
+    </AuthLayout>
+  );
+}
+
+/** Inline Google "G" logo SVG. */
+function GoogleIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 48 48">
+      <path
+        fill="#EA4335"
+        d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
+      />
+      <path
+        fill="#4285F4"
+        d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M10.53 28.59A14.5 14.5 0 0 1 9.5 24c0-1.59.28-3.14.76-4.59l-7.98-6.19A23.9 23.9 0 0 0 0 24c0 3.77.9 7.35 2.56 10.56l7.97-5.97z"
+      />
+      <path
+        fill="#34A853"
+        d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 5.97C6.51 42.62 14.62 48 24 48z"
+      />
+    </svg>
+  );
+}

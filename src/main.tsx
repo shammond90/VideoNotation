@@ -3,9 +3,10 @@ import { createRoot } from 'react-dom/client'
 import { ClerkProvider } from '@clerk/react'
 import './index.css'
 
-// Simple client-side routing: /video-window renders the popup view,
-// everything else renders the main app.
-const isPopup = window.location.pathname === '/video-window';
+// Simple client-side routing.
+const pathname = window.location.pathname;
+const isPopup = pathname === '/video-window';
+const isSSOCallback = pathname === '/sso-callback';
 
 const CLERK_PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
@@ -17,6 +18,16 @@ async function renderApp() {
     root.render(
       <StrictMode>
         <VideoPopupWindow />
+      </StrictMode>,
+    );
+  } else if (isSSOCallback) {
+    // OAuth redirect callback — process and redirect to /
+    const { SSOCallback } = await import('./components/SSOCallback');
+    root.render(
+      <StrictMode>
+        <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY}>
+          <SSOCallback />
+        </ClerkProvider>
       </StrictMode>,
     );
   } else {

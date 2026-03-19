@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Show, SignInButton, SignUpButton, UserButton } from '@clerk/react';
+import { Show, UserButton } from '@clerk/react';
 import { useProject } from './hooks/useProject';
 import { useToast } from './hooks/useToast';
 import { useEnsureUser } from './hooks/useEnsureUser';
@@ -7,6 +7,9 @@ import { TierProvider, useTier } from './hooks/useTier';
 import { HomeScreen } from './components/HomeScreen';
 import { CreateProjectForm } from './components/CreateProjectForm';
 import { LevelSelectScreen } from './components/LevelSelectScreen';
+import { SignInScreen } from './components/SignInScreen';
+import { SignUpScreen } from './components/SignUpScreen';
+import { ForgotPasswordScreen } from './components/ForgotPasswordScreen';
 import { ImportConflictModal } from './components/ImportConflictModal';
 import { ProjectSwitcherModal } from './components/ProjectSwitcherModal';
 import { ToastContainer } from './components/ToastContainer';
@@ -383,26 +386,7 @@ export function AppShell() {
   return (
     <>
       <Show when="signed-out">
-        <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center text-gray-100">
-          <div className="text-center space-y-6">
-            <h1 className="text-5xl font-bold tracking-tight">Cuetation</h1>
-            <p className="text-lg text-gray-400 max-w-md">
-              Video cue annotation for stage managers
-            </p>
-            <div className="flex gap-4 justify-center">
-              <SignInButton mode="modal">
-                <button className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium transition-colors">
-                  Sign in
-                </button>
-              </SignInButton>
-              <SignUpButton mode="modal">
-                <button className="px-6 py-2.5 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-medium transition-colors">
-                  Sign up
-                </button>
-              </SignUpButton>
-            </div>
-          </div>
-        </div>
+        <SignedOutContent />
       </Show>
       <Show when="signed-in">
         <SignedInContent>
@@ -453,5 +437,72 @@ function TierGate({ children }: { children: React.ReactNode }) {
   }
 
   return <>{children}</>;
+}
+
+type AuthScreen = 'landing' | 'sign-in' | 'sign-up' | 'forgot-password';
+
+/**
+ * Handles the signed-out experience: landing page with custom auth screens.
+ * No modal popups — inline screens matching the Cuetation design system.
+ */
+function SignedOutContent() {
+  const [authScreen, setAuthScreen] = useState<AuthScreen>('landing');
+
+  if (authScreen === 'sign-in') {
+    return (
+      <SignInScreen
+        onForgotPassword={() => setAuthScreen('forgot-password')}
+        onSwitchToSignUp={() => setAuthScreen('sign-up')}
+      />
+    );
+  }
+
+  if (authScreen === 'sign-up') {
+    return <SignUpScreen onSwitchToSignIn={() => setAuthScreen('sign-in')} />;
+  }
+
+  if (authScreen === 'forgot-password') {
+    return <ForgotPasswordScreen onBackToSignIn={() => setAuthScreen('sign-in')} />;
+  }
+
+  // Landing page
+  return (
+    <div
+      className="min-h-screen flex flex-col items-center justify-center px-4"
+      style={{ background: 'var(--bg)', color: 'var(--text)' }}
+    >
+      <div className="text-center space-y-6">
+        <h1
+          className="font-display"
+          style={{ fontSize: 48, fontWeight: 400, letterSpacing: '-0.03em' }}
+        >
+          Cue<em style={{ color: 'var(--amber)', fontStyle: 'italic' }}>tation</em>
+        </h1>
+        <p className="font-mono text-sm" style={{ color: 'var(--text-mid)', maxWidth: 400 }}>
+          Video cue annotation for stage managers
+        </p>
+        <div className="flex gap-3 justify-center pt-2">
+          <button
+            onClick={() => setAuthScreen('sign-in')}
+            className="px-6 py-2.5 rounded font-mono text-sm font-medium cursor-pointer transition-colors"
+            style={{ background: 'var(--amber)', color: 'var(--text-inv)', border: 'none' }}
+          >
+            Sign in
+          </button>
+          <button
+            onClick={() => setAuthScreen('sign-up')}
+            className="px-6 py-2.5 rounded font-mono text-sm font-medium cursor-pointer transition-colors"
+            style={{
+              background: 'transparent',
+              color: 'var(--text)',
+              border: '1px solid var(--border-hi)',
+            }}
+          >
+            Sign up
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
