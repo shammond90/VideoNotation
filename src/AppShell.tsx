@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Show, UserButton } from '@clerk/react';
+import { Show, UserButton, useAuth } from '@clerk/react';
 import { useProject } from './hooks/useProject';
 import { useToast } from './hooks/useToast';
 import { useEnsureUser } from './hooks/useEnsureUser';
@@ -382,6 +382,27 @@ export function AppShell() {
       </div>
     );
   };
+
+  const { isLoaded } = useAuth();
+
+  // While Clerk initialises, show wordmark loading screen.
+  // Neither <Show when="signed-in"> nor <Show when="signed-out"> renders
+  // during this phase, which would otherwise produce a blank screen.
+  if (!isLoaded) {
+    return (
+      <div
+        className="min-h-screen flex items-center justify-center"
+        style={{ background: 'var(--bg)' }}
+      >
+        <span
+          className="font-display"
+          style={{ fontSize: 28, fontWeight: 400, letterSpacing: '-0.02em', color: 'var(--text)' }}
+        >
+          Cue<em style={{ color: 'var(--amber)', fontStyle: 'italic' }}>tation</em>
+        </span>
+      </div>
+    );
+  }
 
   return (
     <>

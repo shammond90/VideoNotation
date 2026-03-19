@@ -35,9 +35,11 @@ export function SignInScreen({ onForgotPassword, onSwitchToSignUp }: SignInScree
         await setActive({ session: result.createdSessionId });
         // Clerk's <Show when="signed-in"> will automatically render the app
       }
-    } catch {
-      // Deliberately vague — don't confirm which field is wrong
-      setError('Incorrect email or password.');
+    } catch (err: unknown) {
+      console.error('Sign-in error:', err);
+      const clerkErr = err as { errors?: Array<{ message: string; code?: string }> };
+      const msg = clerkErr.errors?.[0]?.message;
+      setError(msg || 'Incorrect email or password.');
     } finally {
       setLoading(false);
     }
@@ -45,11 +47,18 @@ export function SignInScreen({ onForgotPassword, onSwitchToSignUp }: SignInScree
 
   async function handleGoogle() {
     if (!isLoaded || !signIn) return;
-    await signIn.authenticateWithRedirect({
-      strategy: 'oauth_google',
-      redirectUrl: '/sso-callback',
-      redirectUrlComplete: '/',
-    });
+    setError(null);
+    try {
+      await signIn.authenticateWithRedirect({
+        strategy: 'oauth_google',
+        redirectUrl: '/sso-callback',
+        redirectUrlComplete: '/',
+      });
+    } catch (err: unknown) {
+      console.error('Google OAuth error:', err);
+      const clerkErr = err as { errors?: Array<{ message: string }> };
+      setError(clerkErr.errors?.[0]?.message || 'Google sign-in failed. Is the social connection enabled?');
+    }
   }
 
   return (

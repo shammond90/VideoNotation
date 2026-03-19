@@ -71,11 +71,18 @@ export function SignUpScreen({ onSwitchToSignIn }: SignUpScreenProps) {
   // Google OAuth
   async function handleGoogle() {
     if (!isLoaded || !signUp) return;
-    await signUp.authenticateWithRedirect({
-      strategy: 'oauth_google',
-      redirectUrl: '/sso-callback',
-      redirectUrlComplete: '/',
-    });
+    setError(null);
+    try {
+      await signUp.authenticateWithRedirect({
+        strategy: 'oauth_google',
+        redirectUrl: '/sso-callback',
+        redirectUrlComplete: '/',
+      });
+    } catch (err: unknown) {
+      console.error('Google OAuth error:', err);
+      const clerkErr = err as { errors?: Array<{ message: string }> };
+      setError(clerkErr.errors?.[0]?.message || 'Google sign-up failed. Is the social connection enabled?');
+    }
   }
 
   // ── Verify stage ──
