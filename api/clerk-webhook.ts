@@ -1,16 +1,20 @@
 /**
- * Clerk Webhook Handler — creates Supabase user record on `user.created`.
+ * Clerk Webhook Handler — creates Supabase user record on `user.created`
+ * and sends a welcome email via Resend.
  *
  * Platform-agnostic: uses Web Standard Request/Response API.
  * Works on both Vercel (`api/clerk-webhook.ts`) and Netlify (`netlify/functions/`).
  *
  * Required environment variables:
- *   CLERK_WEBHOOK_SECRET  — signing secret from Clerk dashboard
- *   SUPABASE_URL          — project URL (server-side, not VITE_ prefixed)
+ *   CLERK_WEBHOOK_SECRET      — signing secret from Clerk dashboard
+ *   SUPABASE_URL              — project URL (server-side, not VITE_ prefixed)
  *   SUPABASE_SERVICE_ROLE_KEY — bypasses RLS, server-side only
+ *   RESEND_API_KEY            — Resend API key for transactional emails
  */
 import { Webhook } from 'svix';
 import { createClient } from '@supabase/supabase-js';
+import { Resend } from 'resend';
+import { WelcomeEmail } from '../src/emails/WelcomeEmail';
 
 export default async function handler(req: Request): Promise<Response> {
   // Only accept POST
@@ -80,6 +84,25 @@ export default async function handler(req: Request): Promise<Response> {
   if (error) {
     console.error('Supabase upsert error:', error);
     return new Response('Database error', { status: 500 });
+  }
+
+  // Send welcome email via Resend (non-blocking — don't fail the webhook)
+  const resendApiKey = process.env.RESEND_API_KEY;
+  if (resendApiKey) {
+    try {
+      const resend = new Resend(resendApiKey);
+      await resend.emails.send({
+        from: process.env.RESEND_FROM_EMAIL ?? 'Cuetation <noreply@cuetation.app>',
+        to: email,
+        subject: 'Welcome to Cuetation',
+        react: WelcomeEmail({ name }),
+      });
+    } catch (emailError) {
+      // Log but don't fail the webhook — the user was still created
+      console.error('Resend welcome email error:', emailError);
+    }
+  } else {
+    console.warn('RESEND_API_KEY not configured — skipping welcome email');
   }
 
   return new Response('OK', { status: 200 });

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Show, UserButton, useAuth } from '@clerk/react';
+import { Show, useAuth } from '@clerk/react';
 import { useProject } from './hooks/useProject';
 import { useToast } from './hooks/useToast';
 import { useEnsureUser } from './hooks/useEnsureUser';
@@ -19,6 +19,8 @@ import type { TemplateData } from './types';
 import { DEFAULT_CONFIG } from './types';
 import App from './App';
 import { SavePromptModal } from './components/SavePromptModal';
+import { UserMenu } from './components/UserMenu';
+import { AccountModal } from './components/AccountModal';
 import type { Project } from './types/index';
 
 type Screen = 'home' | 'create-project' | 'cue-sheet';
@@ -60,6 +62,9 @@ export function AppShell() {
 
   // Project switcher state
   const [switcherOpen, setSwitcherOpen] = useState(false);
+
+  // Account modal state
+  const [accountModalOpen, setAccountModalOpen] = useState(false);
 
   // Load all projects on mount
   useEffect(() => {
@@ -412,8 +417,17 @@ export function AppShell() {
       <Show when="signed-in">
         <SignedInContent>
           <div className="fixed top-3 right-3 z-50">
-            <UserButton />
+            <UserMenu onOpenAccount={() => setAccountModalOpen(true)} />
           </div>
+          <AccountModal
+            isOpen={accountModalOpen}
+            onClose={() => setAccountModalOpen(false)}
+            onAccountDeleted={() => {
+              setAccountModalOpen(false);
+              // Clerk signOut will trigger <Show when="signed-out">
+              window.location.reload();
+            }}
+          />
           {renderScreenContent()}
         </SignedInContent>
       </Show>

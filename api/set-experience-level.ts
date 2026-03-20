@@ -69,6 +69,25 @@ export default async function handler(req: Request): Promise<Response> {
     return new Response('Database error', { status: 500 });
   }
 
+  // Sync tier to Clerk publicMetadata (convenience cache for client reads)
+  try {
+    const clerkRes = await fetch(`https://api.clerk.com/v1/users/${userId}`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${clerkSecretKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        public_metadata: { tier: level },
+      }),
+    });
+    if (!clerkRes.ok) {
+      console.warn('Clerk publicMetadata sync failed:', clerkRes.status, await clerkRes.text());
+    }
+  } catch (metaError) {
+    console.warn('Clerk publicMetadata sync error:', metaError);
+  }
+
   return new Response(JSON.stringify({ tier: level }), {
     status: 200,
     headers: { 'Content-Type': 'application/json' },
