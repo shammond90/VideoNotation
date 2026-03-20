@@ -1,14 +1,15 @@
 /**
  * Set Experience Level — updates the user's tier in Supabase.
  *
- * Platform-agnostic: uses Web Standard Request/Response API.
- * Works on both Vercel (`api/set-experience-level.ts`) and Netlify (`netlify/functions/`).
+ * Vercel Edge Runtime — uses Web Standard Request/Response API.
  *
  * Required environment variables:
  *   CLERK_SECRET_KEY          — Clerk secret key for token verification
  *   SUPABASE_URL              — project URL (server-side)
  *   SUPABASE_SERVICE_ROLE_KEY — bypasses RLS, server-side only
  */
+export const config = { runtime: 'edge' };
+
 import { verifyToken } from '@clerk/backend';
 import { createClient } from '@supabase/supabase-js';
 
