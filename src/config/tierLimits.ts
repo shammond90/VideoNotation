@@ -18,11 +18,21 @@ export interface TierLimits {
   maxCuesPerProject: number;  // 0 = unlimited
   maxCustomFields: number;    // 0 = unlimited
   maxCustomCueTypes: number;  // 0 = unlimited
+  maxTemplates: number;       // 0 = unlimited
   allowTemplates: boolean;
   allowDualWindow: boolean;
   allowXlsxExport: boolean;
   allowAdvancedConfig: boolean; // Fields tab, per-type column overrides, etc.
   allowTheatreMode: boolean;
+  pdfExport: boolean;
+  csvExport: boolean;
+  cloudSync: boolean;
+  techTracker: boolean;
+  maxTTSessions: number;     // 0 = unlimited
+  asyncMerge: boolean;
+  asyncMergeLimit: number;   // 0 = unlimited
+  sessionDiffExport: boolean;
+  historyReport: boolean;
 }
 
 export const TIER_LIMITS: Record<UserTier, TierLimits> = {
@@ -32,44 +42,84 @@ export const TIER_LIMITS: Record<UserTier, TierLimits> = {
     maxCuesPerProject: 50,
     maxCustomFields: 0,
     maxCustomCueTypes: 0,
+    maxTemplates: 0,
     allowTemplates: false,
     allowDualWindow: false,
     allowXlsxExport: false,
     allowAdvancedConfig: false,
     allowTheatreMode: false,
+    pdfExport: false,
+    csvExport: true,
+    cloudSync: false,
+    techTracker: true,
+    maxTTSessions: 2,
+    asyncMerge: false,
+    asyncMergeLimit: 0,
+    sessionDiffExport: false,
+    historyReport: false,
   },
   beginner: {
     maxProjects: 2,
     maxCuesPerProject: 50,
     maxCustomFields: 0,
     maxCustomCueTypes: 0,
+    maxTemplates: 0,
     allowTemplates: false,
     allowDualWindow: false,
     allowXlsxExport: false,
     allowAdvancedConfig: false,
     allowTheatreMode: false,
+    pdfExport: false,
+    csvExport: true,
+    cloudSync: false,
+    techTracker: true,
+    maxTTSessions: 2,
+    asyncMerge: false,
+    asyncMergeLimit: 0,
+    sessionDiffExport: false,
+    historyReport: false,
   },
   advanced: {
     maxProjects: 10,
     maxCuesPerProject: 200,
     maxCustomFields: 5,
     maxCustomCueTypes: 10,
+    maxTemplates: 5,
     allowTemplates: true,
     allowDualWindow: true,
     allowXlsxExport: true,
     allowAdvancedConfig: true,
     allowTheatreMode: true,
+    pdfExport: true,
+    csvExport: true,
+    cloudSync: true,
+    techTracker: true,
+    maxTTSessions: 0,
+    asyncMerge: true,
+    asyncMergeLimit: 1,
+    sessionDiffExport: true,
+    historyReport: false,
   },
   expert: {
     maxProjects: 0,
     maxCuesPerProject: 0,
     maxCustomFields: 0,
     maxCustomCueTypes: 0,
+    maxTemplates: 0,
     allowTemplates: true,
     allowDualWindow: true,
     allowXlsxExport: true,
     allowAdvancedConfig: true,
     allowTheatreMode: true,
+    pdfExport: true,
+    csvExport: true,
+    cloudSync: true,
+    techTracker: true,
+    maxTTSessions: 0,
+    asyncMerge: true,
+    asyncMergeLimit: 5,
+    sessionDiffExport: true,
+    historyReport: true,
   },
 };
 
@@ -86,11 +136,18 @@ export const TIER_FEATURE_TABLE: TierFeatureRow[] = [
   { label: 'Cues per project',  beginner: 'Up to 50',  advanced: 'Up to 200', expert: 'Unlimited' },
   { label: 'Custom fields',     beginner: '—',         advanced: 'Up to 5',   expert: 'Unlimited' },
   { label: 'Custom cue types',  beginner: '—',         advanced: 'Up to 10',  expert: 'Unlimited' },
-  { label: 'Config templates',  beginner: '—',         advanced: '✓',         expert: '✓' },
+  { label: 'Config templates',  beginner: '—',         advanced: 'Up to 5',   expert: 'Unlimited' },
   { label: 'Dual-window mode',  beginner: '—',         advanced: '✓',         expert: '✓' },
+  { label: 'CSV export',        beginner: '✓',         advanced: '✓',         expert: '✓' },
   { label: 'XLSX export',       beginner: '—',         advanced: '✓',         expert: '✓' },
+  { label: 'PDF export',        beginner: '—',         advanced: '✓',         expert: '✓' },
+  { label: 'Cloud sync',        beginner: '—',         advanced: '✓',         expert: '✓' },
   { label: 'Advanced config',   beginner: '—',         advanced: '✓',         expert: '✓' },
   { label: 'Theatre mode',      beginner: '—',         advanced: '✓',         expert: '✓' },
+  { label: 'Tech Tracker',      beginner: '2 sessions', advanced: 'Unlimited', expert: 'Unlimited' },
+  { label: 'Async merge',       beginner: '—',         advanced: '1 partner', expert: '5 partners' },
+  { label: 'Session diff export', beginner: '—',       advanced: '✓',         expert: '✓' },
+  { label: 'History report',    beginner: '—',         advanced: '—',         expert: '✓' },
 ];
 
 export const TIER_DESCRIPTIONS: Record<SelectableTier, { title: string; subtitle: string }> = {

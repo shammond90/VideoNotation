@@ -34,7 +34,6 @@ export function useEnsureUser() {
         email: user.primaryEmailAddress?.emailAddress ?? '',
         name: user.fullName ?? '',
         tier: 'starter',
-        subscription_status: 'active',
       });
 
       if (error) {

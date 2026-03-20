@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useAuth } from '@clerk/react';
 import { useTier } from '../hooks/useTier';
 import {
   SELECTABLE_TIERS,
@@ -20,6 +21,7 @@ interface LevelSelectScreenProps {
  */
 export function LevelSelectScreen({ allowCancel, onCancel, onSelected }: LevelSelectScreenProps) {
   const { updateTier } = useTier();
+  const { getToken } = useAuth();
   const [selected, setSelected] = useState<SelectableTier | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,11 +30,46 @@ export function LevelSelectScreen({ allowCancel, onCancel, onSelected }: LevelSe
     if (!selected) return;
     setIsSaving(true);
     setError(null);
+
     try {
-      await updateTier(selected);
-      onSelected?.();
-    } catch {
-      setError('Could not save your selection. Please try again.');
+      // Try server-side validation first
+      const token = await getToken();
+      const res = await fetch('/api/set-experience-level', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ level: selected }),
+      });
+
+      if (res.ok) {
+        // Server updated Supabase — sync local state + cache
+        await updateTier(selected);
+        onSelected?.();
+        return;
+      }
+
+      // If the API is not deployed yet (404) or misconfigured, fall back to client-side
+      if (res.status === 404) {
+        console.warn('[LevelSelect] API not deployed, falling back to client-side update');
+        await updateTier(selected);
+        onSelected?.();
+        return;
+      }
+
+      // Real server error
+      const text = await res.text();
+      throw new Error(text || `Server error (${res.status})`);
+    } catch (err) {
+      // Network errors (e.g. offline) — fall back to client-side
+      if (err instanceof TypeError && err.message.includes('fetch')) {
+        console.warn('[LevelSelect] Network error, falling back to client-side update');
+        await updateTier(selected);
+        onSelected?.();
+        return;
+      }
+      setError(err instanceof Error ? err.message : 'Could not save your selection. Please try again.');
     } finally {
       setIsSaving(false);
     }
