@@ -4,7 +4,7 @@
     "target": "ES2022",
     "lib": ["ES2022"],
     "module": "ESNext",
-    "types": ["node"],
+    "types": ["node", "@vercel/node"],
     "skipLibCheck": true,
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,

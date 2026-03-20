@@ -2,7 +2,8 @@
  * Clerk Webhook Handler — creates Supabase user record on `user.created`
  * and sends a welcome email via Resend.
  *
- * Vercel Edge Runtime — uses Web Standard Request/Response API.
+ * Vercel Node.js Serverless Function.
+ * Body parser is disabled so we can read the raw body for svix signature verification.
  *
  * Required environment variables:
  *   CLERK_WEBHOOK_SECRET      — signing secret from Clerk dashboard
@@ -10,23 +11,38 @@
  *   SUPABASE_SERVICE_ROLE_KEY — bypasses RLS, server-side only
  *   RESEND_API_KEY            — Resend API key for transactional emails
  */
-export const config = { runtime: 'edge' };
-
+import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { Webhook } from 'svix';
 import { createClient } from '@supabase/supabase-js';
 
-export default async function handler(req: Request): Promise<Response> {
-  // Only accept POST
+// Disable Vercel's automatic body parsing — svix needs the raw body string
+export const config = {
+  api: { bodyParser: false },
+};
+
+/** Read the raw request body as a UTF-8 string. */
+function getRawBody(req: VercelRequest): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let data = '';
+    req.on('data', (chunk: Buffer) => { data += chunk.toString(); });
+    req.on('end', () => resolve(data));
+    req.on('error', reject);
+  });
+}
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
-    return new Response('Method not allowed', { status: 405 });
+    return res.status(405).json({ error: 'Method not allowed' });
   }
 
   // Verify webhook signature
   const webhookSecret = process.env.CLERK_WEBHOOK_SECRET;
   if (!webhookSecret) {
     console.error('CLERK_WEBHOOK_SECRET not configured');
-    return new Response('Server misconfigured', { status: 500 });
+    return res.status(500).json({ error: 'Server misconfigured' });
   }
+
+  const rawBody = await getRawBody(req);
 
   const webhook = new Webhook(webhookSecret);
   let event: {
@@ -39,21 +55,19 @@ export default async function handler(req: Request): Promise<Response> {
     };
   };
 
-  const body = await req.text();
-
   try {
-    event = webhook.verify(body, {
-      'svix-id': req.headers.get('svix-id') ?? '',
-      'svix-timestamp': req.headers.get('svix-timestamp') ?? '',
-      'svix-signature': req.headers.get('svix-signature') ?? '',
+    event = webhook.verify(rawBody, {
+      'svix-id': req.headers['svix-id'] as string ?? '',
+      'svix-timestamp': req.headers['svix-timestamp'] as string ?? '',
+      'svix-signature': req.headers['svix-signature'] as string ?? '',
     }) as typeof event;
   } catch {
-    return new Response('Invalid signature', { status: 400 });
+    return res.status(400).json({ error: 'Invalid signature' });
   }
 
   // Only handle user creation
   if (event.type !== 'user.created') {
-    return new Response('OK', { status: 200 });
+    return res.status(200).json({ received: true });
   }
 
   const { id, email_addresses, first_name, last_name } = event.data;
@@ -61,7 +75,7 @@ export default async function handler(req: Request): Promise<Response> {
   const name = [first_name, last_name].filter(Boolean).join(' ') || null;
 
   if (!email) {
-    return new Response('No email address', { status: 400 });
+    return res.status(400).json({ error: 'No email address' });
   }
 
   // Service role key — bypasses RLS, safe server-side only
@@ -70,7 +84,7 @@ export default async function handler(req: Request): Promise<Response> {
 
   if (!supabaseUrl || !supabaseServiceKey) {
     console.error('Supabase environment variables not configured');
-    return new Response('Server misconfigured', { status: 500 });
+    return res.status(500).json({ error: 'Server misconfigured' });
   }
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -82,7 +96,7 @@ export default async function handler(req: Request): Promise<Response> {
 
   if (error) {
     console.error('Supabase upsert error:', error);
-    return new Response('Database error', { status: 500 });
+    return res.status(500).json({ error: 'Database error' });
   }
 
   // Send welcome email via Resend REST API (non-blocking — don't fail the webhook)
@@ -104,21 +118,19 @@ export default async function handler(req: Request): Promise<Response> {
         }),
       });
     } catch (emailError) {
-      // Log but don't fail the webhook — the user was still created
       console.error('Resend welcome email error:', emailError);
     }
   } else {
     console.warn('RESEND_API_KEY not configured — skipping welcome email');
   }
 
-  return new Response('OK', { status: 200 });
+  return res.status(200).json({ received: true });
 }
 
-// ── Inline email HTML (avoids bundling React Email in Edge runtime) ──
+// ── Inline email HTML ───────────────────────────────────────────────
 
 function buildWelcomeHtml(name: string): string {
-  return `
-<!DOCTYPE html>
+  return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"></head>
 <body style="margin:0;padding:0;background:#141416;font-family:Geist,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#141416;padding:40px 20px">
@@ -136,20 +148,20 @@ function buildWelcomeHtml(name: string): string {
           <hr style="border:none;border-top:1px solid #2a2a2e;margin:20px 0">
           <p style="font-size:15px;font-weight:600;color:#ede9e3;margin:0 0 12px">What you can do right away</p>
           <p style="font-size:14px;line-height:1.6;color:#b0aca4;margin:0 0 8px;padding-left:8px">
-            <strong style="color:#BF5700">Create a project</strong> \u2014 set up a show with custom cue types, fields, and video
+            <strong style="color:#BF5700">Create a project</strong> &mdash; set up a show with custom cue types, fields, and video
           </p>
           <p style="font-size:14px;line-height:1.6;color:#b0aca4;margin:0 0 8px;padding-left:8px">
-            <strong style="color:#BF5700">Annotate video</strong> \u2014 place cues on a timeline with timecodes, statuses, and notes
+            <strong style="color:#BF5700">Annotate video</strong> &mdash; place cues on a timeline with timecodes, statuses, and notes
           </p>
           <p style="font-size:14px;line-height:1.6;color:#b0aca4;margin:0 0 8px;padding-left:8px">
-            <strong style="color:#BF5700">Export</strong> \u2014 generate PDF, CSV, or XLSX reports for your production team
+            <strong style="color:#BF5700">Export</strong> &mdash; generate PDF, CSV, or XLSX reports for your production team
           </p>
           <hr style="border:none;border-top:1px solid #2a2a2e;margin:20px 0">
           <p style="font-size:14px;line-height:1.6;color:#6b6b6b;margin:0">Break a leg,<br>The Cuetation Team</p>
         </td></tr>
         <tr><td align="center" style="padding-top:24px">
           <span style="color:#6b6b6b;font-size:12px;font-family:'DM Mono',monospace">
-            \u00a9 ${new Date().getFullYear()} Cuetation \u00b7 Video cue annotation for stage managers
+            &copy; ${new Date().getFullYear()} Cuetation &middot; Video cue annotation for stage managers
           </span>
         </td></tr>
       </table>

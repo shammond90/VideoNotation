@@ -1,7 +1,7 @@
 /**
  * Delete Account — permanently deletes a user's account and all associated data.
  *
- * Vercel Edge Runtime — uses Web Standard Request/Response API.
+ * Vercel Node.js Serverless Function.
  *
  * Flow:
  *   1. Verify Clerk session token
@@ -16,26 +16,26 @@
  *   SUPABASE_SERVICE_ROLE_KEY — bypasses RLS, server-side only
  *   RESEND_API_KEY            — Resend API key for farewell email
  */
-export const config = { runtime: 'edge' };
-
+import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { verifyToken } from '@clerk/backend';
 import { createClient } from '@supabase/supabase-js';
 
-export default async function handler(req: Request): Promise<Response> {
+export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'DELETE' && req.method !== 'POST') {
-    return new Response('Method not allowed', { status: 405 });
+    return res.status(405).json({ error: 'Method not allowed' });
   }
 
   // ── Verify Clerk session ────────────────────────────────────────────
   const clerkSecretKey = process.env.CLERK_SECRET_KEY;
   if (!clerkSecretKey) {
     console.error('CLERK_SECRET_KEY not configured');
-    return new Response('Server misconfigured', { status: 500 });
+    return res.status(500).json({ error: 'Server misconfigured' });
   }
 
-  const sessionToken = req.headers.get('Authorization')?.replace('Bearer ', '');
+  const authHeader = req.headers['authorization'] as string | undefined;
+  const sessionToken = authHeader?.replace('Bearer ', '');
   if (!sessionToken) {
-    return new Response('Unauthorised', { status: 401 });
+    return res.status(401).json({ error: 'Unauthorised' });
   }
 
   let userId: string;
@@ -43,7 +43,7 @@ export default async function handler(req: Request): Promise<Response> {
     const payload = await verifyToken(sessionToken, { secretKey: clerkSecretKey });
     userId = payload.sub;
   } catch {
-    return new Response('Invalid token', { status: 401 });
+    return res.status(401).json({ error: 'Invalid token' });
   }
 
   // ── Supabase setup ──────────────────────────────────────────────────
@@ -51,7 +51,7 @@ export default async function handler(req: Request): Promise<Response> {
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!supabaseUrl || !supabaseServiceKey) {
     console.error('Supabase environment variables not configured');
-    return new Response('Server misconfigured', { status: 500 });
+    return res.status(500).json({ error: 'Server misconfigured' });
   }
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
@@ -73,7 +73,7 @@ export default async function handler(req: Request): Promise<Response> {
 
   if (deleteError) {
     console.error('Supabase delete error:', deleteError);
-    return new Response('Database error', { status: 500 });
+    return res.status(500).json({ error: 'Database error' });
   }
 
   // ── Send farewell email via Resend REST API (non-blocking) ──────────
@@ -115,17 +115,13 @@ export default async function handler(req: Request): Promise<Response> {
     console.error('Clerk user deletion error:', clerkError);
   }
 
-  return new Response(JSON.stringify({ deleted: true }), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' },
-  });
+  return res.status(200).json({ deleted: true });
 }
 
-// ── Inline email HTML (avoids bundling React Email in Edge runtime) ──
+// ── Inline email HTML ───────────────────────────────────────────────
 
 function buildAccountDeletedHtml(name: string): string {
-  return `
-<!DOCTYPE html>
+  return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"></head>
 <body style="margin:0;padding:0;background:#141416;font-family:Geist,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#141416;padding:40px 20px">
@@ -149,7 +145,7 @@ function buildAccountDeletedHtml(name: string): string {
         </td></tr>
         <tr><td align="center" style="padding-top:24px">
           <span style="color:#6b6b6b;font-size:12px;font-family:'DM Mono',monospace">
-            \u00a9 ${new Date().getFullYear()} Cuetation \u00b7 Video cue annotation for stage managers
+            &copy; ${new Date().getFullYear()} Cuetation &middot; Video cue annotation for stage managers
           </span>
         </td></tr>
       </table>
