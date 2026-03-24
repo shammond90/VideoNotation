@@ -64,7 +64,7 @@ export function GoToDialog({ annotations, cueTypeShortCodes, cueTypes, onSeek, o
     if (seconds !== null && seconds >= 0) {
       // Find the first annotation at or after this time to scroll to
       const nearest = [...annotations]
-        .filter(a => a.type === 'cue')
+        .filter(a => a.cue.type !== 'TITLE' && a.cue.type !== 'SCENE')
         .sort((a, b) => Math.abs(a.timestamp - seconds) - Math.abs(b.timestamp - seconds))[0];
       onSeek(seconds, nearest?.id);
       onClose();
