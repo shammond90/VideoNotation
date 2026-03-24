@@ -199,7 +199,7 @@ function OverflowChips({ chips, showTimestamp, timestamp, onSeek, isActive, isSt
           {onSeek ? (
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); onSeek(timestamp); }}
+              onClick={(e) => { e.stopPropagation(); onSeek(timestamp); e.currentTarget.blur(); }}
               className={`text-[10px] font-mono px-1.5 py-0.5 rounded transition-colors cursor-pointer shrink-0 ${isActive ? 'bg-emerald-500/30 text-emerald-300' : isStandby ? 'bg-amber-500/30 text-amber-300' : isWarning ? 'bg-blue-500/30 text-blue-300' : 'bg-[var(--bg-panel)] text-[var(--text-mid)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'}`}
             >
               {formatTime(timestamp)}
@@ -696,7 +696,7 @@ export function AnnotationPanel({
           )}
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); onSeek(annotation.timestamp); }}
+            onClick={(e) => { e.stopPropagation(); onSeek(annotation.timestamp); e.currentTarget.blur(); }}
             className="font-mono text-[10px] shrink-0 transition-colors cursor-pointer"
             style={{ color: 'var(--text-dim)' }}
             onMouseEnter={e => { e.currentTarget.style.color = 'var(--text)'; }}
@@ -768,7 +768,7 @@ export function AnnotationPanel({
         </span>
         <button
           type="button"
-          onClick={(e) => { e.stopPropagation(); onSeek(annotation.timestamp); }}
+          onClick={(e) => { e.stopPropagation(); onSeek(annotation.timestamp); e.currentTarget.blur(); }}
           className="font-mono text-[10px] ml-2 shrink-0 px-1 py-0.5 rounded transition-colors cursor-pointer"
           style={{ color: 'var(--text-dim)' }}
           onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text)'; }}
@@ -869,7 +869,7 @@ export function AnnotationPanel({
           )}
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); onSeek(annotation.timestamp); }}
+            onClick={(e) => { e.stopPropagation(); onSeek(annotation.timestamp); e.currentTarget.blur(); }}
             className="font-mono text-[10px] shrink-0 transition-colors cursor-pointer"
             style={{ color: 'var(--text-dim)' }}
             onMouseEnter={e => { e.currentTarget.style.color = 'var(--text)'; }}
@@ -939,7 +939,7 @@ export function AnnotationPanel({
         </span>
         <button
           type="button"
-          onClick={(e) => { e.stopPropagation(); onSeek(annotation.timestamp); }}
+          onClick={(e) => { e.stopPropagation(); onSeek(annotation.timestamp); e.currentTarget.blur(); }}
           className="font-mono text-[10px] ml-2 shrink-0 px-1 py-0.5 rounded transition-colors cursor-pointer"
           style={{ color: 'var(--text-dim)' }}
           onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text)'; }}
@@ -1157,7 +1157,7 @@ export function AnnotationPanel({
                 {showTimestamp && (
                   <button
                     type="button"
-                    onClick={(e) => { e.stopPropagation(); onSeek(annotation.timestamp); }}
+                    onClick={(e) => { e.stopPropagation(); onSeek(annotation.timestamp); e.currentTarget.blur(); }}
                     className={`font-mono ${theatreMode ? 'text-[11px]' : 'text-[10px]'} tracking-wide shrink-0 whitespace-nowrap transition-colors cursor-pointer`}
                     style={{ color: theatreMode ? 'var(--text-mid)' : 'var(--text-dim)', fontWeight: theatreMode ? 500 : undefined, letterSpacing: theatreMode ? '0.06em' : undefined }}
                     onMouseEnter={e => { e.currentTarget.style.color = 'var(--text)'; }}
@@ -1654,7 +1654,7 @@ export function AnnotationPanel({
                         <div className="shrink-0 flex items-center gap-1.5 ml-2 pl-2" style={{ borderLeft: '1px solid var(--border)' }}>
                           {pastStatusColor && <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: pastStatusColor }} />}
                           {pastIsFlagged && <span style={{ color: 'var(--flag)', fontSize: 9 }}><Flag className="w-2.5 h-2.5" /></span>}
-                          {showTimestamp && <button type="button" onClick={(e) => { e.stopPropagation(); onSeek(annotation.timestamp); }} className="font-mono text-[9px] shrink-0 cursor-pointer hover:text-[var(--text-mid)] transition-colors" style={{ color: 'var(--text-dim)', background: 'none', border: 'none', padding: 0 }}>{formatTime(annotation.timestamp)}</button>}
+                          {showTimestamp && <button type="button" onClick={(e) => { e.stopPropagation(); onSeek(annotation.timestamp); e.currentTarget.blur(); }} className="font-mono text-[9px] shrink-0 cursor-pointer hover:text-[var(--text-mid)] transition-colors" style={{ color: 'var(--text-dim)', background: 'none', border: 'none', padding: 0 }}>{formatTime(annotation.timestamp)}</button>}
                         </div>
                       </div>
                     );
