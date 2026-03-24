@@ -21,6 +21,13 @@ function migrateFieldDefinitions(cfg: AppConfig): AppConfig {
   if (!result.mandatoryFields) {
     result = { ...result, mandatoryFields: {} };
   }
+  // Ensure hidden arrays exist
+  if (!result.hiddenCueTypes) {
+    result = { ...result, hiddenCueTypes: [] };
+  }
+  if (!result.hiddenFieldKeys) {
+    result = { ...result, hiddenFieldKeys: [] };
+  }
   return result;
 }
 
@@ -190,6 +197,10 @@ export function useConfiguration() {
 
   const setVideoTimecodePosition = useCallback((pos: { x: number; y: number }) => {
     setConfig((prev) => ({ ...prev, videoTimecodePosition: pos }));
+  }, []);
+
+  const setAutoplayAfterCue = useCallback((enabled: boolean) => {
+    setConfig((prev) => ({ ...prev, autoplayAfterCue: enabled }));
   }, []);
 
   const setCueBackupInterval = useCallback((minutes: number) => {
@@ -373,6 +384,8 @@ export function useConfiguration() {
       expandedSearchFilter: data.expandedSearchFilter,
       showVideoTimecode: data.showVideoTimecode,
       videoTimecodePosition: { ...data.videoTimecodePosition },
+      hiddenCueTypes: [...(data.hiddenCueTypes ?? [])],
+      hiddenFieldKeys: [...(data.hiddenFieldKeys ?? [])],
     }));
   }, []);
 
@@ -511,6 +524,59 @@ export function useConfiguration() {
     });
   }, []);
 
+  /** Reorder cue types. Reserved types (TITLE, SCENE) are kept at the top automatically. */
+  const reorderCueTypes = useCallback((newOrder: string[]) => {
+    setConfig((prev) => {
+      // Ensure reserved types stay at top
+      const reserved = (RESERVED_CUE_TYPES as readonly string[]);
+      const reservedInOrder = newOrder.filter((t) => reserved.includes(t));
+      const nonReserved = newOrder.filter((t) => !reserved.includes(t));
+      const final = [...reservedInOrder, ...nonReserved];
+      // Verify no types lost
+      if (final.length !== prev.cueTypes.length) return prev;
+      return { ...prev, cueTypes: final };
+    });
+  }, []);
+
+  /** Toggle a cue type's hidden state. Hidden types are excluded from dropdowns, cue sheet, and exports. */
+  const toggleCueTypeHidden = useCallback((typeName: string) => {
+    setConfig((prev) => {
+      const hidden = prev.hiddenCueTypes ?? [];
+      const isHidden = hidden.includes(typeName);
+      return {
+        ...prev,
+        hiddenCueTypes: isHidden ? hidden.filter((t) => t !== typeName) : [...hidden, typeName],
+      };
+    });
+  }, []);
+
+  /**
+   * Toggle a field's hidden state. Hidden fields are removed from all cue types' visible fields,
+   * hidden from column config, and excluded from exports. Cannot hide Tier 1 or in-use fields.
+   */
+  const toggleFieldHidden = useCallback((fieldKey: string) => {
+    setConfig((prev) => {
+      const hidden = prev.hiddenFieldKeys ?? [];
+      const isHidden = hidden.includes(fieldKey);
+      if (isHidden) {
+        // Unhide — just remove from hidden list; user re-adds to cue types manually
+        return { ...prev, hiddenFieldKeys: hidden.filter((k) => k !== fieldKey) };
+      }
+      // Hide — add to hidden list and remove from all cue types' field lists
+      const newCueTypeFields = { ...prev.cueTypeFields };
+      for (const [ct, fields] of Object.entries(newCueTypeFields)) {
+        if (fields.includes(fieldKey)) {
+          newCueTypeFields[ct] = fields.filter((k) => k !== fieldKey);
+        }
+      }
+      return {
+        ...prev,
+        hiddenFieldKeys: [...hidden, fieldKey],
+        cueTypeFields: newCueTypeFields,
+      };
+    });
+  }, []);
+
   return {
     config,
     configLoaded,
@@ -530,6 +596,7 @@ export function useConfiguration() {
     setTheatreMode,
     setShowVideoTimecode,
     setVideoTimecodePosition,
+    setAutoplayAfterCue,
     setCueBackupInterval,
     setCueTypeAllowStandby,
     setCueTypeAllowWarning,
@@ -554,5 +621,8 @@ export function useConfiguration() {
     restoreFieldDefinition,
     setMandatoryField,
     unsetMandatoryField,
+    reorderCueTypes,
+    toggleCueTypeHidden,
+    toggleFieldHidden,
   };
 }

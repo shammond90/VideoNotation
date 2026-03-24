@@ -221,6 +221,8 @@ interface ExportTemplateBuilderProps {
   cueTypeShortCodes: Record<string, string>;
   skippedIds: Set<string>;
   videoName: string;
+  hiddenCueTypes?: string[];
+  hiddenFieldKeys?: string[];
 }
 
 export function ExportTemplateBuilder({
@@ -232,6 +234,8 @@ export function ExportTemplateBuilder({
   cueTypeShortCodes,
   skippedIds,
   videoName,
+  hiddenCueTypes,
+  hiddenFieldKeys,
 }: ExportTemplateBuilderProps) {
   // ── State ──
   const [columns, setColumns] = useState<ExportTemplateColumn[]>([...LOCKED_EXPORT_COLUMNS]);
@@ -266,15 +270,16 @@ export function ExportTemplateBuilder({
     return used;
   }, [columns]);
 
-  // Pool fields — exclude fields already placed in columns, then apply search filter
+  // Pool fields — exclude fields already placed in columns and hidden fields, then apply search filter
   const poolFields = useMemo(() => {
-    let fields = EXPORT_POOL_FIELDS.filter((f) => !usedFieldKeys.has(f.key));
+    const hiddenKeys = new Set(hiddenFieldKeys ?? []);
+    let fields = EXPORT_POOL_FIELDS.filter((f) => !usedFieldKeys.has(f.key) && !hiddenKeys.has(f.key));
     const q = poolSearch.toLowerCase().trim();
     if (q) {
       fields = fields.filter((f) => f.label.toLowerCase().includes(q) || f.key.toLowerCase().includes(q));
     }
     return fields;
-  }, [poolSearch, usedFieldKeys]);
+  }, [poolSearch, usedFieldKeys, hiddenFieldKeys]);
 
   // dnd-kit sensors
   const sensors = useSensors(
@@ -422,9 +427,10 @@ export function ExportTemplateBuilder({
       skippedIds,
       includeSkipped,
       videoName,
+      hiddenCueTypes,
     });
     onClose();
-  }, [annotations, columns, colorOverrides, cueTypeColors, cueTypeShortCodes, skippedIds, includeSkipped, videoName, onClose]);
+  }, [annotations, columns, colorOverrides, cueTypeColors, cueTypeShortCodes, skippedIds, includeSkipped, videoName, hiddenCueTypes, onClose]);
 
   // Column ids for sortable context
   const columnIds = useMemo(() => columns.map((c) => c.id), [columns]);
@@ -579,7 +585,7 @@ export function ExportTemplateBuilder({
                 <div>
                   <h4 className="text-[10px] font-semibold text-[var(--text-mid)] uppercase tracking-wider mb-2">Cue Type Colours</h4>
                   <div className="flex flex-wrap gap-2">
-                    {cueTypes.map((ct) => {
+                    {cueTypes.filter(ct => !(hiddenCueTypes ?? []).includes(ct)).map((ct) => {
                       const effectiveColor = colorOverrides[ct] || cueTypeColors[ct] || '#6b7280';
                       return (
                         <label key={ct} className="flex items-center gap-1.5 cursor-pointer">

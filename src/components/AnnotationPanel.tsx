@@ -51,6 +51,14 @@ interface AnnotationPanelProps {
   onSetFlag: (id: string, flagged: boolean, flagNote?: string) => void;
   onDuplicate: (id: string) => Annotation | null;
   onReorderTieGroup: (cueIds: string[]) => void;
+  /** When incremented, forces a scroll-to-active even when paused (e.g. after Go-To) */
+  scrollToActiveSignal?: number;
+  /** Specific cue ID to scroll to (from Go-To dialog) */
+  scrollToCueId?: string | null;
+  /** Cue types hidden via config — filtered from display and dropdowns */
+  hiddenCueTypes?: string[];
+  /** Field keys hidden via config — filtered from columns and form fields */
+  hiddenFieldKeys?: string[];
   /* Create-overlay props (passed from App) */
   isCreating?: boolean;
   createTimestamp?: number;
@@ -199,7 +207,7 @@ function OverflowChips({ chips, showTimestamp, timestamp, onSeek, isActive, isSt
           {onSeek ? (
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); onSeek(timestamp); }}
+              onClick={(e) => { e.stopPropagation(); onSeek(timestamp); e.currentTarget.blur(); }}
               className={`text-[10px] font-mono px-1.5 py-0.5 rounded transition-colors cursor-pointer shrink-0 ${isActive ? 'bg-emerald-500/30 text-emerald-300' : isStandby ? 'bg-amber-500/30 text-amber-300' : isWarning ? 'bg-blue-500/30 text-blue-300' : 'bg-[var(--bg-panel)] text-[var(--text-mid)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'}`}
             >
               {formatTime(timestamp)}
@@ -293,17 +301,36 @@ export function AnnotationPanel({
   onSetFlag,
   onDuplicate,
   onReorderTieGroup,
+  scrollToActiveSignal,
+  scrollToCueId,
+  hiddenCueTypes,
+  hiddenFieldKeys,
   isCreating,
   createTimestamp,
   onCreateSave,
   onCreateCancel,
   createSaveRef,
 }: AnnotationPanelProps) {
+  // Compute visible cue types (exclude hidden)
+  const hiddenSet = useMemo(() => new Set(hiddenCueTypes ?? []), [hiddenCueTypes]);
+  const hiddenFieldSet = useMemo(() => new Set(hiddenFieldKeys ?? []), [hiddenFieldKeys]);
+  const visibleCueTypes = useMemo(() => cueTypes.filter(t => !hiddenSet.has(t)), [cueTypes, hiddenSet]);
+
+  // Filter cueTypeFields to exclude hidden field keys
+  const filteredCueTypeFields = useMemo(() => {
+    if (hiddenFieldSet.size === 0) return cueTypeFields;
+    const result: Record<string, string[]> = {};
+    for (const [ct, fields] of Object.entries(cueTypeFields)) {
+      result[ct] = fields.filter(k => !hiddenFieldSet.has(k));
+    }
+    return result;
+  }, [cueTypeFields, hiddenFieldSet]);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isUserScrolling, setIsUserScrolling] = useState(false);
-  const [typeFilter, setTypeFilter] = useState<Set<string>>(() => new Set(cueTypes));
+  const [typeFilter, setTypeFilter] = useState<Set<string>>(() => new Set(visibleCueTypes));
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [flaggedOnly, setFlaggedOnly] = useState(false);
   const [statusFilter, setStatusFilter] = useState<Set<string>>(() => new Set(CUE_STATUSES));
@@ -355,30 +382,31 @@ export function AnnotationPanel({
     [cueTypeColors],
   );
 
-  // Helper: get visible columns for a specific cue type
+  // Helper: get visible columns for a specific cue type, excluding hidden field keys
   const getColumnsForType = useCallback(
     (cueType: string): ColumnConfig[] => {
-      if (cueTypeColumns[cueType]) return cueTypeColumns[cueType];
-      return visibleColumns;
+      const cols = cueTypeColumns[cueType] ?? visibleColumns;
+      if (hiddenFieldSet.size === 0) return cols;
+      return cols.filter(c => !hiddenFieldSet.has(c.key));
     },
-    [visibleColumns, cueTypeColumns],
+    [visibleColumns, cueTypeColumns, hiddenFieldSet],
   );
 
-  // Keep typeFilter synced when cueTypes list changes (e.g. import adds new ones)
+  // Keep typeFilter synced when visibleCueTypes list changes (e.g. import adds new ones, or types hidden/shown)
   useEffect(() => {
     setTypeFilter((prev) => {
       const next = new Set(prev);
-      // Add any newly-appearing cue types
-      for (const t of cueTypes) {
+      // Add any newly-appearing visible cue types
+      for (const t of visibleCueTypes) {
         if (!next.has(t)) next.add(t);
       }
-      // Remove types that no longer exist
+      // Remove types that no longer exist or are now hidden
       for (const t of next) {
-        if (!cueTypes.includes(t)) next.delete(t);
+        if (!visibleCueTypes.includes(t)) next.delete(t);
       }
       return next;
     });
-  }, [cueTypes]);
+  }, [visibleCueTypes]);
 
   // Toggle a type in the filter
   const toggleTypeFilter = useCallback((type: string) => {
@@ -402,8 +430,13 @@ export function AnnotationPanel({
       anns = anns.filter((a) => !skippedIds.has(a.id));
     }
 
-    // Apply cue type filter — types NOT in the set are hidden (LOOP/TITLE/SCENE always pass)
-    if (typeFilter.size < cueTypes.length) {
+    // Hide cues whose type is in hiddenCueTypes (fully invisible).
+    if (hiddenSet.size > 0) {
+      anns = anns.filter((a) => !hiddenSet.has(a.cue.type));
+    }
+
+    // Apply cue type filter — types NOT in the set are hidden (TITLE/SCENE always pass)
+    if (typeFilter.size < visibleCueTypes.length) {
       anns = anns.filter((a) => a.cue.type === 'TITLE' || a.cue.type === 'SCENE' || typeFilter.has(a.cue.type));
     }
 
@@ -434,7 +467,7 @@ export function AnnotationPanel({
     }
 
     return anns;
-  }, [annotations, searchQuery, typeFilter, statusFilter, flaggedOnly, showSkippedCues, skippedIds]);
+  }, [annotations, searchQuery, typeFilter, statusFilter, flaggedOnly, showSkippedCues, skippedIds, hiddenSet]);
 
   // Split into past / active / upcoming
   const { activeCues, upcomingCues: _upcomingCues, pastCues } = useMemo(() => {
@@ -465,6 +498,30 @@ export function AnnotationPanel({
       activeRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }, [activeId, isPlaying, isUserScrolling, editingId, searchQuery]);
+
+  // Scroll to specific cue when triggered by Go-To (works even when paused)
+  // Scrolls 2 items above the target so there's structural context visible.
+  useEffect(() => {
+    if (!scrollToActiveSignal) return;
+    const t = setTimeout(() => {
+      if (scrollToCueId) {
+        const idx = groupedItems.findIndex((g) => g.annotation.id === scrollToCueId);
+        // Walk 2 items back for context (Title/Scene headers above the target)
+        const contextIdx = Math.max(0, idx - 2);
+        const contextId = idx >= 0 ? groupedItems[contextIdx].annotation.id : scrollToCueId;
+        const el = document.getElementById(`cue-${contextId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          return;
+        }
+      }
+      // Fallback: scroll to first active cue
+      if (activeRef.current) {
+        activeRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 80);
+    return () => clearTimeout(t);
+  }, [scrollToActiveSignal, scrollToCueId, groupedItems]);
 
   // Auto-expand collapsed sections during standard playback
   useEffect(() => {
@@ -524,20 +581,32 @@ export function AnnotationPanel({
     // When no search/type filter is active we still need to strip past cues,
     // so we always run the filter pass below.
 
+    // Build a set of structural IDs that have at least one active/upcoming descendant.
+    // Walk backwards through the flat list: when we find a matching cue, the most recent
+    // title/scene above it gets marked as "has active children".
+    const structuralWithActiveChildren = new Set<string>();
+    let lastTitleId: string | null = null;
+    let lastSceneId: string | null = null;
+
+    for (const item of groupedItems) {
+      if (item.kind === 'title') {
+        lastTitleId = item.annotation.id;
+        lastSceneId = null;
+      } else if (item.kind === 'scene') {
+        lastSceneId = item.annotation.id;
+      } else if (matchingIds.has(item.annotation.id)) {
+        // This cue is active/upcoming — mark its parent title and scene
+        if (lastTitleId) structuralWithActiveChildren.add(lastTitleId);
+        if (lastSceneId) structuralWithActiveChildren.add(lastSceneId);
+      }
+    }
+
     return groupedItems.filter((item) => {
       if (item.kind === 'title' || item.kind === 'scene') {
         // Keep a structural row if it itself is active/upcoming OR has
         // any active/upcoming descendants.
         if (matchingIds.has(item.annotation.id)) return true;
-        if (item.kind === 'title') {
-          return annotations.some(
-            (a) =>
-              matchingIds.has(a.id) &&
-              a.timestamp >= item.annotation.timestamp,
-          );
-        }
-        // Scene — keep if any upcoming/active child exists
-        return true;
+        return structuralWithActiveChildren.has(item.annotation.id);
       }
       // Regular cue — show only if active/upcoming and passes filters
       return matchingIds.has(item.annotation.id);
@@ -684,7 +753,7 @@ export function AnnotationPanel({
           )}
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); onSeek(annotation.timestamp); }}
+            onClick={(e) => { e.stopPropagation(); onSeek(annotation.timestamp); e.currentTarget.blur(); }}
             className="font-mono text-[10px] shrink-0 transition-colors cursor-pointer"
             style={{ color: 'var(--text-dim)' }}
             onMouseEnter={e => { e.currentTarget.style.color = 'var(--text)'; }}
@@ -756,7 +825,7 @@ export function AnnotationPanel({
         </span>
         <button
           type="button"
-          onClick={(e) => { e.stopPropagation(); onSeek(annotation.timestamp); }}
+          onClick={(e) => { e.stopPropagation(); onSeek(annotation.timestamp); e.currentTarget.blur(); }}
           className="font-mono text-[10px] ml-2 shrink-0 px-1 py-0.5 rounded transition-colors cursor-pointer"
           style={{ color: 'var(--text-dim)' }}
           onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text)'; }}
@@ -857,7 +926,7 @@ export function AnnotationPanel({
           )}
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); onSeek(annotation.timestamp); }}
+            onClick={(e) => { e.stopPropagation(); onSeek(annotation.timestamp); e.currentTarget.blur(); }}
             className="font-mono text-[10px] shrink-0 transition-colors cursor-pointer"
             style={{ color: 'var(--text-dim)' }}
             onMouseEnter={e => { e.currentTarget.style.color = 'var(--text)'; }}
@@ -927,7 +996,7 @@ export function AnnotationPanel({
         </span>
         <button
           type="button"
-          onClick={(e) => { e.stopPropagation(); onSeek(annotation.timestamp); }}
+          onClick={(e) => { e.stopPropagation(); onSeek(annotation.timestamp); e.currentTarget.blur(); }}
           className="font-mono text-[10px] ml-2 shrink-0 px-1 py-0.5 rounded transition-colors cursor-pointer"
           style={{ color: 'var(--text-dim)' }}
           onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text)'; }}
@@ -1016,10 +1085,17 @@ export function AnnotationPanel({
             paddingLeft: prodIndentPx,
             paddingRight: 14,
             background: isActive ? 'var(--bg-panel)' : undefined,
-            opacity: isCut ? 0.3 : isSkipped ? 0.4 : undefined,
+            opacity: isCut ? 0.3 : isSkipped ? 0.4 : (isActive || isStandby || isWarning || isExpanded) ? undefined : 0.6,
+            transition: 'opacity 150ms, background 100ms',
           }}
-          onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = 'var(--bg-hover)'; }}
-          onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = ''; }}
+          onMouseEnter={(e) => {
+            if (!isActive) e.currentTarget.style.background = 'var(--bg-hover)';
+            if (!isCut && !isSkipped && !isActive && !isStandby && !isWarning && !isExpanded) e.currentTarget.style.opacity = '1';
+          }}
+          onMouseLeave={(e) => {
+            if (!isActive) e.currentTarget.style.background = '';
+            if (!isCut && !isSkipped && !isActive && !isStandby && !isWarning && !isExpanded) e.currentTarget.style.opacity = '0.6';
+          }}
         >
           {/* Left bar — live status */}
           <div
@@ -1057,8 +1133,8 @@ export function AnnotationPanel({
                 initialValues={cue}
                 timeInTitle={annotation.timeInTitle}
                 allAnnotations={annotations}
-                cueTypes={cueTypes}
-                cueTypeFields={cueTypeFields}
+                cueTypes={visibleCueTypes}
+                cueTypeFields={filteredCueTypeFields}
                 fieldDefinitions={fieldDefs}
                 mandatoryFields={mandatoryFields}
                 onSave={(updated, newTimestamp) => { onEdit(annotation.id, updated, newTimestamp); setEditingId(null); }}
@@ -1145,7 +1221,7 @@ export function AnnotationPanel({
                 {showTimestamp && (
                   <button
                     type="button"
-                    onClick={(e) => { e.stopPropagation(); onSeek(annotation.timestamp); }}
+                    onClick={(e) => { e.stopPropagation(); onSeek(annotation.timestamp); e.currentTarget.blur(); }}
                     className={`font-mono ${theatreMode ? 'text-[11px]' : 'text-[10px]'} tracking-wide shrink-0 whitespace-nowrap transition-colors cursor-pointer`}
                     style={{ color: theatreMode ? 'var(--text-mid)' : 'var(--text-dim)', fontWeight: theatreMode ? 500 : undefined, letterSpacing: theatreMode ? '0.06em' : undefined }}
                     onMouseEnter={e => { e.currentTarget.style.color = 'var(--text)'; }}
@@ -1194,7 +1270,8 @@ export function AnnotationPanel({
             : isActive ? 'bg-emerald-900/30 border-emerald-500/60 shadow-sm shadow-emerald-500/10'
             : isStandby ? 'bg-amber-900/20 border-amber-500/50 shadow-sm shadow-amber-500/10'
             : isWarning ? 'bg-blue-900/20 border-blue-500/50 shadow-sm shadow-blue-500/10'
-            : 'hover:border-[var(--border-hi)]'
+            : isExpanded ? 'hover:border-[var(--border-hi)]'
+            : 'opacity-60 hover:opacity-100 hover:border-[var(--border-hi)]'
         }`}
         style={{
           background: (isActive || isStandby || isWarning) ? undefined : 'var(--bg-card)',
@@ -1229,8 +1306,8 @@ export function AnnotationPanel({
               initialValues={cue}
               timeInTitle={annotation.timeInTitle}
               allAnnotations={annotations}
-              cueTypes={cueTypes}
-              cueTypeFields={cueTypeFields}
+              cueTypes={visibleCueTypes}
+              cueTypeFields={filteredCueTypeFields}
               fieldDefinitions={fieldDefs}
               mandatoryFields={mandatoryFields}
               onSave={(updated, newTimestamp) => { onEdit(annotation.id, updated, newTimestamp); setEditingId(null); }}
@@ -1239,10 +1316,10 @@ export function AnnotationPanel({
           </div>
         ) : (
           <>
-            {isActive && <span className="absolute -top-2 right-2 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase z-10 bg-emerald-600 text-emerald-100 tracking-wider">Active</span>}
-            {isWarning && <span className="absolute -top-2 right-2 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase z-10 bg-blue-600 text-blue-100 tracking-wider">Warning</span>}
-            {isStandby && <span className="absolute -top-2 right-2 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase z-10 bg-amber-600 text-amber-100 tracking-wider">Standby</span>}
-            {isSkipped && <span className="absolute -top-2 right-2 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase z-10 tracking-wider" style={{ background: 'var(--bg-hover)', color: 'var(--text-mid)' }}>Skipped</span>}
+            {isActive && <span className="absolute -top-2 right-2 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase bg-emerald-600 text-emerald-100 tracking-wider">Active</span>}
+            {isWarning && <span className="absolute -top-2 right-2 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase bg-blue-600 text-blue-100 tracking-wider">Warning</span>}
+            {isStandby && <span className="absolute -top-2 right-2 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase bg-amber-600 text-amber-100 tracking-wider">Standby</span>}
+            {isSkipped && <span className="absolute -top-2 right-2 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider" style={{ background: 'var(--bg-hover)', color: 'var(--text-mid)' }}>Skipped</span>}
 
             {/* Classic view layout */}
             <div className="flex items-center gap-1.5 pr-2 pt-0.5 pb-0.5">
@@ -1372,16 +1449,16 @@ export function AnnotationPanel({
                   type="button"
                   onClick={() => setIsFilterOpen((prev) => !prev)}
                   className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded-md transition-colors ${
-                    typeFilter.size < cueTypes.length
+                    typeFilter.size < visibleCueTypes.length
                       ? 'bg-[var(--amber-dim)] text-[var(--amber)]'
                       : 'text-[var(--text-mid)] hover:text-[var(--text)] hover:bg-[var(--bg-hover)]'
                   }`}
                 >
                   <Filter className="w-3.5 h-3.5" />
                   Filter by Type
-                  {typeFilter.size < cueTypes.length && (
+                  {typeFilter.size < visibleCueTypes.length && (
                     <span className="text-white text-[10px] font-bold px-1.5 py-0 rounded-full" style={{ background: "var(--amber)" }}>
-                      {cueTypes.length - typeFilter.size} hidden
+                      {visibleCueTypes.length - typeFilter.size} hidden
                     </span>
                   )}
                 </button>
@@ -1417,7 +1494,7 @@ export function AnnotationPanel({
               </div>
               {isFilterOpen && (
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
-                  {cueTypes.filter((type) => type !== 'TITLE' && type !== 'SCENE').map((type) => {
+                  {visibleCueTypes.filter((type) => type !== 'TITLE' && type !== 'SCENE').map((type) => {
                     const isActive = typeFilter.has(type);
                     const color = getCueColor(type);
                     return (
@@ -1436,10 +1513,10 @@ export function AnnotationPanel({
                       </button>
                     );
                   })}
-                  {typeFilter.size < cueTypes.length && (
+                  {typeFilter.size < visibleCueTypes.length && (
                     <button
                       type="button"
-                      onClick={() => setTypeFilter(new Set(cueTypes))}
+                      onClick={() => setTypeFilter(new Set(visibleCueTypes))}
                       className="text-[10px] px-2 py-1 rounded-md transition-colors" style={{ color: "var(--text-dim)" }} onMouseEnter={e=>{e.currentTarget.style.background="var(--bg-hover)";e.currentTarget.style.color="var(--text)"}} onMouseLeave={e=>{e.currentTarget.style.background="";e.currentTarget.style.color="var(--text-dim)"}}
                     >
                       Select all
@@ -1642,7 +1719,7 @@ export function AnnotationPanel({
                         <div className="shrink-0 flex items-center gap-1.5 ml-2 pl-2" style={{ borderLeft: '1px solid var(--border)' }}>
                           {pastStatusColor && <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: pastStatusColor }} />}
                           {pastIsFlagged && <span style={{ color: 'var(--flag)', fontSize: 9 }}><Flag className="w-2.5 h-2.5" /></span>}
-                          {showTimestamp && <button type="button" onClick={(e) => { e.stopPropagation(); onSeek(annotation.timestamp); }} className="font-mono text-[9px] shrink-0 cursor-pointer hover:text-[var(--text-mid)] transition-colors" style={{ color: 'var(--text-dim)', background: 'none', border: 'none', padding: 0 }}>{formatTime(annotation.timestamp)}</button>}
+                          {showTimestamp && <button type="button" onClick={(e) => { e.stopPropagation(); onSeek(annotation.timestamp); e.currentTarget.blur(); }} className="font-mono text-[9px] shrink-0 cursor-pointer hover:text-[var(--text-mid)] transition-colors" style={{ color: 'var(--text-dim)', background: 'none', border: 'none', padding: 0 }}>{formatTime(annotation.timestamp)}</button>}
                         </div>
                       </div>
                     );
@@ -1668,8 +1745,8 @@ export function AnnotationPanel({
                             initialValues={cue}
                             timeInTitle={annotation.timeInTitle}
                             allAnnotations={annotations}
-                            cueTypes={cueTypes}
-                            cueTypeFields={cueTypeFields}
+                            cueTypes={visibleCueTypes}
+                            cueTypeFields={filteredCueTypeFields}
                             fieldDefinitions={fieldDefs}
                             mandatoryFields={mandatoryFields}
                             onSave={(updated, newTimestamp) => { onEdit(annotation.id, updated, newTimestamp); setEditingId(null); }}
@@ -1866,8 +1943,8 @@ export function AnnotationPanel({
             title="Edit Cue"
             annotation={ann}
             allAnnotations={annotations}
-            cueTypes={cueTypes}
-            cueTypeFields={cueTypeFields}
+            cueTypes={visibleCueTypes}
+            cueTypeFields={filteredCueTypeFields}
             fieldDefinitions={fieldDefs}
             mandatoryFields={mandatoryFields}
             onSave={(id, cue, newTimestamp) => { onEdit(id as string, cue as CueFields, newTimestamp); setSlideEditId(null); }}
@@ -1883,8 +1960,8 @@ export function AnnotationPanel({
           title="New Cue"
           timestamp={createTimestamp}
           allAnnotations={annotations}
-          cueTypes={cueTypes}
-          cueTypeFields={cueTypeFields}
+          cueTypes={visibleCueTypes}
+          cueTypeFields={filteredCueTypeFields}
           fieldDefinitions={fieldDefs}
           mandatoryFields={mandatoryFields}
           onSave={(cue, overrideTimestamp) => { onCreateSave(cue as CueFields, overrideTimestamp as number | undefined); }}

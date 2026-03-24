@@ -296,6 +296,9 @@ export interface TemplateData {
   expandedSearchFilter: boolean;
   showVideoTimecode: boolean;
   videoTimecodePosition: { x: number; y: number };
+  autoplayAfterCue: boolean;
+  hiddenCueTypes?: string[];
+  hiddenFieldKeys?: string[];
 }
 
 /** A saved config template (stored in IndexedDB). */
@@ -337,6 +340,9 @@ export function extractTemplateData(config: AppConfig): TemplateData {
     expandedSearchFilter: config.expandedSearchFilter,
     showVideoTimecode: config.showVideoTimecode,
     videoTimecodePosition: { ...config.videoTimecodePosition },
+    autoplayAfterCue: config.autoplayAfterCue,
+    hiddenCueTypes: [...(config.hiddenCueTypes ?? [])],
+    hiddenFieldKeys: [...(config.hiddenFieldKeys ?? [])],
   };
 }
 
@@ -360,8 +366,11 @@ export interface AppConfig {
   cueBackupIntervalMinutes: number; // how often (minutes) to create cue backups while active
   showVideoTimecode: boolean; // whether to show timecode overlay on video
   videoTimecodePosition: { x: number; y: number }; // overlay position as percentages (0–100)
+  autoplayAfterCue: boolean; // whether video resumes playback after saving/cancelling a cue
   fieldDefinitions: FieldDefinition[]; // global field registry (Tier 1 + 2 + 3)
   mandatoryFields: Record<string, string[]>; // per-cue-type mandatory field keys
+  hiddenCueTypes: string[]; // cue types hidden from dropdowns, cue sheet, and exports
+  hiddenFieldKeys: string[]; // field keys hidden from visible-fields, columns, and exports
 }
 
 /**
@@ -464,8 +473,11 @@ export const DEFAULT_CONFIG: AppConfig = {
   cueBackupIntervalMinutes: 5,
   showVideoTimecode: false,
   videoTimecodePosition: { x: 2, y: 4 },
+  autoplayAfterCue: false,
   fieldDefinitions: [...DEFAULT_FIELD_DEFINITIONS],
   mandatoryFields: {},
+  hiddenCueTypes: [],
+  hiddenFieldKeys: [],
 };
 
 /** The factory-default template. Always available for "Reset to Factory". */

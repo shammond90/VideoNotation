@@ -2,8 +2,10 @@ import Papa from 'papaparse';
 import { formatTime } from './formatTime';
 import type { Annotation, CueFields } from '../types';
 
-export function exportAnnotationsToCSV(annotations: Annotation[], videoName: string): void {
+export function exportAnnotationsToCSV(annotations: Annotation[], videoName: string, hiddenCueTypes?: string[]): void {
+  const hiddenSet = new Set(hiddenCueTypes ?? []);
   const sorted = [...annotations]
+    .filter((a) => !hiddenSet.has(a.cue.type))
     .sort((a, b) => a.timestamp - b.timestamp);
 
   const data = sorted.map((a) => ({

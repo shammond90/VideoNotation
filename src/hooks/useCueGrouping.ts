@@ -110,7 +110,15 @@ export function useCueGrouping(
 
   // ── Build tree structure from flat annotation list ──
   const tree = useMemo(() => {
-    const sorted = [...annotations].sort((a, b) => a.timestamp - b.timestamp);
+    const sorted = [...annotations].sort((a, b) => {
+      const dt = a.timestamp - b.timestamp;
+      if (dt !== 0) return dt;
+      // Structural priority: TITLE before SCENE before regular cues
+      const priority = (t: string) => t === 'TITLE' ? -2 : t === 'SCENE' ? -1 : 0;
+      const sp = priority(a.cue.type) - priority(b.cue.type);
+      if (sp !== 0) return sp;
+      return (a.sort_order ?? 0) - (b.sort_order ?? 0);
+    });
     const titles: TitleGroup[] = [];
     /** Cues before any TITLE */
     const preambleCues: Annotation[] = [];
