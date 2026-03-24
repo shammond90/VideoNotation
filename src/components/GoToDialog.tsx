@@ -15,7 +15,7 @@ interface GoToDialogProps {
   annotations: Annotation[];
   cueTypeShortCodes: Record<string, string>; // { 'LX': 'L', 'SND': 'S', ... }
   cueTypes: string[];
-  onSeek: (time: number) => void;
+  onSeek: (time: number, annotationId?: string) => void;
   onClose: () => void;
 }
 
@@ -62,7 +62,11 @@ export function GoToDialog({ annotations, cueTypeShortCodes, cueTypes, onSeek, o
     // 1) Try parsing as timecode
     const seconds = parseTime(trimmed);
     if (seconds !== null && seconds >= 0) {
-      onSeek(seconds);
+      // Find the first annotation at or after this time to scroll to
+      const nearest = [...annotations]
+        .filter(a => a.type === 'cue')
+        .sort((a, b) => Math.abs(a.timestamp - seconds) - Math.abs(b.timestamp - seconds))[0];
+      onSeek(seconds, nearest?.id);
       onClose();
       return;
     }
@@ -81,7 +85,7 @@ export function GoToDialog({ annotations, cueTypeShortCodes, cueTypes, onSeek, o
           a => a.cue.type === matchedType && a.cue.cueNumber.toLowerCase() === cueNumInput.toLowerCase()
         );
         if (found) {
-          onSeek(found.timestamp);
+          onSeek(found.timestamp, found.id);
           onClose();
           return;
         }

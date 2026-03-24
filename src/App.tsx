@@ -72,6 +72,8 @@ export default function App({
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
   const [isXlsxBuilderOpen, setIsXlsxBuilderOpen] = useState(false);
   const [isGoToOpen, setIsGoToOpen] = useState(false);
+  const [scrollToActiveSignal, setScrollToActiveSignal] = useState(0);
+  const [scrollToCueId, setScrollToCueId] = useState<string | null>(null);
 
   // ── Resizable split panel state ──
   const PANEL_MIN_PX = 260;
@@ -184,6 +186,9 @@ export default function App({
     restoreFieldDefinition,
     setMandatoryField,
     unsetMandatoryField,
+    reorderCueTypes,
+    toggleCueTypeHidden,
+    toggleFieldHidden,
   } = useConfiguration();
 
   const {
@@ -672,9 +677,9 @@ export default function App({
   // Direct CSV export
   const handleExportCSV = useCallback(() => {
     if (annotations.length === 0) return;
-    exportAnnotationsToCSV(annotations, videoFile?.name ?? 'video');
+    exportAnnotationsToCSV(annotations, videoFile?.name ?? 'video', config.hiddenCueTypes);
     addToast(`Exported ${annotations.length} cues to CSV`, 'success');
-  }, [annotations, videoFile, addToast]);
+  }, [annotations, videoFile, addToast, config.hiddenCueTypes]);
 
   // Open XLSX template builder (closes the export dialog)
   const handleExportXLSX = useCallback(() => {
@@ -1375,6 +1380,8 @@ export default function App({
               fieldDefinitions={config.fieldDefinitions}
               mandatoryFields={config.mandatoryFields}
               onSeek={handleSeek}
+              scrollToActiveSignal={scrollToActiveSignal}
+              scrollToCueId={scrollToCueId}
               onEdit={updateAnnotation}
               onDelete={deleteAnnotation}
               onExport={handleExport}
@@ -1383,6 +1390,8 @@ export default function App({
               visibleColumns={config.visibleColumns}
               cueTypeColumns={config.cueTypeColumns}
               cueTypes={config.cueTypes}
+              hiddenCueTypes={config.hiddenCueTypes}
+              hiddenFieldKeys={config.hiddenFieldKeys}
               onSetStatus={setAnnotationStatus}
               onSetFlag={setAnnotationFlag}
               onDuplicate={duplicateAnnotation}
@@ -1524,6 +1533,11 @@ export default function App({
         mandatoryFields={config.mandatoryFields}
         onSetMandatoryField={setMandatoryField}
         onUnsetMandatoryField={unsetMandatoryField}
+        onReorderCueTypes={reorderCueTypes}
+        onToggleCueTypeHidden={toggleCueTypeHidden}
+        hiddenCueTypes={config.hiddenCueTypes}
+        onToggleFieldHidden={toggleFieldHidden}
+        hiddenFieldKeys={config.hiddenFieldKeys}
         addToast={addToast}
         projectName={projectName}
         annotationCount={annotations.length}
@@ -1551,6 +1565,8 @@ export default function App({
         cueTypeShortCodes={config.cueTypeShortCodes}
         skippedIds={skippedIds}
         videoName={videoFile?.name ?? 'video'}
+        hiddenCueTypes={config.hiddenCueTypes}
+        hiddenFieldKeys={config.hiddenFieldKeys}
       />
 
       {/* Hidden import input */}
@@ -1571,7 +1587,7 @@ export default function App({
           annotations={annotations}
           cueTypeShortCodes={config.cueTypeShortCodes}
           cueTypes={config.cueTypes}
-          onSeek={(time) => handleSeek(time)}
+          onSeek={(time, annotationId) => { handleSeek(time); setScrollToCueId(annotationId ?? null); setScrollToActiveSignal(s => s + 1); }}
           onClose={() => setIsGoToOpen(false)}
         />
       )}

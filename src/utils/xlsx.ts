@@ -12,6 +12,7 @@ export interface XlsxExportOptions {
   skippedIds: Set<string>;
   includeSkipped: boolean;
   videoName: string;
+  hiddenCueTypes?: string[];
 }
 
 /** Resolve the value for a given field key on an annotation row. */
@@ -77,13 +78,20 @@ export async function exportAnnotationsToXlsx(options: XlsxExportOptions): Promi
     skippedIds,
     includeSkipped,
     videoName,
+    hiddenCueTypes,
   } = options;
+
+  const hiddenSet = new Set(hiddenCueTypes ?? []);
 
   // Sort chronologically
   let sorted = [...annotations]
     .sort((a, b) => a.timestamp - b.timestamp);
   if (!includeSkipped) {
     sorted = sorted.filter((a) => !skippedIds.has(a.id));
+  }
+  // Filter out hidden cue types
+  if (hiddenSet.size > 0) {
+    sorted = sorted.filter((a) => !hiddenSet.has(a.cue.type));
   }
 
   const wb = new ExcelJS.Workbook();

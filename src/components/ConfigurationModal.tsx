@@ -1,5 +1,5 @@
 import React, { useState, useRef, useMemo, useCallback, useEffect } from 'react';
-import { X, Plus, Trash2, GripVertical, Download, Lock, Pencil, Check, AlertTriangle, ChevronDown, ChevronRight, Save, FileUp, Info, UserCircle, RotateCcw, Archive, Star, Tag, List, LayoutGrid, Eye, Keyboard, Bookmark, FolderOpen } from 'lucide-react';
+import { X, Plus, Trash2, GripVertical, Download, Lock, Pencil, Check, AlertTriangle, ChevronDown, ChevronRight, Save, FileUp, Info, UserCircle, RotateCcw, Archive, Star, Tag, List, LayoutGrid, Eye, EyeOff, Keyboard, Bookmark, FolderOpen } from 'lucide-react';
 import type { ColumnConfig, Project, AppConfig, FieldDefinition, ConfigTemplate, TemplateData, Toast } from '../types';
 import { RESERVED_CUE_TYPES, EDITABLE_FIELD_KEYS, LINK_COLUMN_KEYS, getDefaultFieldsForType, getFieldLabel, extractTemplateData, FACTORY_DEFAULT_TEMPLATE } from '../types';
 import { loadConfigTemplates, saveConfigTemplate, deleteConfigTemplate, renameConfigTemplate, exportTemplateToJSON, importTemplateFromJSON, getDefaultTemplate, setDefaultTemplate } from '../utils/configTemplates';
@@ -116,6 +116,12 @@ interface ConfigurationModalProps {
   mandatoryFields?: Record<string, string[]>;
   onSetMandatoryField?: (cueType: string, fieldKey: string) => void;
   onUnsetMandatoryField?: (cueType: string, fieldKey: string) => void;
+  // Reorder & hide
+  onReorderCueTypes?: (newOrder: string[]) => void;
+  onToggleCueTypeHidden?: (typeName: string) => void;
+  hiddenCueTypes?: string[];
+  onToggleFieldHidden?: (fieldKey: string) => void;
+  hiddenFieldKeys?: string[];
   /** Toast notification handler — passed from parent so toasts use the shared stack. */
   addToast?: (message: string, type: Toast['type'], opts?: number | { duration?: number; details?: string }) => string;
   /** Current project name for Data tab confirmation messages. */
@@ -171,6 +177,49 @@ function SortableColumnItem({
         <span className="text-sm text-[var(--text)]">{column.label}</span>
         <span className="text-[10px] text-[var(--text-dim)] font-mono">({column.key})</span>
       </label>
+    </div>
+  );
+}
+
+// ── Sortable cue type row for drag reorder ──
+
+function SortableCueTypeRow({
+  type,
+  isReserved,
+  children,
+}: {
+  type: string;
+  isReserved: boolean;
+  children: React.ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: `cue-type-${type}`,
+    disabled: isReserved,
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <div className="flex items-center gap-1">
+        {isReserved ? (
+          <div className="w-5 shrink-0" />
+        ) : (
+          <button
+            type="button"
+            className="cursor-grab active:cursor-grabbing text-[var(--text-dim)] hover:text-[var(--text-mid)] touch-none shrink-0"
+            {...attributes}
+            {...listeners}
+          >
+            <GripVertical className="w-4 h-4" />
+          </button>
+        )}
+        <div className="flex-1 min-w-0">{children}</div>
+      </div>
     </div>
   );
 }
@@ -569,6 +618,11 @@ export function ConfigurationModal({
   mandatoryFields,
   onSetMandatoryField,
   onUnsetMandatoryField,
+  onReorderCueTypes,
+  onToggleCueTypeHidden,
+  hiddenCueTypes,
+  onToggleFieldHidden,
+  hiddenFieldKeys,
   addToast,
   projectName,
   annotationCount,
@@ -905,15 +959,33 @@ export function ConfigurationModal({
               </div>
 
               {/* Type list */}
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={(event: DragEndEvent) => {
+                  const { active, over } = event;
+                  if (!over || active.id === over.id || !onReorderCueTypes) return;
+                  const oldIndex = cueTypes.findIndex((t) => `cue-type-${t}` === active.id);
+                  const newIndex = cueTypes.findIndex((t) => `cue-type-${t}` === over.id);
+                  if (oldIndex < 0 || newIndex < 0) return;
+                  const reordered = [...cueTypes];
+                  const [moved] = reordered.splice(oldIndex, 1);
+                  reordered.splice(newIndex, 0, moved);
+                  onReorderCueTypes(reordered);
+                }}
+              >
+              <SortableContext items={cueTypes.map((t) => `cue-type-${t}`)} strategy={verticalListSortingStrategy}>
               <div className="space-y-1.5">
                 {cueTypes.map((type) => {
                   const isReserved = (RESERVED_CUE_TYPES as readonly string[]).includes(type);
                   const isInUse = usedCueTypes.has(type);
                   const isLocked = isReserved || isInUse;
                   const isEditing = editingType === type;
+                  const isHidden = hiddenCueTypes?.includes(type) ?? false;
 
                   return (
-                    <React.Fragment key={type}>
+                    <SortableCueTypeRow key={type} type={type} isReserved={isReserved}>
+                    <React.Fragment>
                     <div
                       className="flex items-center justify-between px-3 py-2 bg-[var(--bg-panel-a50)] rounded-md border border-[var(--border-hi-a50)]"
                     >
@@ -967,6 +1039,12 @@ export function ConfigurationModal({
                               <span className="flex items-center gap-1 text-[10px] text-sky-400 bg-sky-500/10 px-1.5 py-0.5 rounded">
                                 <Lock className="w-3 h-3" />
                                 In Use
+                              </span>
+                            )}
+                            {isHidden && (
+                              <span className="flex items-center gap-1 text-[10px] text-orange-400 bg-orange-500/10 px-1.5 py-0.5 rounded">
+                                <EyeOff className="w-3 h-3" />
+                                Hidden
                               </span>
                             )}
                           </>
@@ -1028,6 +1106,16 @@ export function ConfigurationModal({
                           >
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
+                          {!isReserved && onToggleCueTypeHidden && (
+                            <button
+                              type="button"
+                              onClick={() => onToggleCueTypeHidden(type)}
+                              className={`p-1 rounded transition-colors ${isHidden ? 'text-amber-400 hover:text-amber-300' : 'text-[var(--text-dim)] hover:text-[var(--text-mid)]'} hover:bg-[var(--bg-hover)]`}
+                              title={isHidden ? `Show ${type} in dropdowns and cue sheet` : `Hide ${type} from dropdowns and cue sheet`}
+                            >
+                              {isHidden ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                            </button>
+                          )}
                           {!isLocked && (
                             <button
                               type="button"
@@ -1046,13 +1134,14 @@ export function ConfigurationModal({
                     {expandedFieldType === type && !isEditing && (() => {
                       const fieldDefs = liveConfig.fieldDefinitions ?? [];
                       const archivedKeys = new Set(fieldDefs.filter((f) => f.archived).map((f) => f.key));
-                      // Combine static editable keys + custom (Tier 3) keys, excluding archived
+                      const hiddenKeys = new Set(hiddenFieldKeys ?? []);
+                      // Combine static editable keys + custom (Tier 3) keys, excluding archived and hidden
                       const tier3Keys = fieldDefs.filter((f) => f.tier === 3 && !f.archived).map((f) => f.key);
-                      const allEditableKeys = [...EDITABLE_FIELD_KEYS.filter((k) => !archivedKeys.has(k)), ...tier3Keys];
+                      const allEditableKeys = [...EDITABLE_FIELD_KEYS.filter((k) => !archivedKeys.has(k) && !hiddenKeys.has(k)), ...tier3Keys.filter((k) => !hiddenKeys.has(k))];
 
-                      const currentFields = cueTypeFields[type] ?? getDefaultFieldsForType(type);
+                      const currentFields = (cueTypeFields[type] ?? getDefaultFieldsForType(type)).filter((k) => !hiddenKeys.has(k));
                       const allCount = allEditableKeys.length;
-                      const selectedCount = currentFields.filter((k) => !archivedKeys.has(k)).length;
+                      const selectedCount = currentFields.filter((k) => !archivedKeys.has(k) && !hiddenKeys.has(k)).length;
 
                       const toggleField = (fieldKey: string) => {
                         if (LOCKED_FIELD_KEYS.includes(fieldKey)) return;
@@ -1068,13 +1157,13 @@ export function ConfigurationModal({
                         onSetCueTypeFields(type, ordered);
                       };
                       const selectNone = () => onSetCueTypeFields(type, [...LOCKED_FIELD_KEYS]);
-                      const resetDefaults = () => onSetCueTypeFields(type, getDefaultFieldsForType(type));
+                      const resetDefaults = () => onSetCueTypeFields(type, getDefaultFieldsForType(type).filter((k) => !hiddenKeys.has(k)));
 
                       // Build the ordered display list:
                       // 1. Locked fields always at top (always active)
                       // 2. Active (non-locked) fields in their current order
                       // 3. Inactive fields at the bottom in definition order
-                      const activeNonLocked = currentFields.filter((k) => !LOCKED_FIELD_KEYS.includes(k) && !archivedKeys.has(k));
+                      const activeNonLocked = currentFields.filter((k) => !LOCKED_FIELD_KEYS.includes(k) && !archivedKeys.has(k) && !hiddenKeys.has(k));
                       const inactiveFields = allEditableKeys.filter((k) => !LOCKED_FIELD_KEYS.includes(k) && !currentFields.includes(k));
                       const orderedKeys = [...LOCKED_FIELD_KEYS, ...activeNonLocked, ...inactiveFields];
 
@@ -1145,9 +1234,12 @@ export function ConfigurationModal({
                       );
                     })()}
                     </React.Fragment>
+                    </SortableCueTypeRow>
                   );
                 })}
               </div>
+              </SortableContext>
+              </DndContext>
 
             </div>
           )}
@@ -1330,6 +1422,12 @@ export function ConfigurationModal({
                               <span className="text-[9px] text-[var(--text-dim)]">
                                 {fd.sizeHint === 'large' ? 'L' : fd.sizeHint === 'medium' ? 'M' : 'S'}
                               </span>
+                              {(hiddenFieldKeys ?? []).includes(fd.key) && (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded inline-flex items-center gap-0.5 text-orange-400 bg-orange-500/10">
+                                  <EyeOff className="w-2.5 h-2.5" />
+                                  Hidden
+                                </span>
+                              )}
                             </>
                           )}
                         </div>
@@ -1347,6 +1445,16 @@ export function ConfigurationModal({
                             >
                               <Pencil className="w-3 h-3" />
                             </button>
+                            {fd.tier !== 1 && !isFieldInUse(fd.key) && onToggleFieldHidden && (
+                              <button
+                                type="button"
+                                onClick={() => onToggleFieldHidden(fd.key)}
+                                className={`p-0.5 rounded transition-colors ${(hiddenFieldKeys ?? []).includes(fd.key) ? 'text-orange-400 hover:text-orange-300' : 'text-[var(--text-dim)] hover:text-[var(--text-mid)]'} hover:bg-[var(--bg-hover)]`}
+                                title={(hiddenFieldKeys ?? []).includes(fd.key) ? `Show ${fd.label}` : `Hide ${fd.label} from all cue types, columns, and exports`}
+                              >
+                                {(hiddenFieldKeys ?? []).includes(fd.key) ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                              </button>
+                            )}
                             {fd.tier !== 1 && !isFieldInUse(fd.key) && (
                               <button
                                 type="button"
@@ -1635,13 +1743,13 @@ export function ConfigurationModal({
               {([
                 { key: 'Space', action: 'Play / Pause', hi: true },
                 { key: '←', action: 'Seek back 1 second', hi: false },
+                { key: 'Ctrl + ←', action: 'Seek back 5 seconds', hi: false },
                 { key: '→', action: 'Seek forward 1 second', hi: false },
-                { key: 'Ctrl+←', action: 'Seek back 5 seconds', hi: false },
-                { key: 'Ctrl+→', action: 'Seek forward 5 seconds', hi: false },
+                { key: 'Ctrl + →', action: 'Seek forward 5 seconds', hi: false },
                 { key: ',', action: 'Previous frame', hi: false },
+                { key: 'Ctrl + ,', action: 'Back 5 frames', hi: false },
                 { key: '.', action: 'Next frame', hi: false },
-                { key: 'Ctrl+,', action: 'Back 5 frames', hi: false },
-                { key: 'Ctrl+.', action: 'Forward 5 frames', hi: false },
+                { key: 'Ctrl + .', action: 'Forward 5 frames', hi: false },
                 { key: '+', action: 'Increase playback speed', hi: false },
                 { key: '−', action: 'Decrease playback speed', hi: false },
               ] as const).map(({ key, action, hi }) => (
@@ -1667,6 +1775,7 @@ export function ConfigurationModal({
                 { key: 'Ctrl+Enter', action: 'Save cue (when cue form is open)', hi: false },
                 { key: 'Escape', action: 'Close cue form without saving', hi: false },
                 { key: 'J', action: 'Toggle Jump Navigation menu', hi: false },
+                { key: 'G', action: 'Toggle Go To Navigation menu', hi: false },
               ] as const).map(({ key, action, hi }) => (
                 <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
                   <kbd
