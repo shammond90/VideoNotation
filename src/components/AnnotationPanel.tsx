@@ -524,20 +524,32 @@ export function AnnotationPanel({
     // When no search/type filter is active we still need to strip past cues,
     // so we always run the filter pass below.
 
+    // Build a set of structural IDs that have at least one active/upcoming descendant.
+    // Walk backwards through the flat list: when we find a matching cue, the most recent
+    // title/scene above it gets marked as "has active children".
+    const structuralWithActiveChildren = new Set<string>();
+    let lastTitleId: string | null = null;
+    let lastSceneId: string | null = null;
+
+    for (const item of groupedItems) {
+      if (item.kind === 'title') {
+        lastTitleId = item.annotation.id;
+        lastSceneId = null;
+      } else if (item.kind === 'scene') {
+        lastSceneId = item.annotation.id;
+      } else if (matchingIds.has(item.annotation.id)) {
+        // This cue is active/upcoming — mark its parent title and scene
+        if (lastTitleId) structuralWithActiveChildren.add(lastTitleId);
+        if (lastSceneId) structuralWithActiveChildren.add(lastSceneId);
+      }
+    }
+
     return groupedItems.filter((item) => {
       if (item.kind === 'title' || item.kind === 'scene') {
         // Keep a structural row if it itself is active/upcoming OR has
         // any active/upcoming descendants.
         if (matchingIds.has(item.annotation.id)) return true;
-        if (item.kind === 'title') {
-          return annotations.some(
-            (a) =>
-              matchingIds.has(a.id) &&
-              a.timestamp >= item.annotation.timestamp,
-          );
-        }
-        // Scene — keep if any upcoming/active child exists
-        return true;
+        return structuralWithActiveChildren.has(item.annotation.id);
       }
       // Regular cue — show only if active/upcoming and passes filters
       return matchingIds.has(item.annotation.id);

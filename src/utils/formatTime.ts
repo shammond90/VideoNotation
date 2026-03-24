@@ -13,6 +13,7 @@ export const FPS = 30;
 export const FRAME_DURATION = 1 / NTSC_FPS;
 
 const DROP = 2;                  // frames dropped per non-tenth minute
+const DROPS_PER_10MIN = 18;      // 9 drop-minutes × 2 frames = total drops per 10-min block
 const FRAMES_PER_10MIN = 17982;  // 10*60*30 - 9*2
 const FRAMES_PER_MIN   = 1798;   // 60*30 - 2
 
@@ -29,8 +30,8 @@ export function formatTime(seconds: number): string {
   const m = fn % FRAMES_PER_10MIN;
 
   const adj = m < DROP
-    ? fn + DROP * d
-    : fn + DROP * d + DROP * Math.floor((m - DROP) / FRAMES_PER_MIN);
+    ? fn + DROPS_PER_10MIN * d
+    : fn + DROPS_PER_10MIN * d + DROP * Math.floor((m - DROP) / FRAMES_PER_MIN);
 
   const ff = adj % FPS;
   const ss = Math.floor(adj / FPS) % 60;
@@ -56,8 +57,8 @@ export function formatTimeShort(seconds: number): string {
   const m = fn % FRAMES_PER_10MIN;
 
   const adj = m < DROP
-    ? fn + DROP * d
-    : fn + DROP * d + DROP * Math.floor((m - DROP) / FRAMES_PER_MIN);
+    ? fn + DROPS_PER_10MIN * d
+    : fn + DROPS_PER_10MIN * d + DROP * Math.floor((m - DROP) / FRAMES_PER_MIN);
 
   const ff = adj % FPS;
   const ss = Math.floor(adj / FPS) % 60;

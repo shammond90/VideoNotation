@@ -29,10 +29,14 @@ export const userGuide = `
 | Action | Keyboard | Button |
 |---|---|---|
 | Play / Pause | Space | Play |
-| Seek back 5s | Left Arrow | -5s |
-| Seek forward 5s | Right Arrow | +5s |
+| Seek back 1s | Left Arrow | -1s |
+| Seek forward 1s | Right Arrow | +1s |
+| Seek back 5s | Ctrl+Left Arrow | — |
+| Seek forward 5s | Ctrl+Right Arrow | — |
 | Previous frame | , | -1f |
 | Next frame | . | +1f |
+| Back 5 frames | Ctrl+, | — |
+| Forward 5 frames | Ctrl+. | — |
 | Speed up | + | Fast |
 | Slow down | - | Slow |
 
@@ -212,8 +216,10 @@ All actions require confirmation.
 | Enter | Open cue form / Add cue |
 | Ctrl+Enter | Save cue |
 | Space | Play/pause video |
-| Left / Right | Seek 5 seconds |
+| Left / Right | Seek 1 second |
+| Ctrl+Left / Right | Seek 5 seconds |
 | , / . | Step 1 frame |
+| Ctrl+, / . | Step 5 frames |
 | + / - | Increase/decrease speed |
 | J | Toggle Jump Navigation menu |
 | Ctrl+S | Save project (works everywhere) |

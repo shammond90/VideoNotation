@@ -192,6 +192,10 @@ export function useConfiguration() {
     setConfig((prev) => ({ ...prev, videoTimecodePosition: pos }));
   }, []);
 
+  const setAutoplayAfterCue = useCallback((enabled: boolean) => {
+    setConfig((prev) => ({ ...prev, autoplayAfterCue: enabled }));
+  }, []);
+
   const setCueBackupInterval = useCallback((minutes: number) => {
     setConfig((prev) => ({ ...prev, cueBackupIntervalMinutes: Math.max(1, Math.round(minutes)) }));
   }, []);
@@ -530,6 +534,7 @@ export function useConfiguration() {
     setTheatreMode,
     setShowVideoTimecode,
     setVideoTimecodePosition,
+    setAutoplayAfterCue,
     setCueBackupInterval,
     setCueTypeAllowStandby,
     setCueTypeAllowWarning,

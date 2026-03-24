@@ -161,6 +161,7 @@ export default function App({
     setShowSkippedCues,
     setShowVideoTimecode,
     setVideoTimecodePosition,
+    setAutoplayAfterCue,
     setCueTypeFields,
     toggleColumnVisibility,
     reorderColumns,
@@ -586,7 +587,27 @@ export default function App({
 
       setIsAnnotating(false);
       addToast('Cue saved', 'success');
-      // Resume playback after saving
+      // Resume playback after saving (if autoplay enabled)
+      if (config.autoplayAfterCue) {
+        if (isDualWindow) {
+          broadcastSend({ type: 'CMD_PLAY' });
+        } else {
+          try {
+            videoRef.current?.play().catch(() => {});
+          } catch {
+            // ignore
+          }
+        }
+      }
+    },
+    [annotateTimestamp, addAnnotation, addToast, isDualWindow, broadcastSend, config.autoplayAfterCue],
+  );
+
+  // Cancel note — close form and resume playback
+  const handleCancelNote = useCallback(() => {
+    setIsAnnotating(false);
+    // Resume playback (if autoplay enabled)
+    if (config.autoplayAfterCue) {
       if (isDualWindow) {
         broadcastSend({ type: 'CMD_PLAY' });
       } else {
@@ -596,24 +617,8 @@ export default function App({
           // ignore
         }
       }
-    },
-    [annotateTimestamp, addAnnotation, addToast, isDualWindow, broadcastSend],
-  );
-
-  // Cancel note — close form and resume playback
-  const handleCancelNote = useCallback(() => {
-    setIsAnnotating(false);
-    // Resume playback
-    if (isDualWindow) {
-      broadcastSend({ type: 'CMD_PLAY' });
-    } else {
-      try {
-        videoRef.current?.play().catch(() => {});
-      } catch {
-        // ignore
-      }
     }
-  }, [isDualWindow, broadcastSend]);
+  }, [isDualWindow, broadcastSend, config.autoplayAfterCue]);
 
   // Seek to annotation timestamp
   const handleSeek = useCallback(
@@ -793,7 +798,7 @@ export default function App({
         case 'ArrowLeft':
           e.preventDefault();
           {
-            const skipAmount = e.shiftKey || e.ctrlKey ? 1 : 5;
+            const skipAmount = e.ctrlKey || e.metaKey ? 5 : 1;
             if (isDualWindow) {
               broadcastSend({ type: 'CMD_SEEK', seconds: popupTimecodeRef.current - skipAmount });
             } else {
@@ -804,7 +809,7 @@ export default function App({
         case 'ArrowRight':
           e.preventDefault();
           {
-            const skipAmount = e.shiftKey || e.ctrlKey ? 1 : 5;
+            const skipAmount = e.ctrlKey || e.metaKey ? 5 : 1;
             if (isDualWindow) {
               broadcastSend({ type: 'CMD_SEEK', seconds: popupTimecodeRef.current + skipAmount });
             } else {
@@ -814,19 +819,24 @@ export default function App({
           break;
         case ',':
           e.preventDefault();
-          if (isDualWindow) {
-            // Approximate frame step backward (~1/24s)
-            broadcastSend({ type: 'CMD_SEEK', seconds: popupTimecodeRef.current - (1 / 24) });
-          } else {
-            playerActions.stepFrame(-1);
+          {
+            const frameCount = e.ctrlKey || e.metaKey ? 5 : 1;
+            if (isDualWindow) {
+              broadcastSend({ type: 'CMD_SEEK', seconds: popupTimecodeRef.current - (frameCount / 24) });
+            } else {
+              playerActions.stepFrame(-frameCount);
+            }
           }
           break;
         case '.':
           e.preventDefault();
-          if (isDualWindow) {
-            broadcastSend({ type: 'CMD_SEEK', seconds: popupTimecodeRef.current + (1 / 24) });
-          } else {
-            playerActions.stepFrame(1);
+          {
+            const frameCount = e.ctrlKey || e.metaKey ? 5 : 1;
+            if (isDualWindow) {
+              broadcastSend({ type: 'CMD_SEEK', seconds: popupTimecodeRef.current + (frameCount / 24) });
+            } else {
+              playerActions.stepFrame(frameCount);
+            }
           }
           break;
         case '+':
@@ -1167,6 +1177,7 @@ export default function App({
                 <button
                   type="button"
                   onClick={handleTogglePlay}
+                  onMouseUp={e => e.currentTarget.blur()}
                   className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-md transition-colors"
                   style={{ color: 'var(--text-mid)' }}
                   onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
@@ -1179,6 +1190,7 @@ export default function App({
                 <button
                   type="button"
                   onClick={handleEnterAnnotate}
+                  onMouseUp={e => e.currentTarget.blur()}
                   className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-md transition-colors"
                   style={{ background: 'rgba(191,87,0,0.12)', color: 'var(--amber)' }}
                   onMouseEnter={e => (e.currentTarget.style.background = 'rgba(191,87,0,0.22)')}
@@ -1190,31 +1202,34 @@ export default function App({
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleSeek(playerState.currentTime - 5)}
+                  onClick={() => handleSeek(playerState.currentTime - 1)}
+                  onMouseUp={e => e.currentTarget.blur()}
                   className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-md transition-colors"
                   style={{ color: 'var(--text-mid)' }}
                   onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
                   onMouseLeave={e => (e.currentTarget.style.background = '')}
-                  title="Back 5s"
+                  title="Back 1s"
                 >
                   <kbd className="inline-flex items-center justify-center w-7 h-7 text-[11px] font-mono font-bold rounded" style={{ background: 'var(--bg-panel)', color: 'var(--text-mid)', border: '1px solid var(--border-hi)' }}>←</kbd>
-                  <span className="text-xs" style={{ color: 'var(--text-dim)' }}>−5s</span>
+                  <span className="text-xs" style={{ color: 'var(--text-dim)' }}>−1s</span>
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleSeek(playerState.currentTime + 5)}
+                  onClick={() => handleSeek(playerState.currentTime + 1)}
+                  onMouseUp={e => e.currentTarget.blur()}
                   className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-md transition-colors"
                   style={{ color: 'var(--text-mid)' }}
                   onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
                   onMouseLeave={e => (e.currentTarget.style.background = '')}
-                  title="Forward 5s"
+                  title="Forward 1s"
                 >
                   <kbd className="inline-flex items-center justify-center w-7 h-7 text-[11px] font-mono font-bold rounded" style={{ background: 'var(--bg-panel)', color: 'var(--text-mid)', border: '1px solid var(--border-hi)' }}>→</kbd>
-                  <span className="text-xs" style={{ color: 'var(--text-dim)' }}>+5s</span>
+                  <span className="text-xs" style={{ color: 'var(--text-dim)' }}>+1s</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => playerActions.stepFrame(-1)}
+                  onMouseUp={e => e.currentTarget.blur()}
                   className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-md transition-colors"
                   style={{ color: 'var(--text-mid)' }}
                   onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
@@ -1227,6 +1242,7 @@ export default function App({
                 <button
                   type="button"
                   onClick={() => playerActions.stepFrame(1)}
+                  onMouseUp={e => e.currentTarget.blur()}
                   className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-md transition-colors"
                   style={{ color: 'var(--text-mid)' }}
                   onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
@@ -1246,6 +1262,7 @@ export default function App({
                       addToast(`Speed: ${speeds[idx + 1]}x`, 'info', 1500);
                     }
                   }}
+                  onMouseUp={e => e.currentTarget.blur()}
                   className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-md transition-colors"
                   style={{ color: 'var(--text-mid)' }}
                   onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
@@ -1265,6 +1282,7 @@ export default function App({
                       addToast(`Speed: ${speeds[idx - 1]}x`, 'info', 1500);
                     }
                   }}
+                  onMouseUp={e => e.currentTarget.blur()}
                   className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-md transition-colors"
                   style={{ color: 'var(--text-mid)' }}
                   onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
@@ -1468,6 +1486,8 @@ export default function App({
         theatreMode={config.theatreMode}
         onSetTheatreMode={setTheatreMode}
         onSetShowVideoTimecode={setShowVideoTimecode}
+        autoplayAfterCue={config.autoplayAfterCue}
+        onSetAutoplayAfterCue={setAutoplayAfterCue}
         currentVideoName={videoFile?.name}
         currentVideoSize={videoFile?.size}
         cueBackupIntervalMinutes={config.cueBackupIntervalMinutes}

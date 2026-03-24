@@ -89,6 +89,8 @@ interface ConfigurationModalProps {
   onSetShowPastCues: (show: boolean) => void;
   onSetShowSkippedCues: (show: boolean) => void;
   onSetShowVideoTimecode: (show: boolean) => void;
+  autoplayAfterCue: boolean;
+  onSetAutoplayAfterCue: (enabled: boolean) => void;
   onSetCueTypeFields: (cueType: string, fields: string[]) => void;
   onToggleColumn: (key: string, cueType?: string) => void;
   onReorderColumns: (fromIndex: number, toIndex: number, cueType?: string) => void;
@@ -543,6 +545,8 @@ export function ConfigurationModal({
   onSetShowPastCues,
   onSetShowSkippedCues,
   onSetShowVideoTimecode,
+  autoplayAfterCue,
+  onSetAutoplayAfterCue,
   onSetCueTypeFields,
   onToggleColumn,
   onReorderColumns,
@@ -1605,6 +1609,22 @@ export function ConfigurationModal({
                   </p>
                 </div>
               </label>
+
+              {/* Autoplay after Cue toggle */}
+              <label className="flex items-center gap-3 px-3 py-3 bg-[var(--bg-panel-a50)] rounded-md border border-[var(--border-hi-a50)] cursor-pointer select-none hover:bg-[var(--bg-panel)]">
+                <input
+                  type="checkbox"
+                  checked={autoplayAfterCue}
+                  onChange={() => onSetAutoplayAfterCue(!autoplayAfterCue)}
+                  className="w-4 h-4 rounded border-[var(--border-hi)] bg-[var(--bg-hover)] text-[var(--amber)] focus:ring-[#BF5700] focus:ring-offset-0 cursor-pointer"
+                />
+                <div>
+                  <span className="text-sm text-[var(--text)] font-medium">Autoplay after Cue</span>
+                  <p className="text-[10px] text-[var(--text-dim)] mt-0.5">
+                    Automatically resume video playback after saving or cancelling a new cue.
+                  </p>
+                </div>
+              </label>
             </div>
           )}
 
@@ -1614,10 +1634,14 @@ export function ConfigurationModal({
               <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: '.1em', textTransform: 'uppercase' as const, color: 'var(--text-dim)', marginBottom: 10 }}>Video Playback</div>
               {([
                 { key: 'Space', action: 'Play / Pause', hi: true },
-                { key: '←', action: 'Seek back 5 seconds', hi: false },
-                { key: '→', action: 'Seek forward 5 seconds', hi: false },
+                { key: '←', action: 'Seek back 1 second', hi: false },
+                { key: '→', action: 'Seek forward 1 second', hi: false },
+                { key: 'Ctrl+←', action: 'Seek back 5 seconds', hi: false },
+                { key: 'Ctrl+→', action: 'Seek forward 5 seconds', hi: false },
                 { key: ',', action: 'Previous frame', hi: false },
                 { key: '.', action: 'Next frame', hi: false },
+                { key: 'Ctrl+,', action: 'Back 5 frames', hi: false },
+                { key: 'Ctrl+.', action: 'Forward 5 frames', hi: false },
                 { key: '+', action: 'Increase playback speed', hi: false },
                 { key: '−', action: 'Decrease playback speed', hi: false },
               ] as const).map(({ key, action, hi }) => (

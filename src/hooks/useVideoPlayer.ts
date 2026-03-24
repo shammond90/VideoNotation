@@ -23,7 +23,7 @@ export interface VideoPlayerActions {
   setVolume: (vol: number) => void;
   toggleMute: () => void;
   setSpeed: (rate: number) => void;
-  stepFrame: (direction: 1 | -1) => void;
+  stepFrame: (frames: number) => void;
   toggleFullscreen: () => void;
 }
 
@@ -260,12 +260,12 @@ export function useVideoPlayer(
     }
   }, [videoRef]);
 
-  const stepFrame = useCallback((direction: 1 | -1) => {
+  const stepFrame = useCallback((frames: number) => {
     const video = videoRef.current;
     if (video) {
       wasSeekedRef.current = true;
       video.pause();
-      video.currentTime = Math.max(0, Math.min(video.currentTime + direction * FRAME_DUR, video.duration));
+      video.currentTime = Math.max(0, Math.min(video.currentTime + frames * FRAME_DUR, video.duration));
       previousTimeRef.current = video.currentTime;
       setState((prev) => ({ ...prev, currentTime: video.currentTime }));
     }

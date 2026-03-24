@@ -14,11 +14,20 @@ function migrateAnnotation(a: any): Annotation {
   };
 }
 
-/** Sort comparator: primary = timestamp, secondary = sort_order (for tie groups) */
+/** Structural priority: TITLE first, then SCENE, then regular cues */
+function structuralPriority(type: string): number {
+  if (type === 'TITLE') return -2;
+  if (type === 'SCENE') return -1;
+  return 0;
+}
+
+/** Sort comparator: primary = timestamp, secondary = structural type, tertiary = sort_order */
 function sortAnnotations(list: Annotation[]): Annotation[] {
   return [...list].sort((a, b) => {
     const dt = a.timestamp - b.timestamp;
     if (dt !== 0) return dt;
+    const sp = structuralPriority(a.cue.type) - structuralPriority(b.cue.type);
+    if (sp !== 0) return sp;
     return a.sort_order - b.sort_order;
   });
 }
