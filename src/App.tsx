@@ -1567,6 +1567,7 @@ export default function App({
         videoName={videoFile?.name ?? 'video'}
         hiddenCueTypes={config.hiddenCueTypes}
         hiddenFieldKeys={config.hiddenFieldKeys}
+        addToast={addToast}
       />
 
       {/* Hidden import input */}

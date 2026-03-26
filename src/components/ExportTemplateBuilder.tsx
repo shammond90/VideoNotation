@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   DndContext,
   closestCenter,
+  pointerWithin,
   PointerSensor,
   useSensor,
   useSensors,
@@ -9,6 +10,7 @@ import {
   type DragStartEvent,
   type DragEndEvent,
   useDroppable,
+  type CollisionDetection,
 } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -39,12 +41,12 @@ import {
   CUE_FIELD_LABELS,
   VIRTUAL_COLUMN_LABELS,
 } from '../types';
-import type { ConfigTemplate } from '../types';
 import {
-  loadConfigTemplates,
-  saveConfigTemplate,
-  deleteConfigTemplate,
+  loadXlsxExportTemplates,
+  saveXlsxExportTemplate,
+  deleteXlsxExportTemplate,
 } from '../utils/configTemplates';
+import type { XlsxExportTemplate } from '../utils/configTemplates';
 import { exportAnnotationsToXlsx } from '../utils/xlsx';
 
 // ── Helper: auto-generate column name from field keys ──
@@ -55,6 +57,20 @@ function autoName(fieldKeys: string[]): string {
       ?? VIRTUAL_COLUMN_LABELS[k]
       ?? k;
   }).join(' / ');
+}
+
+// ── Droppable gap between columns (for inserting new columns from pool) ──
+function ColumnGapDropZone({ index, isPoolDragging }: { index: number; isPoolDragging: boolean }) {
+  const { setNodeRef, isOver } = useDroppable({ id: `gap-${index}` });
+  if (!isPoolDragging) return null;
+  return (
+    <div
+      ref={setNodeRef}
+      className={`h-1.5 -my-0.5 rounded-full transition-all ${
+        isOver ? 'bg-[var(--amber)] h-2 -my-0.5 shadow-[0_0_8px_var(--amber)]' : 'bg-[var(--border-hi)]/30 hover:bg-[var(--border-hi)]/60'
+      }`}
+    />
+  );
 }
 
 // ── Droppable column card target ──
@@ -212,6 +228,8 @@ function DraggablePoolField({ fieldKey, label }: { fieldKey: string; label: stri
 
 // ── Main component ──
 
+const LAST_TEMPLATE_KEY = 'xlsxExport-lastTemplateId';
+
 interface ExportTemplateBuilderProps {
   isOpen: boolean;
   onClose: () => void;
@@ -223,6 +241,7 @@ interface ExportTemplateBuilderProps {
   videoName: string;
   hiddenCueTypes?: string[];
   hiddenFieldKeys?: string[];
+  addToast: (message: string, type?: 'success' | 'info' | 'warning' | 'error', duration?: number) => void;
 }
 
 export function ExportTemplateBuilder({
@@ -236,28 +255,46 @@ export function ExportTemplateBuilder({
   videoName,
   hiddenCueTypes,
   hiddenFieldKeys,
+  addToast,
 }: ExportTemplateBuilderProps) {
   // ── State ──
   const [columns, setColumns] = useState<ExportTemplateColumn[]>([...LOCKED_EXPORT_COLUMNS]);
   const [colorOverrides, setColorOverrides] = useState<ExportColorOverrides>({});
   const [includeSkipped, setIncludeSkipped] = useState(true);
   const [templateName, setTemplateName] = useState('');
-  const [savedTemplates, setSavedTemplates] = useState<ConfigTemplate[]>([]);
+  const [savedTemplates, setSavedTemplates] = useState<XlsxExportTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [activePoolField, setActivePoolField] = useState<string | null>(null);
   const [poolSearch, setPoolSearch] = useState('');
+  const [excludedCueTypes, setExcludedCueTypes] = useState<Set<string>>(new Set());
 
-  // Load templates on open
+  // Load templates on open, auto-load last-used template
   useEffect(() => {
     if (isOpen) {
-      loadConfigTemplates().then((all) => setSavedTemplates(all.filter((t) => t.category === 'xlsxExport')));
-      // Reset to defaults
-      setColumns([...LOCKED_EXPORT_COLUMNS.map((c) => ({ ...c }))]);
-      setColorOverrides({});
-      setIncludeSkipped(true);
-      setTemplateName('');
-      setSelectedTemplateId('');
-      setPoolSearch('');
+      loadXlsxExportTemplates().then((xlsxTemplates) => {
+        setSavedTemplates(xlsxTemplates);
+
+        // Try to restore last-used template
+        const lastId = localStorage.getItem(LAST_TEMPLATE_KEY);
+        const lastTpl = lastId ? xlsxTemplates.find((t) => t.id === lastId) : undefined;
+        if (lastTpl) {
+          setSelectedTemplateId(lastTpl.id);
+          setTemplateName(lastTpl.name);
+          setColumns((lastTpl.columns ?? LOCKED_EXPORT_COLUMNS).map((c) => ({ ...c })));
+          setColorOverrides({ ...(lastTpl.colorOverrides ?? {}) });
+          setIncludeSkipped(lastTpl.includeSkipped ?? true);
+          setExcludedCueTypes(new Set(lastTpl.excludedCueTypes ?? []));
+        } else {
+          // Reset to defaults
+          setColumns([...LOCKED_EXPORT_COLUMNS.map((c) => ({ ...c }))]);
+          setColorOverrides({});
+          setIncludeSkipped(true);
+          setTemplateName('');
+          setSelectedTemplateId('');
+          setExcludedCueTypes(new Set());
+        }
+        setPoolSearch('');
+      });
     }
   }, [isOpen]);
 
@@ -335,6 +372,37 @@ export function ExportTemplateBuilder({
     }));
   }, []);
 
+  // Helper: create a new column with a field at a specific position
+  const createColumnAtIndex = useCallback((fieldKey: string, index: number) => {
+    const newCol: ExportTemplateColumn = {
+      id: crypto.randomUUID(),
+      fieldKeys: [fieldKey],
+      name: autoName([fieldKey]),
+      customName: false,
+    };
+    setColumns((prev) => {
+      const next = [...prev];
+      next.splice(index, 0, newCol);
+      return next;
+    });
+  }, []);
+
+  // Custom collision detection: prefer column-drop targets, then gap zones, when dragging pool fields
+  const collisionDetection: CollisionDetection = useCallback((args) => {
+    const activeId = String(args.active.id);
+    if (activeId.startsWith('pool-')) {
+      // For pool fields, check pointerWithin first to find column-drop targets or gap zones
+      const pointerCollisions = pointerWithin(args);
+      const columnDrop = pointerCollisions.find((c) => String(c.id).startsWith('column-drop-'));
+      if (columnDrop) return [columnDrop];
+      const gap = pointerCollisions.find((c) => String(c.id).startsWith('gap-'));
+      if (gap) return [gap];
+      // Not over any drop zone → return empty so handleDragEnd creates a new column at end
+      return [];
+    }
+    return closestCenter(args);
+  }, []);
+
   // ── Drag and drop ──
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
@@ -347,18 +415,29 @@ export function ExportTemplateBuilder({
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     setActivePoolField(null);
     const { active, over } = event;
-    if (!over) return;
 
     const activeId = String(active.id);
-    const overId = String(over.id);
 
-    // Pool field dropped onto a column
-    if (activeId.startsWith('pool-') && overId.startsWith('column-drop-')) {
+    // Pool field: if dropped on a column-drop zone, add to that column;
+    // if dropped on a gap zone, insert new column at that position;
+    // otherwise create a new column at end
+    if (activeId.startsWith('pool-')) {
       const fieldKey = activeId.replace('pool-', '');
-      const colId = overId.replace('column-drop-', '');
-      addFieldToColumn(colId, fieldKey);
+      const overId = over ? String(over.id) : '';
+      if (overId.startsWith('column-drop-')) {
+        const colId = overId.replace('column-drop-', '');
+        addFieldToColumn(colId, fieldKey);
+      } else if (overId.startsWith('gap-')) {
+        const gapIndex = parseInt(overId.replace('gap-', ''), 10);
+        createColumnAtIndex(fieldKey, gapIndex);
+      } else {
+        createColumnAtIndex(fieldKey, columns.length);
+      }
       return;
     }
+
+    if (!over) return;
+    const overId = String(over.id);
 
     // Reordering column cards
     if (!activeId.startsWith('pool-') && !overId.startsWith('pool-') && !overId.startsWith('column-drop-')) {
@@ -369,55 +448,61 @@ export function ExportTemplateBuilder({
         return arrayMove(prev, oldIndex, newIndex);
       });
     }
-  }, [addFieldToColumn]);
+  }, [addFieldToColumn, createColumnAtIndex, columns]);
 
   // ── Templates ──
 
   const handleSaveTemplate = useCallback(async () => {
     const name = templateName.trim() || `Export ${savedTemplates.length + 1}`;
-    const template: ConfigTemplate = {
+    const template: XlsxExportTemplate = {
       id: selectedTemplateId || crypto.randomUUID(),
       name,
-      category: 'xlsxExport',
-      data: {
-        columns: columns.map((c) => ({ ...c })),
-        colorOverrides: { ...colorOverrides },
-      } as unknown as ConfigTemplate['data'],
+      columns: columns.map((c) => ({ ...c })),
+      colorOverrides: { ...colorOverrides },
+      includeSkipped,
+      excludedCueTypes: [...excludedCueTypes],
       createdAt: selectedTemplateId
         ? savedTemplates.find((t) => t.id === selectedTemplateId)?.createdAt ?? new Date().toISOString()
         : new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    await saveConfigTemplate(template);
-    const all = await loadConfigTemplates();
-    setSavedTemplates(all.filter((t) => t.category === 'xlsxExport'));
+    await saveXlsxExportTemplate(template);
+    const all = await loadXlsxExportTemplates();
+    setSavedTemplates(all);
     setSelectedTemplateId(template.id);
     setTemplateName(template.name);
-  }, [templateName, columns, colorOverrides, savedTemplates, selectedTemplateId]);
+    localStorage.setItem(LAST_TEMPLATE_KEY, template.id);
+    addToast('Template saved', 'success', 3000);
+  }, [templateName, columns, colorOverrides, includeSkipped, excludedCueTypes, savedTemplates, selectedTemplateId, addToast]);
 
   const handleLoadTemplate = useCallback((templateId: string) => {
     const tpl = savedTemplates.find((t) => t.id === templateId);
     if (!tpl) return;
-    const data = tpl.data as { columns?: ExportTemplateColumn[]; colorOverrides?: ExportColorOverrides };
     setSelectedTemplateId(tpl.id);
     setTemplateName(tpl.name);
-    setColumns((data.columns ?? LOCKED_EXPORT_COLUMNS).map((c) => ({ ...c })));
-    setColorOverrides({ ...(data.colorOverrides ?? {}) });
+    setColumns((tpl.columns ?? LOCKED_EXPORT_COLUMNS).map((c) => ({ ...c })));
+    setColorOverrides({ ...(tpl.colorOverrides ?? {}) });
+    setIncludeSkipped(tpl.includeSkipped ?? true);
+    setExcludedCueTypes(new Set(tpl.excludedCueTypes ?? []));
+    localStorage.setItem(LAST_TEMPLATE_KEY, tpl.id);
   }, [savedTemplates]);
 
   const handleDeleteTemplate = useCallback(async (templateId: string) => {
-    await deleteConfigTemplate(templateId);
-    const all = await loadConfigTemplates();
-    setSavedTemplates(all.filter((t) => t.category === 'xlsxExport'));
+    await deleteXlsxExportTemplate(templateId);
+    const all = await loadXlsxExportTemplates();
+    setSavedTemplates(all);
     if (selectedTemplateId === templateId) {
       setSelectedTemplateId('');
       setTemplateName('');
+      localStorage.removeItem(LAST_TEMPLATE_KEY);
     }
   }, [selectedTemplateId]);
 
   // ── Export ──
 
   const handleExport = useCallback(async () => {
+    // Combine global hiddenCueTypes with builder-level excludedCueTypes
+    const allHidden = [...new Set([...(hiddenCueTypes ?? []), ...excludedCueTypes])];
     await exportAnnotationsToXlsx({
       annotations,
       columns,
@@ -427,10 +512,10 @@ export function ExportTemplateBuilder({
       skippedIds,
       includeSkipped,
       videoName,
-      hiddenCueTypes,
+      hiddenCueTypes: allHidden.length > 0 ? allHidden : undefined,
     });
     onClose();
-  }, [annotations, columns, colorOverrides, cueTypeColors, cueTypeShortCodes, skippedIds, includeSkipped, videoName, hiddenCueTypes, onClose]);
+  }, [annotations, columns, colorOverrides, cueTypeColors, cueTypeShortCodes, skippedIds, includeSkipped, videoName, hiddenCueTypes, excludedCueTypes, onClose]);
 
   // Column ids for sortable context
   const columnIds = useMemo(() => columns.map((c) => c.id), [columns]);
@@ -439,6 +524,20 @@ export function ExportTemplateBuilder({
 
   // Count user columns (non-locked)
   const userColumnCount = columns.filter((c) => !c.locked).length;
+
+  // Compute included cue count (respects skipped + excluded cue types)
+  const { includedCueCount, totalCueCount } = useMemo(() => {
+    const total = annotations.length;
+    const allHidden = new Set([...(hiddenCueTypes ?? []), ...excludedCueTypes]);
+    let included = annotations;
+    if (!includeSkipped) {
+      included = included.filter((a) => !skippedIds.has(a.id));
+    }
+    if (allHidden.size > 0) {
+      included = included.filter((a) => !allHidden.has(a.cue.type));
+    }
+    return { includedCueCount: included.length, totalCueCount: total };
+  }, [annotations, hiddenCueTypes, excludedCueTypes, includeSkipped, skippedIds]);
 
   if (!isOpen) return null;
 
@@ -512,7 +611,7 @@ export function ExportTemplateBuilder({
         <div className="flex-1 min-h-0 flex overflow-hidden">
           <DndContext
             sensors={sensors}
-            collisionDetection={closestCenter}
+            collisionDetection={collisionDetection}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
           >
@@ -557,46 +656,68 @@ export function ExportTemplateBuilder({
               </div>
 
               {/* Scrollable column list */}
-              <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2 annotation-scroll">
+              <div className="flex-1 overflow-y-auto px-4 py-3 space-y-0 annotation-scroll">
                 <SortableContext items={columnIds} strategy={verticalListSortingStrategy}>
-                  {columns.map((col) => (
-                    <SortableColumnCard
-                      key={col.id}
-                      column={col}
-                      onRemoveField={removeFieldFromColumn}
-                      onRemoveColumn={removeColumn}
-                      onNameChange={handleNameChange}
-                      onResetName={handleResetName}
-                    />
+                  {columns.map((col, idx) => (
+                    <div key={col.id}>
+                      <ColumnGapDropZone index={idx} isPoolDragging={!!activePoolField} />
+                      <div className="py-1">
+                        <SortableColumnCard
+                          column={col}
+                          onRemoveField={removeFieldFromColumn}
+                          onRemoveColumn={removeColumn}
+                          onNameChange={handleNameChange}
+                          onResetName={handleResetName}
+                        />
+                      </div>
+                    </div>
                   ))}
+                  <ColumnGapDropZone index={columns.length} isPoolDragging={!!activePoolField} />
                 </SortableContext>
 
                 {userColumnCount === 0 && (
                   <div className="text-center py-8 text-[var(--text-dim)]">
                     <p className="text-sm font-medium mb-1">No custom columns yet</p>
-                    <p className="text-xs">Click "Add Column" then drag fields from the pool</p>
+                    <p className="text-xs">Drag fields from the pool into this area, or click "Add Column"</p>
                   </div>
                 )}
               </div>
 
-              {/* Bottom options: cue type colours + skipped */}
+              {/* Bottom options: cue type + skipped */}
               <div className="border-t border-[var(--border)]/50 px-4 py-3 space-y-3 shrink-0">
-                {/* Cue type colour overrides */}
+                {/* Cue type overrides */}
                 <div>
-                  <h4 className="text-[10px] font-semibold text-[var(--text-mid)] uppercase tracking-wider mb-2">Cue Type Colours</h4>
+                  <h4 className="text-[10px] font-semibold text-[var(--text-mid)] uppercase tracking-wider mb-2">Cue Types</h4>
                   <div className="flex flex-wrap gap-2">
                     {cueTypes.filter(ct => !(hiddenCueTypes ?? []).includes(ct)).map((ct) => {
+                      const isExcluded = excludedCueTypes.has(ct);
                       const effectiveColor = colorOverrides[ct] || cueTypeColors[ct] || '#6b7280';
                       return (
-                        <label key={ct} className="flex items-center gap-1.5 cursor-pointer">
+                        <div key={ct} className="flex items-center gap-1.5">
                           <input
                             type="color"
                             value={effectiveColor}
                             onChange={(e) => setColorOverrides((prev) => ({ ...prev, [ct]: e.target.value }))}
                             className="w-5 h-5 rounded border border-[var(--border-hi)] cursor-pointer"
                           />
-                          <span className="text-[10px] text-[var(--text-mid)]">{ct}</span>
-                        </label>
+                          <button
+                            type="button"
+                            onClick={() => setExcludedCueTypes((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(ct)) next.delete(ct);
+                              else next.add(ct);
+                              return next;
+                            })}
+                            className={`text-[10px] select-none transition-colors ${
+                              isExcluded
+                                ? 'line-through text-[var(--text-dim)] opacity-50'
+                                : 'text-[var(--text-mid)] hover:text-[var(--text)]'
+                            }`}
+                            title={isExcluded ? 'Click to include in export' : 'Click to exclude from export'}
+                          >
+                            {ct}
+                          </button>
+                        </div>
                       );
                     })}
                   </div>
@@ -632,7 +753,10 @@ export function ExportTemplateBuilder({
         {/* Footer */}
         <div className="flex items-center justify-between px-6 py-3 border-t border-[var(--border)] shrink-0">
           <p className="text-[10px] text-[var(--text-dim)]">
-            {annotations.length} cues • {columns.length} columns
+            {includedCueCount === totalCueCount
+              ? `${totalCueCount} cues`
+              : `${includedCueCount}/${totalCueCount} cues`
+            } &bull; {columns.length} columns
           </p>
           <div className="flex items-center gap-2">
             <button

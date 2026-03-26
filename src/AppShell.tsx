@@ -173,7 +173,7 @@ export function AppShell() {
           setImportConflict({ parsed, existingProject: existing });
         } else {
           // No conflict — import directly
-          const imported = await importProject(parsed.project, undefined, parsed.annotations);
+          const imported = await importProject(parsed.project, undefined, parsed.annotations, parsed.xlsxTemplates);
           await loadAllProjects();
           await openProject(imported.id);
           setAppState({ screen: 'cue-sheet' });
@@ -197,7 +197,7 @@ export function AppShell() {
     try {
       // Delete old project, import with same name
       await deleteProjectFromStorage(importConflict.existingProject.id);
-      const imported = await importProject(importConflict.parsed.project, undefined, importConflict.parsed.annotations);
+      const imported = await importProject(importConflict.parsed.project, undefined, importConflict.parsed.annotations, importConflict.parsed.xlsxTemplates);
       setImportConflict(null);
       await loadAllProjects();
       await openProject(imported.id);
@@ -215,7 +215,7 @@ export function AppShell() {
     async (newName: string) => {
       if (!importConflict) return;
       try {
-        const imported = await importProject(importConflict.parsed.project, newName, importConflict.parsed.annotations);
+        const imported = await importProject(importConflict.parsed.project, newName, importConflict.parsed.annotations, importConflict.parsed.xlsxTemplates);
         setImportConflict(null);
         await loadAllProjects();
         await openProject(imported.id);
@@ -374,4 +374,3 @@ export function AppShell() {
     </div>
   );
 }
-

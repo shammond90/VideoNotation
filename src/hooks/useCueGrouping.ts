@@ -47,14 +47,14 @@ function saveCollapseState(projectId: string, state: Record<string, boolean>) {
 // ── Scene band colours (cycling palette for scrubber) ──
 
 export const SCENE_BAND_COLORS = [
-  '#5c6bc0', // indigo
-  '#00acc1', // cyan
-  '#66bb6a', // green
-  '#ffa726', // orange
-  '#ab47bc', // purple
-  '#ef5350', // red
-  '#42a5f5', // blue
-  '#26a69a', // teal
+  '#FD69B3', // pink
+  '#FF0000', // red
+  '#FF8D07', // orange
+  '#FFFC06', // yellow
+  '#038D00', // green
+  '#00C2C2', // cyan
+  '#400379', // purple
+  '#8E018D', // magenta
 ];
 
 // ── Hook ──

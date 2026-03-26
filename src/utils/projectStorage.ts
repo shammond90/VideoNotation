@@ -3,6 +3,8 @@ import type { Project, AppConfig, ColumnConfig, Annotation } from '../types/inde
 import { DEFAULT_CONFIG, DEFAULT_VISIBLE_COLUMNS } from '../types/index';
 import { loadAnnotations, saveAnnotations, saveConfig } from './storage';
 import { deleteVideoHandle } from './videoHandleStorage';
+import { loadXlsxExportTemplates, saveXlsxExportTemplates } from './configTemplates';
+import type { XlsxExportTemplate } from './configTemplates';
 
 const DB_NAME = 'CuetationDB';
 const PROJECTS_STORE = 'projects';
@@ -254,6 +256,9 @@ export async function exportProjectToJSON(
   const configToExport = liveConfig || project.config;
   const columnsToExport = liveConfig ? (liveConfig.visibleColumns || project.columns) : project.columns;
 
+  // Load global xlsxExport templates to include with the project
+  const xlsxTemplates = await loadXlsxExportTemplates();
+
   return {
     cuetation_version: 1,
     exported_at: new Date().toISOString(),
@@ -276,6 +281,7 @@ export async function exportProjectToJSON(
       export_templates: project.export_templates,
     },
     annotations,
+    xlsx_templates: xlsxTemplates,
   };
 }
 
@@ -327,7 +333,12 @@ export function parseImportedProject(json: unknown): ImportedProjectData {
     ? data.annotations as Record<string, Annotation[]>
     : undefined;
 
-  return { project, annotations };
+  // Extract xlsx templates if present
+  const xlsxTemplates = Array.isArray(data.xlsx_templates)
+    ? data.xlsx_templates as XlsxExportTemplate[]
+    : undefined;
+
+  return { project, annotations, xlsxTemplates };
 }
 
 /**
@@ -337,12 +348,14 @@ export function parseImportedProject(json: unknown): ImportedProjectData {
 export interface ImportedProjectData {
   project: Omit<Project, 'id'>;
   annotations?: Record<string, Annotation[]>;
+  xlsxTemplates?: XlsxExportTemplate[];
 }
 
 export async function importProject(
   data: Omit<Project, 'id'>,
   nameOverride?: string,
-  annotations?: Record<string, Annotation[]>
+  annotations?: Record<string, Annotation[]>,
+  xlsxTemplates?: XlsxExportTemplate[],
 ): Promise<Project> {
   const project: Project = {
     ...data,
@@ -377,6 +390,19 @@ export async function importProject(
 
       await saveAnnotations(targetFileName, fileSize, cues);
     }
+  }
+
+  // Merge imported xlsx templates (skip duplicates by name)
+  if (xlsxTemplates && xlsxTemplates.length > 0) {
+    const existing = await loadXlsxExportTemplates();
+    const existingNames = new Set(existing.map((t) => t.name));
+    let merged = false;
+    for (const tpl of xlsxTemplates) {
+      if (existingNames.has(tpl.name)) continue; // skip duplicate names
+      existing.push({ ...tpl, id: crypto.randomUUID() }); // assign new id
+      merged = true;
+    }
+    if (merged) await saveXlsxExportTemplates(existing);
   }
 
   return project;

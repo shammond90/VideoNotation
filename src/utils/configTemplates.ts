@@ -5,6 +5,7 @@ const DB_NAME = 'cuetation-db';
 const DB_VERSION = 1;
 const STORE_NAME = 'keyval';
 const STORAGE_KEY = 'config-templates';
+const XLSX_TEMPLATES_KEY = 'xlsx-export-templates';
 
 async function getDB() {
   return openDB(DB_NAME, DB_VERSION, {
@@ -157,4 +158,53 @@ export async function importTemplateFromJSON(file: File): Promise<ConfigTemplate
   existing.push(template);
   await saveConfigTemplates(existing);
   return template;
+}
+
+// ── XLSX Export Templates (separate storage) ──
+
+export interface XlsxExportTemplate {
+  id: string;
+  name: string;
+  columns: import('../types').ExportTemplateColumn[];
+  colorOverrides: import('../types').ExportColorOverrides;
+  includeSkipped?: boolean;
+  excludedCueTypes?: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Load all XLSX export templates from IndexedDB. */
+export async function loadXlsxExportTemplates(): Promise<XlsxExportTemplate[]> {
+  try {
+    const raw = await idbGet<string>(XLSX_TEMPLATES_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed;
+  } catch {
+    return [];
+  }
+}
+
+/** Save all XLSX export templates to IndexedDB. */
+export async function saveXlsxExportTemplates(templates: XlsxExportTemplate[]): Promise<void> {
+  await idbSet(XLSX_TEMPLATES_KEY, JSON.stringify(templates));
+}
+
+/** Save (insert or update) a single XLSX export template. */
+export async function saveXlsxExportTemplate(template: XlsxExportTemplate): Promise<void> {
+  const templates = await loadXlsxExportTemplates();
+  const idx = templates.findIndex((t) => t.id === template.id);
+  if (idx >= 0) {
+    templates[idx] = template;
+  } else {
+    templates.push(template);
+  }
+  await saveXlsxExportTemplates(templates);
+}
+
+/** Delete an XLSX export template by id. */
+export async function deleteXlsxExportTemplate(id: string): Promise<void> {
+  const templates = (await loadXlsxExportTemplates()).filter((t) => t.id !== id);
+  await saveXlsxExportTemplates(templates);
 }
