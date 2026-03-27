@@ -577,6 +577,13 @@ export default function App({
     const root = document.getElementById('root');
     if (!root) return;
     root.className = config.theme !== 'standard' ? `theme-${config.theme}` : '';
+
+    // Update <meta name="theme-color"> so the browser / PWA title bar matches
+    const themeColors: Record<string, string> = {
+      standard: '#141416', bright: '#ffffff', dark: '#0a0a0b', theatre: '#000000',
+    };
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', themeColors[config.theme] ?? '#141416');
   }, [config.theme]);
 
   // Toggle play/pause (Space)
