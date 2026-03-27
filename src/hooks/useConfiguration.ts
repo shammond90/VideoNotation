@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import type { AppConfig, ColumnConfig, FieldDefinition, TemplateData } from '../types';
+import type { AppConfig, ColumnConfig, FieldDefinition, TemplateData, ThemeMode } from '../types';
 import { DEFAULT_CONFIG, DEFAULT_VISIBLE_COLUMNS, RESERVED_CUE_TYPES, getDefaultFieldsForType, DEFAULT_FIELD_DEFINITIONS, labelToFieldKey, ensureUniqueFieldKey } from '../types';
 import { openDB } from 'idb';
 import { loadConfig, saveConfig, backupConfig, exportConfigToJSON, importConfigFromJSON, clearPrimaryData, clearAllIDBData } from '../utils/storage';
@@ -39,7 +39,23 @@ export function useConfiguration() {
   // Load config from IndexedDB on mount
   useEffect(() => {
     loadConfig().then((loaded) => {
-      const migrated = migrateFieldDefinitions(loaded);
+      let migrated = migrateFieldDefinitions(loaded);
+      // Backward-compat: migrate theatreMode boolean → theme enum
+      if (!('theme' in migrated) || typeof (migrated as any).theme !== 'string') {
+        const legacy = (migrated as any).theatreMode;
+        migrated = { ...migrated, theme: legacy === true ? 'theatre' : 'standard' };
+      }
+      // For brand-new users, honour OS colour-scheme preference.
+      // The flash-prevention script in index.html may have already written
+      // a value; if so, adopt it so config and DOM stay in sync.
+      try {
+        const stored = localStorage.getItem('cuetation-theme');
+        if (stored && migrated.theme === 'standard' && stored !== 'standard') {
+          migrated = { ...migrated, theme: stored as ThemeMode };
+        }
+      } catch {}
+      // Sync to localStorage for flash-free reload
+      try { localStorage.setItem('cuetation-theme', migrated.theme); } catch {}
       setConfig(migrated);
       setConfigLoaded(true);
       initialLoadDone.current = true;
@@ -187,8 +203,9 @@ export function useConfiguration() {
     setConfig((prev) => ({ ...prev, cueSheetView: view }));
   }, []);
 
-  const setTheatreMode = useCallback((enabled: boolean) => {
-    setConfig((prev) => ({ ...prev, theatreMode: enabled }));
+  const setTheme = useCallback((theme: ThemeMode) => {
+    setConfig((prev) => ({ ...prev, theme }));
+    try { localStorage.setItem('cuetation-theme', theme); } catch {}
   }, []);
 
   const setShowVideoTimecode = useCallback((show: boolean) => {
@@ -201,6 +218,10 @@ export function useConfiguration() {
 
   const setAutoplayAfterCue = useCallback((enabled: boolean) => {
     setConfig((prev) => ({ ...prev, autoplayAfterCue: enabled }));
+  }, []);
+
+  const setVideoBrightness = useCallback((brightness: number) => {
+    setConfig((prev) => ({ ...prev, videoBrightness: Math.max(0.2, Math.min(1.8, brightness)) }));
   }, []);
 
   const setCueBackupInterval = useCallback((minutes: number) => {
@@ -376,7 +397,7 @@ export function useConfiguration() {
         Object.entries(data.cueTypeColumns).map(([k, v]) => [k, v.map((c) => ({ ...c }))])
       ),
       cueSheetView: data.cueSheetView,
-      theatreMode: data.theatreMode,
+      theme: data.theme ?? ((data as any).theatreMode === true ? 'theatre' : 'standard'),
       showShortCodes: data.showShortCodes,
       showPastCues: data.showPastCues,
       showSkippedCues: data.showSkippedCues,
@@ -593,10 +614,11 @@ export function useConfiguration() {
     setShowSkippedCues,
     setDistanceView,
     setCueSheetView,
-    setTheatreMode,
+    setTheme,
     setShowVideoTimecode,
     setVideoTimecodePosition,
     setAutoplayAfterCue,
+    setVideoBrightness,
     setCueBackupInterval,
     setCueTypeAllowStandby,
     setCueTypeAllowWarning,

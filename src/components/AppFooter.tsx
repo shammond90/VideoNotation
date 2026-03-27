@@ -8,7 +8,7 @@ const AppFooter: React.FC = () => {
   const [showGuide, setShowGuide] = useState(false);
 
   const linkStyle: React.CSSProperties = {
-    color: '#666',
+    color: 'var(--text-dim)',
     fontSize: '0.75rem',
     cursor: 'pointer',
     textDecoration: 'none',
@@ -28,8 +28,8 @@ const AppFooter: React.FC = () => {
           alignItems: 'center',
           gap: '16px',
           padding: '6px 16px',
-          backgroundColor: '#1a1a1a',
-          borderTop: '1px solid #2a2a2a',
+          backgroundColor: 'var(--bg-raised)',
+          borderTop: '1px solid var(--border)',
           zIndex: 100,
           fontSize: '0.75rem',
         }}
@@ -37,17 +37,17 @@ const AppFooter: React.FC = () => {
         <span
           style={linkStyle}
           onClick={() => setShowFeatures(true)}
-          onMouseEnter={(e) => (e.currentTarget.style.color = '#f0c674')}
-          onMouseLeave={(e) => (e.currentTarget.style.color = '#666')}
+          onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--amber)')}
+          onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-dim)')}
         >
           Feature Notes
         </span>
-        <span style={{ color: '#333' }}>•</span>
+        <span style={{ color: 'var(--border)' }}>•</span>
         <span
           style={linkStyle}
           onClick={() => setShowGuide(true)}
-          onMouseEnter={(e) => (e.currentTarget.style.color = '#f0c674')}
-          onMouseLeave={(e) => (e.currentTarget.style.color = '#666')}
+          onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--amber)')}
+          onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-dim)')}
         >
           User Guide
         </span>

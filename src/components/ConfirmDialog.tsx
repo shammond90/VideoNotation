@@ -21,9 +21,9 @@ export interface ConfirmDialogProps {
 }
 
 const variantStyles: Record<ConfirmVariant, { bg: string; hoverBg: string; border: string }> = {
-  danger: { bg: '#dc2626', hoverBg: '#b91c1c', border: '#991b1b' },
-  warning: { bg: 'var(--amber, #bf5700)', hoverBg: 'var(--amber-hi, #d4690a)', border: 'var(--amber, #bf5700)' },
-  neutral: { bg: 'var(--bg-panel, #1e1e24)', hoverBg: 'var(--bg-hover, #2a2a32)', border: 'var(--border-hi, #3a3a42)' },
+  danger: { bg: 'var(--danger)', hoverBg: 'var(--danger-hi)', border: 'var(--danger-hi)' },
+  warning: { bg: 'var(--amber)', hoverBg: 'var(--amber-hi)', border: 'var(--amber)' },
+  neutral: { bg: 'var(--bg-panel)', hoverBg: 'var(--bg-hover)', border: 'var(--border-hi)' },
 };
 
 const iconMap = {
@@ -99,34 +99,35 @@ export function ConfirmDialog({
 
   const style = variantStyles[variant];
   const IconComponent = iconMap[icon ?? defaultIcon(variant)];
-  const iconColor = variant === 'danger' ? '#f87171' : variant === 'warning' ? '#fbbf24' : 'var(--text-mid, #999)';
+  const iconColor = variant === 'danger' ? 'var(--danger)' : variant === 'warning' ? 'var(--amber)' : 'var(--text-mid)';
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-[60] flex items-center justify-center backdrop-blur-sm"
+      style={{ background: 'var(--overlay)' }}
       onClick={handleBackdropClick}
     >
       <div
         className="rounded-xl shadow-2xl w-full max-w-sm p-6 animate-in zoom-in-95 fade-in duration-150"
-        style={{ background: 'var(--bg-card, #1a1a1f)', border: '1px solid var(--border, #2a2a30)' }}
+        style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
       >
         {/* Icon + Title */}
         <div className="flex items-center gap-3 mb-3">
           <div
             className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
-            style={{ background: variant === 'danger' ? 'rgba(239,68,68,0.12)' : variant === 'warning' ? 'rgba(251,191,36,0.12)' : 'var(--bg-panel, #141418)' }}
+            style={{ background: variant === 'danger' ? 'var(--red-dim)' : variant === 'warning' ? 'var(--amber-dim)' : 'var(--bg-panel)' }}
           >
             <IconComponent className="w-5 h-5" style={{ color: iconColor }} />
           </div>
-          <h2 className="text-lg font-semibold" style={{ color: 'var(--text, #e5e5e5)' }}>{title}</h2>
+          <h2 className="text-lg font-semibold" style={{ color: 'var(--text)' }}>{title}</h2>
         </div>
 
         {/* Message */}
-        <p className="text-sm mb-1 leading-relaxed" style={{ color: 'var(--text-mid, #999)', marginLeft: 52 }}>
+        <p className="text-sm mb-1 leading-relaxed" style={{ color: 'var(--text-mid)', marginLeft: 52 }}>
           {message}
         </p>
         {detail && (
-          <p className="text-xs leading-relaxed mt-1" style={{ color: 'var(--text-dim, #666)', marginLeft: 52 }}>
+          <p className="text-xs leading-relaxed mt-1" style={{ color: 'var(--text-dim)', marginLeft: 52 }}>
             {detail}
           </p>
         )}
@@ -134,8 +135,8 @@ export function ConfirmDialog({
         {/* Type-to-confirm input */}
         {requireText && (
           <div className="mt-4" style={{ marginLeft: 52 }}>
-            <label className="block text-xs mb-1.5" style={{ color: 'var(--text-dim, #666)' }}>
-              Type <span className="font-mono font-semibold" style={{ color: 'var(--text, #e5e5e5)' }}>{requireText}</span> to confirm
+            <label className="block text-xs mb-1.5" style={{ color: 'var(--text-dim)' }}>
+              Type <span className="font-mono font-semibold" style={{ color: 'var(--text)' }}>{requireText}</span> to confirm
             </label>
             <input
               type="text"
@@ -146,12 +147,12 @@ export function ConfirmDialog({
               spellCheck={false}
               className="w-full px-3 py-1.5 text-sm rounded-md outline-none"
               style={{
-                background: 'var(--bg-panel, #1e1e24)',
-                color: 'var(--text, #e5e5e5)',
-                border: '1px solid var(--border-hi, #3a3a42)',
+                background: 'var(--bg-panel)',
+                color: 'var(--text)',
+                border: '1px solid var(--border-hi)',
               }}
-              onFocus={(e) => { e.currentTarget.style.borderColor = variant === 'danger' ? '#dc2626' : 'var(--amber, #bf5700)'; }}
-              onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--border-hi, #3a3a42)'; }}
+              onFocus={(e) => { e.currentTarget.style.borderColor = variant === 'danger' ? 'var(--danger)' : 'var(--amber)'; }}
+              onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--border-hi)'; }}
             />
           </div>
         )}
@@ -164,12 +165,12 @@ export function ConfirmDialog({
             onClick={onCancel}
             className="px-4 py-2 text-sm rounded-lg transition-colors"
             style={{
-              background: 'var(--bg-panel, #1e1e24)',
-              color: 'var(--text-mid, #999)',
-              border: '1px solid var(--border, #2a2a30)',
+              background: 'var(--bg-panel)',
+              color: 'var(--text-mid)',
+              border: '1px solid var(--border)',
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover, #2a2a32)'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-panel, #1e1e24)'; }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-panel)'; }}
           >
             {cancelLabel}
           </button>
@@ -180,8 +181,8 @@ export function ConfirmDialog({
             disabled={isConfirmDisabled}
             className="px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             style={{
-              background: isConfirmDisabled ? 'var(--bg-panel, #1e1e24)' : style.bg,
-              border: `1px solid ${isConfirmDisabled ? 'var(--border, #2a2a30)' : style.border}`,
+              background: isConfirmDisabled ? 'var(--bg-panel)' : style.bg,
+              border: `1px solid ${isConfirmDisabled ? 'var(--border)' : style.border}`,
             }}
             onMouseEnter={(e) => { if (!isConfirmDisabled) e.currentTarget.style.background = style.hoverBg; }}
             onMouseLeave={(e) => { if (!isConfirmDisabled) e.currentTarget.style.background = style.bg; }}

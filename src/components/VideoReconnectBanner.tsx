@@ -36,7 +36,7 @@ export function VideoReconnectBanner({
   return (
     <div
       className="w-full flex flex-col items-center justify-center min-h-[300px]"
-      style={{ background: 'linear-gradient(135deg, #0f0f12 0%, #141418 100%)' }}
+      style={{ background: 'var(--bg)' }}
     >
       {bannerState === 'loading' && (
         <div className="text-center">
@@ -136,7 +136,7 @@ export function VideoReconnectBanner({
 
       {bannerState === 'broken' && (
         <div className="text-center max-w-sm">
-          <AlertTriangle className="w-10 h-10 mx-auto mb-3" style={{ color: '#ef4444' }} />
+          <AlertTriangle className="w-10 h-10 mx-auto mb-3" style={{ color: 'var(--danger)' }} />
           <p className="font-mono text-sm mb-1" style={{ color: 'var(--text)' }}>
             File not found
           </p>

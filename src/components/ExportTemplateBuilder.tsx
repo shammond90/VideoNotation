@@ -729,7 +729,7 @@ export function ExportTemplateBuilder({
                     type="checkbox"
                     checked={includeSkipped}
                     onChange={(e) => setIncludeSkipped(e.target.checked)}
-                    className="w-4 h-4 rounded border-[var(--border-hi)] bg-[var(--bg-hover)] text-[var(--amber)] focus:ring-[#BF5700] focus:ring-offset-0 cursor-pointer"
+                    className="w-4 h-4 rounded border-[var(--border-hi)] bg-[var(--bg-hover)] text-[var(--amber)] focus:ring-[var(--border-focus)] focus:ring-offset-0 cursor-pointer"
                   />
                   <span className="text-xs text-[var(--text-mid)]">Include skipped cues</span>
                   <span className="text-[10px] text-[var(--text-dim)]">(italicised in export)</span>

@@ -6,15 +6,15 @@ import { CueContextMenu } from './CueContextMenu';
 import { SlideEditPanel } from './SlideEditPanel';
 import { ExpandedCueView } from './ExpandedCueView';
 import { FlagNotePopover } from './FlagNotePopover';
-import type { Annotation, CueFields, ColumnConfig, CueStatus, FieldDefinition } from '../types';
+import type { Annotation, CueFields, ColumnConfig, CueStatus, FieldDefinition, ThemeMode } from '../types';
 import { RESERVED_CUE_TYPES, CUE_STATUS_COLORS, CUE_STATUSES, CUE_STATUS_LABELS } from '../types';
 import { useCueGrouping, type GroupedItem } from '../hooks/useCueGrouping';
 
 
 
 /** Design tokens for Title / Scene headers */
-const TITLE_COLOR = '#5c6bc0';
-const SCENE_COLOR = '#00acc1';
+const TITLE_COLOR = 'var(--title-color)';
+const SCENE_COLOR = 'var(--scene-color)';
 const TITLE_ROW_HEIGHT = 44;
 const SCENE_ROW_HEIGHT = 38;
 
@@ -33,7 +33,7 @@ interface AnnotationPanelProps {
   onSetExpandedSearchFilter: (expanded: boolean) => void;
   showPastCues: boolean;
   cueSheetView: 'classic' | 'production';
-  theatreMode: boolean;
+  theme: ThemeMode;
   cueTypeFields: Record<string, string[]>;
   fieldDefinitions?: FieldDefinition[];
   mandatoryFields?: Record<string, string[]>;
@@ -283,7 +283,7 @@ export function AnnotationPanel({
   onSetExpandedSearchFilter,
   showPastCues,
   cueSheetView,
-  theatreMode,
+  theme,
   cueTypeFields,
   fieldDefinitions: fieldDefs,
   mandatoryFields,
@@ -1058,11 +1058,11 @@ export function AnnotationPanel({
       const cueColor = getCueColor(cue.type);
       // Left bar colour = live status: warning=blue, standby=amber, active=green
       const leftBarColor = isActive
-        ? (theatreMode ? '#009966' : 'var(--green)')
+        ? 'var(--active-glow)'
         : isStandby
-        ? (theatreMode ? '#ff9900' : 'var(--amber)')
+        ? 'var(--standby-glow)'
         : isWarning
-        ? (theatreMode ? '#0066ff' : 'var(--blue)')
+        ? 'var(--warning-glow)'
         : 'transparent';
       const prodIndentPx = indent === 'scene' ? 40 : indent === 'title' ? 26 : 14;
 
@@ -1104,7 +1104,7 @@ export function AnnotationPanel({
               left: 0,
               top: 0,
               bottom: 0,
-              width: theatreMode ? 4 : 3,
+              width: theme === 'theatre' ? 4 : 3,
               background: leftBarColor,
               transition: 'background 0.15s',
             }}
@@ -1159,10 +1159,10 @@ export function AnnotationPanel({
                     color: fontColor,
                   }}
                 >
-                  <div className={`${isShortCode ? (theatreMode ? 'text-[13px] font-semibold' : 'text-[11px] font-semibold') : 'text-[8px] font-medium'} tracking-wide uppercase`} style={{ opacity: isShortCode ? 1 : 0.8 }}>
+                  <div className={`${isShortCode ? (theme === 'theatre' ? 'text-[13px] font-semibold' : 'text-[11px] font-semibold') : 'text-[8px] font-medium'} tracking-wide uppercase`} style={{ opacity: isShortCode ? 1 : 0.8 }}>
                     {getCueTypeDisplayName(cue.type)}
                   </div>
-                  <div className={`${theatreMode ? 'text-[15px] font-semibold' : 'text-[13px] font-medium'}${isCut ? ' line-through' : ''}`}>
+                  <div className={`${theme === 'theatre' ? 'text-[15px] font-semibold' : 'text-[13px] font-medium'}${isCut ? ' line-through' : ''}`}>
                     {cue.cueNumber || '—'}
                   </div>
                 </div>
@@ -1190,16 +1190,16 @@ export function AnnotationPanel({
                 {extraChips.map((chip) => (
                   <span
                     key={chip.key}
-                    className={`inline-flex items-baseline gap-1 font-mono ${theatreMode ? 'text-[11px]' : 'text-[10px]'} shrink-0 whitespace-nowrap`}
+                    className={`inline-flex items-baseline gap-1 font-mono ${theme === 'theatre' ? 'text-[11px]' : 'text-[10px]'} shrink-0 whitespace-nowrap`}
                     style={{
                       background: 'var(--bg-panel)',
-                      border: `1px solid ${theatreMode ? 'var(--border-hi)' : 'var(--border)'}`,
+                      border: `1px solid ${theme === 'theatre' ? 'var(--border-hi)' : 'var(--border)'}`,
                       borderRadius: 3,
                       padding: '2px 6px',
                       lineHeight: 1.4,
                     }}
                   >
-                    <span className="uppercase text-[9px] tracking-wide" style={{ color: theatreMode ? 'var(--text-mid)' : 'var(--text-dim)' }}>{chip.label}</span>
+                    <span className="uppercase text-[9px] tracking-wide" style={{ color: theme === 'theatre' ? 'var(--text-mid)' : 'var(--text-dim)' }}>{chip.label}</span>
                     <span style={{ color: 'var(--text-mid)' }}>{chip.value}</span>
                   </span>
                 ))}
@@ -1211,21 +1211,21 @@ export function AnnotationPanel({
                 style={{ borderLeft: '1px solid var(--border)' }}
               >
                 {statusColor && (
-                  <span className={`${theatreMode ? 'w-2 h-2' : 'w-1.5 h-1.5'} rounded-full shrink-0`} style={{ background: statusColor }} title={annotation.status} />
+                  <span className={`${theme === 'theatre' ? 'w-2 h-2' : 'w-1.5 h-1.5'} rounded-full shrink-0`} style={{ background: statusColor }} title={annotation.status} />
                 )}
                 {isFlagged && (
-                  <span title={annotation.flagNote || 'Flagged'} style={{ color: 'var(--flag)', fontSize: theatreMode ? 12 : 10, lineHeight: 1 }}>
-                    <Flag className={theatreMode ? 'w-3 h-3' : 'w-2.5 h-2.5'} />
+                  <span title={annotation.flagNote || 'Flagged'} style={{ color: 'var(--flag)', fontSize: theme === 'theatre' ? 12 : 10, lineHeight: 1 }}>
+                    <Flag className={theme === 'theatre' ? 'w-3 h-3' : 'w-2.5 h-2.5'} />
                   </span>
                 )}
                 {showTimestamp && (
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); onSeek(annotation.timestamp); e.currentTarget.blur(); }}
-                    className={`font-mono ${theatreMode ? 'text-[11px]' : 'text-[10px]'} tracking-wide shrink-0 whitespace-nowrap transition-colors cursor-pointer`}
-                    style={{ color: theatreMode ? 'var(--text-mid)' : 'var(--text-dim)', fontWeight: theatreMode ? 500 : undefined, letterSpacing: theatreMode ? '0.06em' : undefined }}
+                    className={`font-mono ${theme === 'theatre' ? 'text-[11px]' : 'text-[10px]'} tracking-wide shrink-0 whitespace-nowrap transition-colors cursor-pointer`}
+                    style={{ color: theme === 'theatre' ? 'var(--text-mid)' : 'var(--text-dim)', fontWeight: theme === 'theatre' ? 500 : undefined, letterSpacing: theme === 'theatre' ? '0.06em' : undefined }}
                     onMouseEnter={e => { e.currentTarget.style.color = 'var(--text)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.color = theatreMode ? 'var(--text-mid)' : 'var(--text-dim)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.color = theme === 'theatre' ? 'var(--text-mid)' : 'var(--text-dim)'; }}
                   >
                     {formatTime(annotation.timestamp)}
                   </button>
@@ -1359,9 +1359,9 @@ export function AnnotationPanel({
               </div>
 
             {isDeleting && (
-              <div className="flex items-center gap-2 text-sm px-3 pb-2 pt-1 border-t" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
-                <span className="text-red-400 text-xs">Delete this cue?</span>
-                <button type="button" onClick={(e) => { e.stopPropagation(); onDelete(annotation.id); setDeletingId(null); }} className="text-xs px-2 py-0.5 bg-red-600 text-white rounded hover:bg-red-500">Yes</button>
+              <div className="flex items-center gap-2 text-sm px-3 pb-2 pt-1 border-t" style={{ borderColor: 'var(--border)' }}>
+                <span className="text-[var(--danger)] text-xs">Delete this cue?</span>
+                <button type="button" onClick={(e) => { e.stopPropagation(); onDelete(annotation.id); setDeletingId(null); }} className="text-xs px-2 py-0.5 bg-[var(--danger)] text-white rounded hover:bg-[var(--danger-hi)]">Yes</button>
                 <button type="button" onClick={(e) => { e.stopPropagation(); setDeletingId(null); }} className="text-xs px-2 py-0.5 rounded" style={{ background: 'var(--bg-panel)', color: 'var(--text-mid)' }} onMouseEnter={e=>(e.currentTarget.style.background='var(--bg-hover)')} onMouseLeave={e=>(e.currentTarget.style.background='var(--bg-panel)')}>No</button>
               </div>
             )}

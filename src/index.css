@@ -7,54 +7,61 @@
   --font-mono:    'DM Mono', 'Fira Code', monospace;
   --font-display: 'Instrument Serif', Georgia, serif;
 
-  /* Surface colours as Tailwind design tokens */
-  --color-surface:       #141416;
-  --color-surface-raised: #1a1a1e;
-  --color-surface-card:  #1f1f24;
-  --color-surface-panel: #232329;
-  --color-surface-input: #2a2a32;
-  --color-surface-hover: #2e2e38;
+  /* Surface colours — reference CSS variables so Tailwind classes adapt to theme */
+  --color-surface:        var(--bg);
+  --color-surface-raised: var(--bg-raised);
+  --color-surface-card:   var(--bg-card);
+  --color-surface-panel:  var(--bg-panel);
+  --color-surface-input:  var(--bg-input);
+  --color-surface-hover:  var(--bg-hover);
 
   /* Border tokens */
-  --color-border:        #2c2c36;
-  --color-border-hi:     #3a3a46;
-  --color-border-focus:  #BF5700;
+  --color-border:         var(--border);
+  --color-border-hi:      var(--border-hi);
+  --color-border-focus:   var(--border-focus);
 
   /* Text tokens */
-  --color-text:          #ede9e3;
-  --color-text-mid:      #8a8680;
-  --color-text-dim:      #4e4a56;
-  --color-text-inv:      #111110;
+  --color-text:           var(--text);
+  --color-text-mid:       var(--text-mid);
+  --color-text-dim:       var(--text-dim);
+  --color-text-inv:       var(--text-inv);
 
   /* Brand — burnt orange */
-  --color-amber:         #BF5700;
-  --color-amber-hi:      #d4600a;
+  --color-amber:          var(--amber);
+  --color-amber-hi:       var(--amber-hi);
 
   /* Semantic */
-  --color-ok:            #3d9962;
-  --color-warn:          #c49a2a;
-  --color-danger:        #c84848;
+  --color-ok:             var(--green);
+  --color-warn:           var(--yellow);
+  --color-danger:         var(--red);
 }
 
-/* ─── CSS CUSTOM PROPERTIES (for non-Tailwind use) ─────────── */
+/* ═══════════════════════════════════════════════════════════════
+   STANDARD — the current default (dark grays)
+   ═══════════════════════════════════════════════════════════════ */
 :root {
+  /* Surfaces */
   --bg:           #141416;
   --bg-raised:    #1a1a1e;
   --bg-card:      #1f1f24;
   --bg-panel:     #232329;
   --bg-input:     #2a2a32;
   --bg-hover:     #2e2e38;
+  /* Borders */
   --border:       #2c2c36;
   --border-hi:    #3a3a46;
   --border-focus: #BF5700;
+  /* Text */
   --text:         #ede9e3;
   --text-mid:     #8a8680;
   --text-dim:     #4e4a56;
   --text-inv:     #111110;
+  /* Brand */
   --amber:        #BF5700;
   --amber-hi:     #d4600a;
   --amber-dim:    rgba(191,87,0,0.15);
   --amber-glow:   rgba(191,87,0,0.22);
+  /* Semantic */
   --green:        #3d9962;
   --green-dim:    rgba(61,153,98,0.15);
   --red:          #c84848;
@@ -64,37 +71,201 @@
   --blue:         #2d9cdb;
   --blue-dim:     rgba(45,156,219,0.15);
   --flag:         #f59e0b;
+  /* Semantic extras (used by components with previously-hardcoded colours) */
+  --danger:       #dc2626;
+  --danger-hi:    #b91c1c;
+  --info:         #3b82f6;
+  --info-dim:     rgba(59,130,246,0.15);
+  --success:      #10b981;
+  --success-dim:  rgba(16,185,129,0.15);
+  --title-color:  #5c6bc0;
+  --scene-color:  #00acc1;
+  --overlay:      rgba(0,0,0,0.60);
+  --active-glow:  var(--green);
+  --standby-glow: var(--amber);
+  --warning-glow: var(--blue);
+  /* Toast backgrounds */
+  --toast-success-bg: #065f46;
+  --toast-error-bg:   #7f1d1d;
+  --toast-info-bg:    #1e3a5f;
+  --toast-warning-bg: #78350f;
+  /* Code / kbd */
+  --code-bg:      #1e1e2a;
+  --code-text:    #e0e0e0;
+  --kbd-bg:       #2a2a36;
+  --kbd-border:   #444;
+  /* Radii & shadows */
   --r-sm:         3px;
   --r-md:         6px;
   --r-lg:         10px;
   --shadow-sm:    0 1px 3px rgba(0,0,0,0.4);
   --shadow-md:    0 4px 16px rgba(0,0,0,0.5);
   --shadow-lg:    0 8px 40px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.03);
-
-  /* Alpha variants for Tailwind arbitrary-value classes (can't use /50 with var()) */
+  /* Alpha variants */
   --bg-panel-a50:    rgba(35,35,41,0.5);
   --border-hi-a50:   rgba(58,58,70,0.5);
 }
 
-/* ─── THEATRE MODE (low-brightness override) ─────────────────── */
-.theatre-mode {
+/* ═══════════════════════════════════════════════════════════════
+   BRIGHT — light theme (white backgrounds, dark text)
+   ═══════════════════════════════════════════════════════════════ */
+.theme-bright {
+  /* Surfaces */
+  --bg:           #f5f5f7;
+  --bg-raised:    #ffffff;
+  --bg-card:      #ffffff;
+  --bg-panel:     #eeeef2;
+  --bg-input:     #ffffff;
+  --bg-hover:     #e4e4ea;
+  /* Borders */
+  --border:       #d0d0d8;
+  --border-hi:    #b8b8c4;
+  --border-focus: #BF5700;
+  /* Text */
+  --text:         #1a1a1e;
+  --text-mid:     #5a5864;
+  --text-dim:     #8a8894;
+  --text-inv:     #ffffff;
+  /* Brand */
+  --amber:        #BF5700;
+  --amber-hi:     #a64b00;
+  --amber-dim:    rgba(191,87,0,0.10);
+  --amber-glow:   rgba(191,87,0,0.15);
+  /* Semantic */
+  --green:        #1a7a3d;
+  --green-dim:    rgba(26,122,61,0.10);
+  --red:          #b53030;
+  --red-dim:      rgba(181,48,48,0.10);
+  --yellow:       #9a7a10;
+  --yellow-dim:   rgba(154,122,16,0.10);
+  --blue:         #1a6fb8;
+  --blue-dim:     rgba(26,111,184,0.10);
+  --flag:         #d48800;
+  /* Semantic extras */
+  --danger:       #dc2626;
+  --danger-hi:    #b91c1c;
+  --info:         #2563eb;
+  --info-dim:     rgba(37,99,235,0.10);
+  --success:      #059669;
+  --success-dim:  rgba(5,150,105,0.10);
+  --title-color:  #4a56a8;
+  --scene-color:  #008fa3;
+  --overlay:      rgba(0,0,0,0.30);
+  --active-glow:  var(--green);
+  --standby-glow: var(--amber);
+  --warning-glow: var(--blue);
+  /* Toast backgrounds */
+  --toast-success-bg: #d1fae5;
+  --toast-error-bg:   #fee2e2;
+  --toast-info-bg:    #dbeafe;
+  --toast-warning-bg: #fef3c7;
+  /* Code / kbd */
+  --code-bg:      #f0f0f4;
+  --code-text:    #1a1a1e;
+  --kbd-bg:       #e4e4ea;
+  --kbd-border:   #b8b8c4;
+  /* Shadows */
+  --shadow-sm:    0 1px 3px rgba(0,0,0,0.08);
+  --shadow-md:    0 4px 16px rgba(0,0,0,0.10);
+  --shadow-lg:    0 8px 40px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.05);
+  /* Alpha variants */
+  --bg-panel-a50:    rgba(238,238,242,0.5);
+  --border-hi-a50:   rgba(184,184,196,0.5);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   DARK — deeper darks, halfway between Standard and Theatre
+   ═══════════════════════════════════════════════════════════════ */
+.theme-dark {
+  /* Surfaces */
+  --bg:           #0a0a0b;
+  --bg-raised:    #121214;
+  --bg-card:      #17171a;
+  --bg-panel:     #1c1c1f;
+  --bg-input:     #222226;
+  --bg-hover:     #26262b;
+  /* Borders */
+  --border:       #2b2b30;
+  --border-hi:    #3c3c42;
+  --border-focus: #df6900;
+  /* Text */
+  --text:         #f6f4f1;
+  --text-mid:     #a9a59f;
+  --text-dim:     #635f63;
+  --text-inv:     #090908;
+  /* Brand */
+  --amber:        #df6900;
+  --amber-hi:     #ea8628;
+  --amber-dim:    rgba(223,105,0,0.18);
+  --amber-glow:   rgba(223,105,0,0.25);
+  /* Semantic */
+  --green:        #4dc179;
+  --green-dim:    rgba(77,193,121,0.16);
+  --red:          #dc4f4f;
+  --red-dim:      rgba(220,79,79,0.16);
+  --yellow:       #daad30;
+  --yellow-dim:   rgba(218,173,48,0.16);
+  --blue:         #45b6ed;
+  --blue-dim:     rgba(69,182,237,0.16);
+  --flag:         #faaf26;
+  /* Semantic extras */
+  --danger:       #ef4444;
+  --danger-hi:    #dc2626;
+  --info:         #60a5fa;
+  --info-dim:     rgba(96,165,250,0.16);
+  --success:      #34d399;
+  --success-dim:  rgba(52,211,153,0.16);
+  --title-color:  #7986cb;
+  --scene-color:  #26c6da;
+  --overlay:      rgba(0,0,0,0.65);
+  --active-glow:  var(--green);
+  --standby-glow: var(--amber);
+  --warning-glow: var(--blue);
+  /* Toast backgrounds */
+  --toast-success-bg: #064e3b;
+  --toast-error-bg:   #6f1b1b;
+  --toast-info-bg:    #1a3250;
+  --toast-warning-bg: #6b2f0a;
+  /* Code / kbd */
+  --code-bg:      #15151a;
+  --code-text:    #e8e8e8;
+  --kbd-bg:       #222228;
+  --kbd-border:   #3c3c42;
+  /* Shadows */
+  --shadow-sm:    0 1px 3px rgba(0,0,0,0.5);
+  --shadow-md:    0 4px 16px rgba(0,0,0,0.6);
+  --shadow-lg:    0 8px 40px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.025);
+  /* Alpha variants */
+  --bg-panel-a50:    rgba(28,28,31,0.5);
+  --border-hi-a50:   rgba(60,60,66,0.5);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   THEATRE — pure black, boosted contrast for dark environments
+   ═══════════════════════════════════════════════════════════════ */
+.theme-theatre {
+  /* Surfaces */
   --bg:           #000000;
   --bg-raised:    #0a0a0a;
   --bg-card:      #0f0f0f;
   --bg-panel:     #141414;
   --bg-input:     #1a1a1a;
   --bg-hover:     #1e1e1e;
+  /* Borders */
   --border:       #2a2a2a;
   --border-hi:    #3d3d3d;
   --border-focus: #ff7a00;
+  /* Text */
   --text:         #ffffff;
   --text-mid:     #c8c4be;
   --text-dim:     #787470;
   --text-inv:     #000000;
+  /* Brand */
   --amber:        #ff9020;
   --amber-hi:     #ffab45;
   --amber-dim:    rgba(255,122,0,0.20);
   --amber-glow:   rgba(255,122,0,0.28);
+  /* Semantic */
   --green:        #5de890;
   --green-dim:    rgba(93,232,144,0.18);
   --red:          #f05555;
@@ -104,10 +275,33 @@
   --blue:         #5ccfff;
   --blue-dim:     rgba(92,207,255,0.18);
   --flag:         #ffc040;
+  /* Semantic extras */
+  --danger:       #f87171;
+  --danger-hi:    #ef4444;
+  --info:         #93c5fd;
+  --info-dim:     rgba(147,197,253,0.18);
+  --success:      #6ee7b7;
+  --success-dim:  rgba(110,231,183,0.18);
+  --title-color:  #9fa8da;
+  --scene-color:  #4dd0e1;
+  --overlay:      rgba(0,0,0,0.70);
+  --active-glow:  #009966;
+  --standby-glow: #ff9900;
+  --warning-glow: #0066ff;
+  /* Toast backgrounds */
+  --toast-success-bg: #053f30;
+  --toast-error-bg:   #5f1515;
+  --toast-info-bg:    #152a42;
+  --toast-warning-bg: #5a2808;
+  /* Code / kbd */
+  --code-bg:      #0e0e12;
+  --code-text:    #f0f0f0;
+  --kbd-bg:       #1a1a1e;
+  --kbd-border:   #3d3d3d;
+  /* Shadows */
   --shadow-sm:    0 1px 3px rgba(0,0,0,0.6);
   --shadow-md:    0 4px 16px rgba(0,0,0,0.7);
   --shadow-lg:    0 8px 40px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.02);
-
   /* Alpha variants */
   --bg-panel-a50:    rgba(20,20,20,0.5);
   --border-hi-a50:   rgba(61,61,61,0.5);
@@ -138,7 +332,7 @@ body {
 
 /* ─── ACTIVE CUE ─────────────────────────────────────────────── */
 .cue-active {
-  box-shadow: 0 0 0 1px rgba(191,87,0,0.4);
+  box-shadow: 0 0 0 1px var(--amber-glow);
 }
 
 /* ─── PROGRESS BAR ACCENT ────────────────────────────────────── */

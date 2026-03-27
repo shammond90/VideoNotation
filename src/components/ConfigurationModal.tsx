@@ -1,7 +1,7 @@
 import React, { useState, useRef, useMemo, useCallback, useEffect } from 'react';
 import { X, Plus, Trash2, GripVertical, Download, Lock, Pencil, Check, AlertTriangle, ChevronDown, ChevronRight, Save, FileUp, Info, UserCircle, RotateCcw, Archive, Star, Tag, List, LayoutGrid, Eye, EyeOff, Keyboard, Bookmark, FolderOpen } from 'lucide-react';
-import type { ColumnConfig, Project, AppConfig, FieldDefinition, ConfigTemplate, TemplateData, Toast } from '../types';
-import { RESERVED_CUE_TYPES, EDITABLE_FIELD_KEYS, LINK_COLUMN_KEYS, getDefaultFieldsForType, getFieldLabel, extractTemplateData, FACTORY_DEFAULT_TEMPLATE } from '../types';
+import type { ColumnConfig, Project, AppConfig, FieldDefinition, ConfigTemplate, TemplateData, Toast, ThemeMode } from '../types';
+import { RESERVED_CUE_TYPES, EDITABLE_FIELD_KEYS, LINK_COLUMN_KEYS, getDefaultFieldsForType, getFieldLabel, extractTemplateData, FACTORY_DEFAULT_TEMPLATE, THEME_MODES, THEME_LABELS, THEME_DESCRIPTIONS } from '../types';
 import { loadConfigTemplates, saveConfigTemplate, deleteConfigTemplate, renameConfigTemplate, exportTemplateToJSON, importTemplateFromJSON, getDefaultTemplate, setDefaultTemplate } from '../utils/configTemplates';
 import { loadProjects, deleteProject as deleteProjectFromStorage, updateProjectMetadata, exportProjectToJSON } from '../utils/projectStorage';
 import {
@@ -73,8 +73,8 @@ interface ConfigurationModalProps {
   showVideoTimecode: boolean;
   cueSheetView: 'classic' | 'production';
   onSetCueSheetView: (view: 'classic' | 'production') => void;
-  theatreMode: boolean;
-  onSetTheatreMode: (enabled: boolean) => void;
+  theme: ThemeMode;
+  onSetTheme: (theme: ThemeMode) => void;
   currentVideoName?: string;
   currentVideoSize?: number;
   cueBackupIntervalMinutes: number;
@@ -172,7 +172,7 @@ function SortableColumnItem({
           type="checkbox"
           checked={column.visible}
           onChange={onToggle}
-          className="w-4 h-4 rounded border-[var(--border-hi)] bg-[var(--bg-hover)] text-[var(--amber)] focus:ring-[#BF5700] focus:ring-offset-0 cursor-pointer"
+          className="w-4 h-4 rounded border-[var(--border-hi)] bg-[var(--bg-hover)] text-[var(--amber)] focus:ring-[var(--border-focus)] focus:ring-offset-0 cursor-pointer"
         />
         <span className="text-sm text-[var(--text)]">{column.label}</span>
         <span className="text-[10px] text-[var(--text-dim)] font-mono">({column.key})</span>
@@ -285,7 +285,7 @@ function SortableFieldItem({
           checked={isActive}
           onChange={onToggle}
           disabled={isLocked}
-          className="w-3.5 h-3.5 rounded border-[var(--border-hi)] bg-[var(--bg-hover)] text-[var(--amber)] focus:ring-[#BF5700] focus:ring-offset-0 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-3.5 h-3.5 rounded border-[var(--border-hi)] bg-[var(--bg-hover)] text-[var(--amber)] focus:ring-[var(--border-focus)] focus:ring-offset-0 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         />
         <span className={`text-[11px] ${isActive ? 'text-[var(--text)]' : 'text-[var(--text-dim)]'}`}>
           {label}
@@ -418,7 +418,7 @@ function ProjectAdminTab({ liveConfig }: { liveConfig: AppConfig }) {
                     type="text"
                     value={editForm.production_name}
                     onChange={(e) => setEditForm((f) => ({ ...f, production_name: e.target.value }))}
-                    className="w-full bg-[var(--bg)] border border-[var(--border-hi)] rounded px-2 py-1 text-sm text-white focus:outline-none focus:ring-1 focus:ring-[#BF5700]"
+                    className="w-full bg-[var(--bg)] border border-[var(--border-hi)] rounded px-2 py-1 text-sm text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--border-focus)]"
                     placeholder="Production name"
                   />
                 </div>
@@ -428,7 +428,7 @@ function ProjectAdminTab({ liveConfig }: { liveConfig: AppConfig }) {
                     type="text"
                     value={editForm.choreographer}
                     onChange={(e) => setEditForm((f) => ({ ...f, choreographer: e.target.value }))}
-                    className="w-full bg-[var(--bg)] border border-[var(--border-hi)] rounded px-2 py-1 text-sm text-white focus:outline-none focus:ring-1 focus:ring-[#BF5700]"
+                    className="w-full bg-[var(--bg)] border border-[var(--border-hi)] rounded px-2 py-1 text-sm text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--border-focus)]"
                     placeholder="Choreographer"
                   />
                 </div>
@@ -439,7 +439,7 @@ function ProjectAdminTab({ liveConfig }: { liveConfig: AppConfig }) {
                       type="text"
                       value={editForm.venue}
                       onChange={(e) => setEditForm((f) => ({ ...f, venue: e.target.value }))}
-                      className="w-full bg-[var(--bg)] border border-[var(--border-hi)] rounded px-2 py-1 text-sm text-white focus:outline-none focus:ring-1 focus:ring-[#BF5700]"
+                      className="w-full bg-[var(--bg)] border border-[var(--border-hi)] rounded px-2 py-1 text-sm text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--border-focus)]"
                       placeholder="Venue"
                     />
                   </div>
@@ -449,7 +449,7 @@ function ProjectAdminTab({ liveConfig }: { liveConfig: AppConfig }) {
                       type="text"
                       value={editForm.year}
                       onChange={(e) => setEditForm((f) => ({ ...f, year: e.target.value }))}
-                      className="w-full bg-[var(--bg)] border border-[var(--border-hi)] rounded px-2 py-1 text-sm text-white focus:outline-none focus:ring-1 focus:ring-[#BF5700]"
+                      className="w-full bg-[var(--bg)] border border-[var(--border-hi)] rounded px-2 py-1 text-sm text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--border-focus)]"
                       placeholder="Year"
                     />
                   </div>
@@ -459,7 +459,7 @@ function ProjectAdminTab({ liveConfig }: { liveConfig: AppConfig }) {
                   <textarea
                     value={editForm.notes}
                     onChange={(e) => setEditForm((f) => ({ ...f, notes: e.target.value }))}
-                    className="w-full bg-[var(--bg)] border border-[var(--border-hi)] rounded px-2 py-1 text-sm text-white focus:outline-none focus:ring-1 focus:ring-[#BF5700] resize-none"
+                    className="w-full bg-[var(--bg)] border border-[var(--border-hi)] rounded px-2 py-1 text-sm text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--border-focus)] resize-none"
                     rows={2}
                     placeholder="Notes"
                   />
@@ -578,8 +578,8 @@ export function ConfigurationModal({
   showVideoTimecode,
   cueSheetView,
   onSetCueSheetView,
-  theatreMode,
-  onSetTheatreMode,
+  theme,
+  onSetTheme,
   currentVideoName,
   currentVideoSize,
   cueBackupIntervalMinutes,
@@ -848,7 +848,7 @@ export function ConfigurationModal({
   const typesAvailableForOverride = allTypesForOverride.filter((t) => !cueTypeColumns[t]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm" style={{ background: 'var(--overlay)' }}>
       <div
         className="flex flex-col overflow-hidden rounded-xl border shadow-2xl"
         style={{
@@ -857,7 +857,7 @@ export function ConfigurationModal({
           height: '85vh',
           background: 'var(--bg-raised)',
           borderColor: 'var(--border-hi)',
-          boxShadow: '0 24px 80px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.03)',
+          boxShadow: 'var(--shadow-lg)',
         }}
       >
         {/* ─── HEADER ─── */}
@@ -945,7 +945,7 @@ export function ConfigurationModal({
                     }
                   }}
                   placeholder="New type name..."
-                  className="flex-1 bg-[var(--bg-panel)] text-[var(--text)] rounded px-3 py-2 text-sm border border-[var(--border-hi)] focus:border-[var(--amber)] focus:ring-1 focus:ring-[#BF5700] outline-none placeholder-slate-500"
+                  className="flex-1 bg-[var(--bg-panel)] text-[var(--text)] rounded px-3 py-2 text-sm border border-[var(--border-hi)] focus:border-[var(--amber)] focus:ring-1 focus:ring-[var(--border-focus)] outline-none placeholder-[var(--text-dim)]"
                 />
                 <button
                   type="button"
@@ -1007,7 +1007,7 @@ export function ConfigurationModal({
                                 }
                               }}
                               autoFocus
-                              className="flex-1 bg-[var(--bg-hover)] text-[var(--text)] rounded px-2 py-1 text-sm border border-[var(--amber)] focus:ring-1 focus:ring-[#BF5700] outline-none"
+                              className="flex-1 bg-[var(--bg-hover)] text-[var(--text)] rounded px-2 py-1 text-sm border border-[var(--amber)] focus:ring-1 focus:ring-[var(--border-focus)] outline-none"
                             />
                             <button
                               type="button"
@@ -1082,7 +1082,7 @@ export function ConfigurationModal({
                             placeholder="SC"
                             maxLength={4}
                             title="Short code (max 4 characters)"
-                            className="w-10 h-6 text-center text-xs bg-[var(--bg-hover)] text-[var(--text)] rounded border border-[var(--border-hi)] focus:border-[var(--amber)] focus:ring-1 focus:ring-[#BF5700] outline-none placeholder-slate-500"
+                            className="w-10 h-6 text-center text-xs bg-[var(--bg-hover)] text-[var(--text)] rounded border border-[var(--border-hi)] focus:border-[var(--amber)] focus:ring-1 focus:ring-[var(--border-focus)] outline-none placeholder-[var(--text-dim)]"
                           />
                           {/* Font colour picker (Production badge text) */}
                           <label
@@ -1263,7 +1263,7 @@ export function ConfigurationModal({
                       value={newFieldLabel}
                       onChange={(e) => setNewFieldLabel(e.target.value)}
                       placeholder="Field label..."
-                      className="flex-1 min-w-[120px] bg-[var(--bg-panel)] text-[var(--text)] rounded px-2.5 py-1.5 text-xs border border-[var(--border-hi)] focus:border-[var(--amber)] focus:ring-1 focus:ring-[#BF5700] outline-none placeholder-slate-500"
+                      className="flex-1 min-w-[120px] bg-[var(--bg-panel)] text-[var(--text)] rounded px-2.5 py-1.5 text-xs border border-[var(--border-hi)] focus:border-[var(--amber)] focus:ring-1 focus:ring-[var(--border-focus)] outline-none placeholder-[var(--text-dim)]"
                     />
                     <div className="relative">
                       <select
@@ -1362,7 +1362,7 @@ export function ConfigurationModal({
                                   }
                                 }}
                                 autoFocus
-                                className="flex-1 bg-[var(--bg-hover)] text-[var(--text)] rounded px-2 py-0.5 text-xs border border-[var(--amber)] focus:ring-1 focus:ring-[#BF5700] outline-none"
+                                className="flex-1 bg-[var(--bg-hover)] text-[var(--text)] rounded px-2 py-0.5 text-xs border border-[var(--amber)] focus:ring-1 focus:ring-[var(--border-focus)] outline-none"
                               />
                               <div className="relative">
                                 <select
@@ -1532,7 +1532,7 @@ export function ConfigurationModal({
                 <select
                   value={columnView}
                   onChange={(e) => setColumnView(e.target.value)}
-                  className="bg-[var(--bg-panel)] text-[var(--text)] text-sm rounded px-2 py-1.5 border border-[var(--border-hi)] focus:border-[var(--amber)] focus:ring-1 focus:ring-[#BF5700] outline-none cursor-pointer"
+                  className="bg-[var(--bg-panel)] text-[var(--text)] text-sm rounded px-2 py-1.5 border border-[var(--border-hi)] focus:border-[var(--amber)] focus:ring-1 focus:ring-[var(--border-focus)] outline-none cursor-pointer"
                 >
                   <option value="default">Default (all types)</option>
                   {typesWithOverrides.map((t) => (
@@ -1638,21 +1638,30 @@ export function ConfigurationModal({
                 </div>
               </div>
 
-              {/* Theatre Mode toggle */}
-              <label className="flex items-center gap-3 px-3 py-3 bg-[var(--bg-panel-a50)] rounded-md border border-[var(--border-hi-a50)] cursor-pointer select-none hover:bg-[var(--bg-panel)]">
-                <input
-                  type="checkbox"
-                  checked={theatreMode}
-                  onChange={() => onSetTheatreMode(!theatreMode)}
-                  className="w-4 h-4 rounded border-[var(--border-hi)] bg-[var(--bg-hover)] text-[var(--amber)] focus:ring-[#BF5700] focus:ring-offset-0 cursor-pointer"
-                />
-                <div>
-                  <span className="text-sm text-[var(--text)] font-medium">Theatre Mode</span>
-                  <p className="text-[10px] text-[var(--text-dim)] mt-0.5">
-                    Low-brightness colour scheme with pure black base and boosted contrast for dark environments.
-                  </p>
+              {/* Display Mode selector */}
+              <div className="px-3 py-3 bg-[var(--bg-panel-a50)] rounded-md border border-[var(--border-hi-a50)]">
+                <span className="text-sm text-[var(--text)] font-medium">Display Mode</span>
+                <p className="text-[10px] text-[var(--text-dim)] mt-0.5 mb-2">
+                  Controls the overall colour palette of the interface.
+                </p>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {THEME_MODES.map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => onSetTheme(mode)}
+                      className={`px-3 py-2 rounded-md text-xs font-medium border transition-colors text-left ${
+                        theme === mode
+                          ? 'border-[var(--amber)] bg-[var(--amber-dim)] text-[var(--amber)]'
+                          : 'border-[var(--border-hi-a50)] text-[var(--text-mid)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'
+                      }`}
+                    >
+                      <div>{THEME_LABELS[mode]}</div>
+                      <div className={`text-[9px] mt-0.5 ${theme === mode ? 'text-[var(--amber)]' : 'text-[var(--text-dim)]'}`} style={{ opacity: 0.8 }}>{THEME_DESCRIPTIONS[mode]}</div>
+                    </button>
+                  ))}
                 </div>
-              </label>
+              </div>
 
               {/* Show short codes toggle */}
               <label className="flex items-center gap-3 px-3 py-3 bg-[var(--bg-panel-a50)] rounded-md border border-[var(--border-hi-a50)] cursor-pointer select-none hover:bg-[var(--bg-panel)]">
@@ -1660,7 +1669,7 @@ export function ConfigurationModal({
                   type="checkbox"
                   checked={showShortCodes}
                   onChange={() => onSetShowShortCodes(!showShortCodes)}
-                  className="w-4 h-4 rounded border-[var(--border-hi)] bg-[var(--bg-hover)] text-[var(--amber)] focus:ring-[#BF5700] focus:ring-offset-0 cursor-pointer"
+                  className="w-4 h-4 rounded border-[var(--border-hi)] bg-[var(--bg-hover)] text-[var(--amber)] focus:ring-[var(--border-focus)] focus:ring-offset-0 cursor-pointer"
                 />
                 <div>
                   <span className="text-sm text-[var(--text)] font-medium">Show Short Codes</span>
@@ -1676,7 +1685,7 @@ export function ConfigurationModal({
                   type="checkbox"
                   checked={showPastCues}
                   onChange={() => onSetShowPastCues(!showPastCues)}
-                  className="w-4 h-4 rounded border-[var(--border-hi)] bg-[var(--bg-hover)] text-[var(--amber)] focus:ring-[#BF5700] focus:ring-offset-0 cursor-pointer"
+                  className="w-4 h-4 rounded border-[var(--border-hi)] bg-[var(--bg-hover)] text-[var(--amber)] focus:ring-[var(--border-focus)] focus:ring-offset-0 cursor-pointer"
                 />
                 <div>
                   <span className="text-sm text-[var(--text)] font-medium">Show Past Cues</span>
@@ -1692,7 +1701,7 @@ export function ConfigurationModal({
                   type="checkbox"
                   checked={showSkippedCues}
                   onChange={() => onSetShowSkippedCues(!showSkippedCues)}
-                  className="w-4 h-4 rounded border-[var(--border-hi)] bg-[var(--bg-hover)] text-[var(--amber)] focus:ring-[#BF5700] focus:ring-offset-0 cursor-pointer"
+                  className="w-4 h-4 rounded border-[var(--border-hi)] bg-[var(--bg-hover)] text-[var(--amber)] focus:ring-[var(--border-focus)] focus:ring-offset-0 cursor-pointer"
                 />
                 <div>
                   <span className="text-sm text-[var(--text)] font-medium">Show Skipped Cues</span>
@@ -1708,7 +1717,7 @@ export function ConfigurationModal({
                   type="checkbox"
                   checked={showVideoTimecode}
                   onChange={() => onSetShowVideoTimecode(!showVideoTimecode)}
-                  className="w-4 h-4 rounded border-[var(--border-hi)] bg-[var(--bg-hover)] text-[var(--amber)] focus:ring-[#BF5700] focus:ring-offset-0 cursor-pointer"
+                  className="w-4 h-4 rounded border-[var(--border-hi)] bg-[var(--bg-hover)] text-[var(--amber)] focus:ring-[var(--border-focus)] focus:ring-offset-0 cursor-pointer"
                 />
                 <div>
                   <span className="text-sm text-[var(--text)] font-medium">Video Timecode</span>
@@ -1724,7 +1733,7 @@ export function ConfigurationModal({
                   type="checkbox"
                   checked={autoplayAfterCue}
                   onChange={() => onSetAutoplayAfterCue(!autoplayAfterCue)}
-                  className="w-4 h-4 rounded border-[var(--border-hi)] bg-[var(--bg-hover)] text-[var(--amber)] focus:ring-[#BF5700] focus:ring-offset-0 cursor-pointer"
+                  className="w-4 h-4 rounded border-[var(--border-hi)] bg-[var(--bg-hover)] text-[var(--amber)] focus:ring-[var(--border-focus)] focus:ring-offset-0 cursor-pointer"
                 />
                 <div>
                   <span className="text-sm text-[var(--text)] font-medium">Autoplay after Cue</span>
@@ -1965,7 +1974,7 @@ export function ConfigurationModal({
                                     if (e.key === 'Escape') setEditingTemplateId(null);
                                   }}
                                   autoFocus
-                                  className="flex-1 bg-[var(--bg-hover)] text-[var(--text)] rounded px-2 py-1 text-xs border border-[var(--amber)] focus:ring-1 focus:ring-[#BF5700] outline-none"
+                                  className="flex-1 bg-[var(--bg-hover)] text-[var(--text)] rounded px-2 py-1 text-xs border border-[var(--amber)] focus:ring-1 focus:ring-[var(--border-focus)] outline-none"
                                 />
                                 <button
                                   type="button"
@@ -2113,7 +2122,7 @@ export function ConfigurationModal({
                       const v = parseInt(e.target.value, 10);
                       if (!isNaN(v) && v >= 1) onSetCueBackupInterval(v);
                     }}
-                    className="w-20 bg-[var(--bg-panel)] text-[var(--text)] rounded px-3 py-1.5 text-sm border border-[var(--border-hi)] focus:border-[var(--amber)] focus:ring-1 focus:ring-[#BF5700] outline-none"
+                    className="w-20 bg-[var(--bg-panel)] text-[var(--text)] rounded px-3 py-1.5 text-sm border border-[var(--border-hi)] focus:border-[var(--amber)] focus:ring-1 focus:ring-[var(--border-focus)] outline-none"
                   />
                   <span className="text-xs text-[var(--text-mid)]">minutes</span>
                 </div>
@@ -2142,7 +2151,7 @@ export function ConfigurationModal({
                       <select
                         value={effectiveSelectedKey}
                         onChange={(e) => { setSelectedVideoKey(e.target.value); setRecoveryTick((prev) => prev + 1); }}
-                        className="min-w-0 flex-1 bg-[var(--bg-panel)] text-[var(--text)] text-sm rounded px-2 py-1.5 border border-[var(--border-hi)] focus:border-[var(--amber)] focus:ring-1 focus:ring-[#BF5700] outline-none cursor-pointer"
+                        className="min-w-0 flex-1 bg-[var(--bg-panel)] text-[var(--text)] text-sm rounded px-2 py-1.5 border border-[var(--border-hi)] focus:border-[var(--amber)] focus:ring-1 focus:ring-[var(--border-focus)] outline-none cursor-pointer"
                       >
                         {videoFiles.map((vf) => {
                           const displayName = vf.fileName === 'no-video' ? 'No Video' : vf.fileName;
@@ -2546,7 +2555,7 @@ export function ConfigurationModal({
             className="transition-colors"
             style={{
               background: 'var(--amber)',
-              color: '#fff',
+              color: 'var(--text-inv)',
               border: 'none',
               borderRadius: 6,
               padding: '10px 32px',

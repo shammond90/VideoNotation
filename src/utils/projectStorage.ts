@@ -328,6 +328,12 @@ export function parseImportedProject(json: unknown): ImportedProjectData {
     export_templates: (Array.isArray(proj.export_templates) ? proj.export_templates : []) as Project['export_templates'],
   };
 
+  // Backward-compat: migrate theatreMode boolean → theme enum in imported config
+  if (project.config && !('theme' in project.config) || typeof (project.config as any).theme !== 'string') {
+    const legacy = (project.config as any).theatreMode;
+    (project.config as any).theme = legacy === true ? 'theatre' : 'standard';
+  }
+
   // Extract annotations if present
   const annotations = (data.annotations && typeof data.annotations === 'object' && !Array.isArray(data.annotations))
     ? data.annotations as Record<string, Annotation[]>

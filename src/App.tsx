@@ -164,6 +164,7 @@ export default function App({
     setShowVideoTimecode,
     setVideoTimecodePosition,
     setAutoplayAfterCue,
+    setVideoBrightness,
     setCueTypeFields,
     toggleColumnVisibility,
     reorderColumns,
@@ -175,7 +176,7 @@ export default function App({
     saveConfigBackup,
     setCueBackupInterval,
     setCueSheetView,
-    setTheatreMode,
+    setTheme,
     clearAllData,
     clearCurrentVideoCues,
     clearAllCues,
@@ -522,6 +523,9 @@ export default function App({
         setIsDualWindow(false);
         popupRef.current = null;
         break;
+      case 'CMD_BRIGHTNESS':
+        setVideoBrightness(msg.brightness);
+        break;
     }
   }, []);
 
@@ -551,6 +555,29 @@ export default function App({
       broadcastSend({ type: 'CONFIG_SHOW_TIMECODE', show: config.showVideoTimecode });
     }
   }, [config.showVideoTimecode, isDualWindow, broadcastSend]);
+
+  // Sync theme to popup when it changes
+  useEffect(() => {
+    if (isDualWindow) {
+      broadcastSend({ type: 'CONFIG_THEME', theme: config.theme });
+    }
+  }, [config.theme, isDualWindow, broadcastSend]);
+
+  // Sync video brightness to popup when it changes
+  useEffect(() => {
+    if (isDualWindow) {
+      broadcastSend({ type: 'CMD_BRIGHTNESS', brightness: config.videoBrightness });
+    }
+  }, [config.videoBrightness, isDualWindow, broadcastSend]);
+
+  // Keep #root element's theme class in sync so CSS variables resolve
+  // correctly (the flash-prevention script sets it on first load; this
+  // effect keeps it current when the user switches themes at runtime).
+  useEffect(() => {
+    const root = document.getElementById('root');
+    if (!root) return;
+    root.className = config.theme !== 'standard' ? `theme-${config.theme}` : '';
+  }, [config.theme]);
 
   // Toggle play/pause (Space)
   const handleTogglePlay = useCallback(() => {
@@ -901,7 +928,7 @@ export default function App({
   }
 
   return (
-    <div className={`h-screen flex flex-col overflow-hidden${config.theatreMode ? ' theatre-mode' : ''}`} style={{ background: 'var(--bg)', color: 'var(--text)' }}>
+    <div className="h-screen flex flex-col overflow-hidden" style={{ background: 'var(--bg)', color: 'var(--text)' }}>
       {/* Header */}
       <header style={{
         height: 44,
@@ -968,7 +995,7 @@ export default function App({
               <div style={{
                 width: 18, height: 18,
                 background: 'var(--amber-dim)',
-                border: '1px solid rgba(191,87,0,0.3)',
+                border: '1px solid var(--amber-glow)',
                 borderRadius: 3,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>
@@ -1059,7 +1086,7 @@ export default function App({
         // Show reconnect banner when there's a stored handle needing attention
         handleState.isSupported && handleState.status !== 'none' && handleState.status !== 'granted' ? (
           <main className="flex-1 flex flex-col lg:flex-row gap-0 min-h-0 overflow-hidden" style={{ background: 'var(--bg)' }}>
-            <div className="flex flex-col min-w-0 min-h-0 w-full" style={{ flex: '1 1 0%', background: '#0a0a0c' }}>
+            <div className="flex flex-col min-w-0 min-h-0 w-full" style={{ flex: '1 1 0%', background: 'var(--bg)' }}>
               <VideoReconnectBanner
                 bannerState={handleState.status === 'loading' ? 'loading' : handleState.status as 'prompt' | 'denied' | 'broken'}
                 videoFilename={handleState.videoFilename}
@@ -1104,7 +1131,7 @@ export default function App({
           {/* Left: Video + cue form — hidden in dual-window mode */}
           {!isDualWindow && (
           <>
-          <div ref={containerRef} className="flex flex-col min-w-0 min-h-0" style={{ flex: '1 1 0%', borderRight: 'none', background: '#0a0a0c' }}>
+          <div ref={containerRef} className="flex flex-col min-w-0 min-h-0" style={{ flex: '1 1 0%', borderRight: 'none', background: 'var(--bg)' }}>
             {/* Video panel header with Pop out button */}
             {videoSrc && supportsDualWindow && (
               <div className="flex items-center justify-between px-3 py-1.5" style={{ background: 'var(--bg-raised)', borderBottom: '1px solid var(--border)' }}>
@@ -1136,9 +1163,11 @@ export default function App({
                 titleMarkers={scrubberMarkers.titleMarkers}
                 sceneMarkers={scrubberMarkers.sceneMarkers}
                 sceneBands={scrubberMarkers.sceneBands}
+                videoBrightness={config.videoBrightness}
+                onVideoBrightnessChange={setVideoBrightness}
               />
             ) : (
-              <div className="w-full flex flex-col items-center justify-center min-h-[300px]" style={{ background: 'linear-gradient(135deg, #0f0f12 0%, #141418 100%)' }}>
+              <div className="w-full flex flex-col items-center justify-center min-h-[300px]" style={{ background: 'var(--bg)' }}>
                 <div className="text-center">
                   <p className="font-mono text-sm" style={{ color: 'var(--text-dim)', letterSpacing: '0.05em' }}>NO VIDEO LOADED</p>
                   <p className="font-mono text-xs mt-1" style={{ color: 'var(--text-dim)' }}>Cues will default to 0:00</p>
@@ -1197,12 +1226,12 @@ export default function App({
                   onClick={handleEnterAnnotate}
                   onMouseUp={e => e.currentTarget.blur()}
                   className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-md transition-colors"
-                  style={{ background: 'rgba(191,87,0,0.12)', color: 'var(--amber)' }}
-                  onMouseEnter={e => (e.currentTarget.style.background = 'rgba(191,87,0,0.22)')}
-                  onMouseLeave={e => (e.currentTarget.style.background = 'rgba(191,87,0,0.12)')}
+                  style={{ background: 'var(--amber-dim)', color: 'var(--amber)' }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--amber-glow)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'var(--amber-dim)')}
                   title="New Cue"
                 >
-                  <kbd className="inline-flex items-center justify-center w-7 h-7 text-[11px] font-mono font-bold rounded" style={{ background: 'rgba(191,87,0,0.25)', color: 'var(--amber)', border: '1px solid rgba(191,87,0,0.5)' }}>↵</kbd>
+                  <kbd className="inline-flex items-center justify-center w-7 h-7 text-[11px] font-mono font-bold rounded" style={{ background: 'var(--amber-glow)', color: 'var(--amber)', border: '1px solid var(--amber)' }}>↵</kbd>
                   <span className="text-xs font-medium" style={{ color: 'var(--amber)' }}>Cue</span>
                 </button>
                 <button
@@ -1305,12 +1334,12 @@ export default function App({
                   type="button"
                   onClick={handleEnterAnnotate}
                   className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-md transition-colors"
-                  style={{ background: 'rgba(191,87,0,0.12)', color: 'var(--amber)' }}
-                  onMouseEnter={e => (e.currentTarget.style.background = 'rgba(191,87,0,0.22)')}
-                  onMouseLeave={e => (e.currentTarget.style.background = 'rgba(191,87,0,0.12)')}
+                  style={{ background: 'var(--amber-dim)', color: 'var(--amber)' }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--amber-glow)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'var(--amber-dim)')}
                   title="Add Cue"
                 >
-                  <kbd className="inline-flex items-center justify-center w-7 h-7 text-[11px] font-mono font-bold rounded" style={{ background: 'rgba(191,87,0,0.25)', color: 'var(--amber)', border: '1px solid rgba(191,87,0,0.5)' }}>↵</kbd>
+                  <kbd className="inline-flex items-center justify-center w-7 h-7 text-[11px] font-mono font-bold rounded" style={{ background: 'var(--amber-glow)', color: 'var(--amber)', border: '1px solid var(--amber)' }}>↵</kbd>
                   <span className="text-xs font-medium" style={{ color: 'var(--amber)' }}>Add Cue</span>
                 </button>
               </div>
@@ -1375,7 +1404,7 @@ export default function App({
               onSetExpandedSearchFilter={setExpandedSearchFilter}
               showPastCues={config.showPastCues}
               cueSheetView={config.cueSheetView}
-              theatreMode={config.theatreMode}
+              theme={config.theme}
               cueTypeFields={config.cueTypeFields}
               fieldDefinitions={config.fieldDefinitions}
               mandatoryFields={config.mandatoryFields}
@@ -1492,8 +1521,8 @@ export default function App({
         showVideoTimecode={config.showVideoTimecode}
         cueSheetView={config.cueSheetView}
         onSetCueSheetView={setCueSheetView}
-        theatreMode={config.theatreMode}
-        onSetTheatreMode={setTheatreMode}
+        theme={config.theme}
+        onSetTheme={setTheme}
         onSetShowVideoTimecode={setShowVideoTimecode}
         autoplayAfterCue={config.autoplayAfterCue}
         onSetAutoplayAfterCue={setAutoplayAfterCue}

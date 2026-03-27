@@ -10,6 +10,22 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // Apply saved theme class before first paint to prevent flash.
+      // For brand-new users (no saved theme), detect OS preference.
+      (function() {
+        try {
+          var t = localStorage.getItem('cuetation-theme');
+          if (!t) {
+            t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) ? 'bright' : 'standard';
+            localStorage.setItem('cuetation-theme', t);
+          }
+          if (t && t !== 'standard') {
+            document.getElementById('root').className = 'theme-' + t;
+          }
+        } catch(e) {}
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

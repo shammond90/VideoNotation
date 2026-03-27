@@ -99,9 +99,9 @@ export function CueContextMenu({
       disabled={opts?.disabled}
       onClick={(e) => { e.stopPropagation(); onClick(); }}
       className="w-full flex items-center gap-2 px-3 py-1.5 text-xs rounded transition-colors text-left disabled:opacity-30 disabled:cursor-not-allowed"
-      style={{ color: opts?.danger ? '#f87171' : opts?.dimmed ? 'var(--text-dim)' : 'var(--text-mid)' }}
-      onMouseEnter={(e) => { if (!opts?.disabled) { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = opts?.danger ? '#fca5a5' : 'var(--text)'; } }}
-      onMouseLeave={(e) => { e.currentTarget.style.background = ''; e.currentTarget.style.color = opts?.danger ? '#f87171' : opts?.dimmed ? 'var(--text-dim)' : 'var(--text-mid)'; }}
+      style={{ color: opts?.danger ? 'var(--red)' : opts?.dimmed ? 'var(--text-dim)' : 'var(--text-mid)' }}
+      onMouseEnter={(e) => { if (!opts?.disabled) { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = opts?.danger ? 'var(--red)' : 'var(--text)'; } }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = ''; e.currentTarget.style.color = opts?.danger ? 'var(--red)' : opts?.dimmed ? 'var(--text-dim)' : 'var(--text-mid)'; }}
     >
       {icon}
       {label}

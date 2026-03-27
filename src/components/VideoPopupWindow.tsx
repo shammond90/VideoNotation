@@ -6,7 +6,7 @@
  * auto-hiding controls bar, and BroadcastChannel sync.
  */
 import { useRef, useState, useCallback, useEffect } from 'react';
-import { Play, Pause, Volume2, VolumeX, Maximize2, Minimize2 } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, Maximize2, Minimize2, Sun } from 'lucide-react';
 import { useBroadcastSync, type SyncMessage } from '../hooks/useBroadcastSync';
 import { loadVideoHandle } from '../utils/videoHandleStorage';
 import { formatTime } from '../utils/formatTime';
@@ -34,6 +34,13 @@ export function VideoPopupWindow() {
   const [mainWindowClosed, setMainWindowClosed] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showTimecode, setShowTimecode] = useState(false);
+  const [brightness, setBrightness] = useState(1.0);
+  const [showBrightness, setShowBrightness] = useState(false);
+
+  // Theme state — read from localStorage initially, then sync via BroadcastChannel
+  const [theme, setTheme] = useState<string>(() => {
+    try { return localStorage.getItem('cuetation-theme') || 'standard'; } catch { return 'standard'; }
+  });
 
   // Draggable timecode position
   const [tcPos, setTcPos] = useState({ x: 16, y: -1 }); // y=-1 means "bottom-left default"
@@ -78,6 +85,13 @@ export function VideoPopupWindow() {
         break;
       case 'CONFIG_SHOW_TIMECODE':
         setShowTimecode(msg.show);
+        break;
+      case 'CONFIG_THEME':
+        setTheme(msg.theme);
+        try { localStorage.setItem('cuetation-theme', msg.theme); } catch {}
+        break;
+      case 'CMD_BRIGHTNESS':
+        setBrightness(msg.brightness);
         break;
     }
   }, []);
@@ -481,10 +495,12 @@ export function VideoPopupWindow() {
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
+  const themeClass = theme && theme !== 'standard' ? `theme-${theme}` : '';
+
   // ── Render: Loading ──
   if (status === 'loading') {
     return (
-      <div className="h-screen w-screen flex items-center justify-center" style={{ background: '#0a0a0c', color: 'var(--text-dim)' }}>
+      <div className={`h-screen w-screen flex items-center justify-center ${themeClass}`} style={{ background: 'var(--bg)', color: 'var(--text-dim)' }}>
         <span className="font-mono text-sm tracking-widest uppercase animate-pulse">Loading…</span>
       </div>
     );
@@ -493,7 +509,7 @@ export function VideoPopupWindow() {
   // ── Render: User gesture prompt ──
   if (status === 'prompt') {
     return (
-      <div className="h-screen w-screen flex flex-col items-center justify-center gap-6" style={{ background: '#0a0a0c' }}>
+      <div className={`h-screen w-screen flex flex-col items-center justify-center gap-6 ${themeClass}`} style={{ background: 'var(--bg)' }}>
         <div className="text-center">
           <p className="text-sm mb-2" style={{ color: 'var(--text-mid)' }}>
             The video needs permission to load in this window.
@@ -524,7 +540,7 @@ export function VideoPopupWindow() {
   // ── Render: Error ──
   if (status === 'error') {
     return (
-      <div className="h-screen w-screen flex flex-col items-center justify-center gap-4" style={{ background: '#0a0a0c' }}>
+      <div className={`h-screen w-screen flex flex-col items-center justify-center gap-4 ${themeClass}`} style={{ background: 'var(--bg)' }}>
         <p className="text-sm" style={{ color: 'var(--red)' }}>
           Could not load video. The file may have been moved or access was denied.
         </p>
@@ -544,7 +560,7 @@ export function VideoPopupWindow() {
   return (
     <div
       ref={containerRef}
-      className="h-screen w-screen relative select-none"
+      className={`h-screen w-screen relative select-none ${themeClass}`}
       style={{ background: '#000', cursor: controlsVisible ? 'default' : 'none' }}
     >
 
@@ -555,6 +571,7 @@ export function VideoPopupWindow() {
         className="absolute inset-0 w-full h-full object-contain"
         autoPlay
         onClick={togglePlay}
+        style={brightness !== 1.0 ? { filter: `brightness(${brightness})` } : undefined}
       />
 
       {/* Timecode overlay — visible when showTimecode enabled, draggable */}
@@ -571,7 +588,7 @@ export function VideoPopupWindow() {
           fontFamily: 'var(--font-mono, monospace)',
           fontSize: 18,
           fontWeight: 700,
-          color: 'var(--amber, #f59e0b)',
+          color: 'var(--amber)',
           letterSpacing: '0.04em',
           userSelect: 'none',
           whiteSpace: 'nowrap',
@@ -586,7 +603,7 @@ export function VideoPopupWindow() {
       {mainWindowClosed && (
         <div
           className="absolute top-4 left-1/2 -translate-x-1/2 z-40 px-4 py-2 rounded-lg text-xs"
-          style={{ background: 'rgba(0,0,0,0.8)', color: 'var(--yellow, #eab308)', border: '1px solid rgba(234,179,8,0.3)' }}
+          style={{ background: 'rgba(0,0,0,0.8)', color: 'var(--yellow)', border: '1px solid var(--yellow-dim)' }}
         >
           Main window closed. Playback will continue but sync is lost.
         </div>
@@ -612,7 +629,7 @@ export function VideoPopupWindow() {
         >
           <div
             className="absolute inset-y-0 left-0 rounded-full"
-            style={{ width: `${progress}%`, background: 'var(--amber, #f59e0b)' }}
+            style={{ width: `${progress}%`, background: 'var(--amber)' }}
           />
           {/* Scrub handle */}
           <div
@@ -620,7 +637,7 @@ export function VideoPopupWindow() {
             style={{
               left: `calc(${progress}% - 8px)`,
               background: 'white',
-              borderColor: 'var(--amber, #f59e0b)',
+              borderColor: 'var(--amber)',
               boxShadow: '0 1px 4px rgba(0,0,0,0.5)',
             }}
           />
@@ -647,6 +664,32 @@ export function VideoPopupWindow() {
 
           {/* Spacer */}
           <div className="flex-1" />
+
+          {/* Brightness */}
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setShowBrightness(prev => !prev)}
+              onDoubleClick={() => { setBrightness(1.0); setShowBrightness(false); send({ type: 'CMD_BRIGHTNESS', brightness: 1.0 }); }}
+              className="w-8 h-8 flex items-center justify-center rounded-full transition-colors"
+              style={{ background: 'transparent', color: brightness !== 1.0 ? 'var(--amber)' : 'rgba(255,255,255,0.7)', border: 'none', cursor: 'pointer' }}
+              title={`Brightness ${Math.round(brightness * 100)}% — double-click to reset`}
+            >
+              <Sun className="w-4 h-4" />
+            </button>
+            {showBrightness && (
+              <input
+                type="range"
+                min={0.2}
+                max={1.8}
+                step={0.05}
+                value={brightness}
+                onChange={(e) => { const v = parseFloat(e.target.value); setBrightness(v); send({ type: 'CMD_BRIGHTNESS', brightness: v }); }}
+                className="w-20 accent-amber-500"
+                style={{ cursor: 'pointer' }}
+              />
+            )}
+          </div>
 
           {/* Speed selector */}
           <button

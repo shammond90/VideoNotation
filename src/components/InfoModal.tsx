@@ -12,10 +12,10 @@ const InfoModal: React.FC<InfoModalProps> = ({ isOpen, onClose, title, content }
 
   const inlineFormat = (text: string): string => {
     return text
-      .replace(/\*\*(.+?)\*\*/g, '<strong style="color:#e0e0e0">$1</strong>')
+      .replace(/\*\*(.+?)\*\*/g, '<strong style="color:var(--text)">$1</strong>')
       .replace(
         /`(.+?)`/g,
-        '<code style="background:#2a2a2a;padding:1px 4px;border-radius:3px;font-size:0.82em;color:#f0c674">$1</code>',
+        '<code style="background:var(--code-bg);padding:1px 4px;border-radius:3px;font-size:0.82em;color:var(--amber)">$1</code>',
       );
   };
 
@@ -43,8 +43,8 @@ const InfoModal: React.FC<InfoModalProps> = ({ isOpen, onClose, title, content }
                       style={{
                         textAlign: 'left',
                         padding: '6px 10px',
-                        borderBottom: '2px solid #444',
-                        color: '#f0c674',
+                        borderBottom: '2px solid var(--border-hi)',
+                        color: 'var(--amber)',
                         fontWeight: 600,
                       }}
                     >
@@ -61,8 +61,8 @@ const InfoModal: React.FC<InfoModalProps> = ({ isOpen, onClose, title, content }
                         key={ci}
                         style={{
                           padding: '5px 10px',
-                          borderBottom: '1px solid #333',
-                          color: '#ccc',
+                          borderBottom: '1px solid var(--border)',
+                          color: 'var(--text-mid)',
                         }}
                         dangerouslySetInnerHTML={{ __html: inlineFormat(cell.trim()) }}
                       />
@@ -83,7 +83,7 @@ const InfoModal: React.FC<InfoModalProps> = ({ isOpen, onClose, title, content }
       if (listItems.length > 0) {
         const ListTag = isOrderedList ? 'ol' : 'ul';
         elements.push(
-          <ListTag key={key++} style={{ margin: '8px 0', paddingLeft: '24px', color: '#ccc' }}>
+          <ListTag key={key++} style={{ margin: '8px 0', paddingLeft: '24px', color: 'var(--text-mid)' }}>
             {listItems}
           </ListTag>,
         );
@@ -161,9 +161,9 @@ const InfoModal: React.FC<InfoModalProps> = ({ isOpen, onClose, title, content }
             key={key++}
             style={{
               fontSize: '1.4rem',
-              color: '#f0c674',
+              color: 'var(--amber)',
               margin: '20px 0 8px',
-              borderBottom: '1px solid #444',
+              borderBottom: '1px solid var(--border-hi)',
               paddingBottom: '6px',
             }}
           >
@@ -174,7 +174,7 @@ const InfoModal: React.FC<InfoModalProps> = ({ isOpen, onClose, title, content }
         elements.push(
           <h2
             key={key++}
-            style={{ fontSize: '1.15rem', color: '#e0c060', margin: '18px 0 6px' }}
+            style={{ fontSize: '1.15rem', color: 'var(--amber)', margin: '18px 0 6px' }}
           >
             {line.replace('## ', '')}
           </h2>,
@@ -183,7 +183,7 @@ const InfoModal: React.FC<InfoModalProps> = ({ isOpen, onClose, title, content }
         elements.push(
           <h3
             key={key++}
-            style={{ fontSize: '1rem', color: '#d0b050', margin: '14px 0 4px' }}
+            style={{ fontSize: '1rem', color: 'var(--amber)', margin: '14px 0 4px' }}
           >
             {line.replace('### ', '')}
           </h3>,
@@ -194,10 +194,10 @@ const InfoModal: React.FC<InfoModalProps> = ({ isOpen, onClose, title, content }
           <blockquote
             key={key++}
             style={{
-              borderLeft: '3px solid #f0c674',
+              borderLeft: '3px solid var(--amber)',
               paddingLeft: '12px',
               margin: '8px 0',
-              color: '#aaa',
+              color: 'var(--text-mid)',
               fontStyle: 'italic',
             }}
             dangerouslySetInnerHTML={{ __html: inlineFormat(text) }}
@@ -207,14 +207,14 @@ const InfoModal: React.FC<InfoModalProps> = ({ isOpen, onClose, title, content }
         elements.push(
           <hr
             key={key++}
-            style={{ border: 'none', borderTop: '1px solid #444', margin: '16px 0' }}
+            style={{ border: 'none', borderTop: '1px solid var(--border-hi)', margin: '16px 0' }}
           />,
         );
       } else if (line.trim() !== '') {
         elements.push(
           <p
             key={key++}
-            style={{ margin: '6px 0', color: '#ccc', lineHeight: '1.6' }}
+            style={{ margin: '6px 0', color: 'var(--text-mid)', lineHeight: '1.6' }}
             dangerouslySetInnerHTML={{ __html: inlineFormat(line) }}
           />,
         );
@@ -233,7 +233,7 @@ const InfoModal: React.FC<InfoModalProps> = ({ isOpen, onClose, title, content }
       style={{
         position: 'fixed',
         inset: 0,
-        backgroundColor: 'rgba(0,0,0,0.7)',
+        backgroundColor: 'var(--overlay)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -243,15 +243,15 @@ const InfoModal: React.FC<InfoModalProps> = ({ isOpen, onClose, title, content }
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          backgroundColor: '#1e1e1e',
-          border: '1px solid #444',
+          backgroundColor: 'var(--bg-card)',
+          border: '1px solid var(--border-hi)',
           borderRadius: '8px',
           width: '700px',
           maxWidth: '90vw',
           maxHeight: '85vh',
           display: 'flex',
           flexDirection: 'column',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+          boxShadow: 'var(--shadow-lg)',
         }}
       >
         {/* Header */}
@@ -261,24 +261,24 @@ const InfoModal: React.FC<InfoModalProps> = ({ isOpen, onClose, title, content }
             justifyContent: 'space-between',
             alignItems: 'center',
             padding: '16px 20px',
-            borderBottom: '1px solid #333',
+            borderBottom: '1px solid var(--border)',
             flexShrink: 0,
           }}
         >
-          <h2 style={{ margin: 0, fontSize: '1.1rem', color: '#f0c674' }}>{title}</h2>
+          <h2 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--amber)' }}>{title}</h2>
           <button
             onClick={onClose}
             style={{
               background: 'none',
               border: 'none',
-              color: '#888',
+              color: 'var(--text-mid)',
               fontSize: '1.4rem',
               cursor: 'pointer',
               padding: '0 4px',
               lineHeight: 1,
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = '#fff')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = '#888')}
+            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--text)')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-mid)')}
           >
             ×
           </button>

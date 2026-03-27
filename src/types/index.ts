@@ -277,6 +277,23 @@ export type CueSheetView = 'classic' | 'production';
  * Captures cue types, fields, columns, and view settings — everything
  * a user might want to reuse across projects.
  */
+
+// ── Theme Mode ──
+export type ThemeMode = 'standard' | 'bright' | 'dark' | 'theatre';
+export const THEME_MODES: ThemeMode[] = ['standard', 'bright', 'dark', 'theatre'];
+export const THEME_LABELS: Record<ThemeMode, string> = {
+  standard: 'Standard',
+  bright: 'Bright',
+  dark: 'Dark',
+  theatre: 'Theatre',
+};
+export const THEME_DESCRIPTIONS: Record<ThemeMode, string> = {
+  standard: 'Default dark palette',
+  bright: 'Light backgrounds for bright environments',
+  dark: 'Deeper darks, reduced contrast',
+  theatre: 'Pure black, boosted readability',
+};
+
 export interface TemplateData {
   cueTypes: string[];
   cueTypeColors: Record<string, string>;
@@ -288,7 +305,7 @@ export interface TemplateData {
   visibleColumns: ColumnConfig[];
   cueTypeColumns: Record<string, ColumnConfig[]>;
   cueSheetView: CueSheetView;
-  theatreMode: boolean;
+  theme: ThemeMode;
   showShortCodes: boolean;
   showPastCues: boolean;
   showSkippedCues: boolean;
@@ -299,6 +316,7 @@ export interface TemplateData {
   autoplayAfterCue: boolean;
   hiddenCueTypes?: string[];
   hiddenFieldKeys?: string[];
+  videoBrightness?: number;
 }
 
 /** A saved config template (stored in IndexedDB). */
@@ -332,7 +350,7 @@ export function extractTemplateData(config: AppConfig): TemplateData {
       Object.entries(config.cueTypeColumns).map(([k, v]) => [k, v.map((c) => ({ ...c }))])
     ),
     cueSheetView: config.cueSheetView,
-    theatreMode: config.theatreMode,
+    theme: config.theme,
     showShortCodes: config.showShortCodes,
     showPastCues: config.showPastCues,
     showSkippedCues: config.showSkippedCues,
@@ -343,6 +361,7 @@ export function extractTemplateData(config: AppConfig): TemplateData {
     autoplayAfterCue: config.autoplayAfterCue,
     hiddenCueTypes: [...(config.hiddenCueTypes ?? [])],
     hiddenFieldKeys: [...(config.hiddenFieldKeys ?? [])],
+    videoBrightness: config.videoBrightness,
   };
 }
 
@@ -353,7 +372,7 @@ export interface AppConfig {
   cueTypeColumns: Record<string, ColumnConfig[]>; // per-cue-type column overrides
   distanceView: boolean;
   cueSheetView: CueSheetView; // 'classic' (default) or 'production'
-  theatreMode: boolean; // low-brightness colour scheme for dark environments
+  theme: ThemeMode; // display mode: standard, bright, dark, or theatre
   cueTypeAllowStandby: Record<string, boolean>; // DEPRECATED — migrated into cueTypeFields
   cueTypeAllowWarning: Record<string, boolean>; // DEPRECATED — migrated into cueTypeFields
   cueTypeFields: Record<string, string[]>; // per-cue-type visible form fields (keys from EDITABLE_FIELD_KEYS)
@@ -371,6 +390,7 @@ export interface AppConfig {
   mandatoryFields: Record<string, string[]>; // per-cue-type mandatory field keys
   hiddenCueTypes: string[]; // cue types hidden from dropdowns, cue sheet, and exports
   hiddenFieldKeys: string[]; // field keys hidden from visible-fields, columns, and exports
+  videoBrightness: number; // video brightness filter (0.2–1.8, default 1.0)
 }
 
 /**
@@ -460,7 +480,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   cueTypeColumns: {},
   distanceView: true,
   cueSheetView: 'classic',
-  theatreMode: false,
+  theme: 'standard',
   cueTypeAllowStandby: {},
   cueTypeAllowWarning: {},
   cueTypeFields: {},
@@ -478,6 +498,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   mandatoryFields: {},
   hiddenCueTypes: [],
   hiddenFieldKeys: [],
+  videoBrightness: 1.0,
 };
 
 /** The factory-default template. Always available for "Reset to Factory". */

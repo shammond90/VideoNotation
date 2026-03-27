@@ -25,10 +25,10 @@ interface CueFormProps {
 }
 
 const inputClass =
-  'w-full bg-[var(--bg-input)] text-[var(--text)] rounded px-2 py-1.5 text-xs border border-[var(--border)] focus:border-[var(--amber)] focus:ring-1 focus:ring-[#BF5700] outline-none placeholder-[#4e4a56]';
+  'w-full bg-[var(--bg-input)] text-[var(--text)] rounded px-2 py-1.5 text-xs border border-[var(--border)] focus:border-[var(--amber)] focus:ring-1 focus:ring-[var(--border-focus)] outline-none placeholder-[var(--text-dim)]';
 
 const inputErrorClass =
-  'w-full bg-[var(--bg-input)] text-[var(--text)] rounded px-2 py-1.5 text-xs border border-red-500 focus:border-red-400 focus:ring-1 focus:ring-red-500/50 outline-none placeholder-[#4e4a56]';
+  'w-full bg-[var(--bg-input)] text-[var(--text)] rounded px-2 py-1.5 text-xs border border-[var(--danger)] focus:border-[var(--danger)] focus:ring-1 focus:ring-[var(--danger)] outline-none placeholder-[var(--text-dim)]';
 
 const readOnlyClass =
   'w-full bg-[var(--bg-card)] text-[var(--text-mid)] rounded px-2 py-1.5 text-xs border border-[var(--border)] outline-none cursor-not-allowed';
@@ -153,7 +153,7 @@ function CheckboxField({
           type="checkbox"
           checked={checked}
           onChange={(e) => onChange(name, e.target.checked ? 'true' : 'false')}
-          className="w-3.5 h-3.5 rounded border-[var(--border)] bg-[var(--bg-input)] text-[var(--amber)] focus:ring-[#BF5700] focus:ring-offset-0 cursor-pointer"
+          className="w-3.5 h-3.5 rounded border-[var(--border)] bg-[var(--bg-input)] text-[var(--amber)] focus:ring-[var(--border-focus)] focus:ring-offset-0 cursor-pointer"
         />
         <span className={labelClass} style={{ marginBottom: 0, display: 'inline' }}>
           {label}
@@ -519,11 +519,11 @@ export function CueForm({
       onSubmit={handleSubmit}
       onKeyDown={handleKeyDown}
       className={`rounded-lg p-4 mt-3 ${fillHeight ? 'flex flex-col flex-1 min-h-0 overflow-y-auto annotation-scroll' : 'max-h-[60vh] overflow-y-auto annotation-scroll'}`}
-      style={{ background: 'var(--bg-card)', border: '1px solid rgba(191,87,0,0.3)' }}
+      style={{ background: 'var(--bg-card)', border: '1px solid var(--amber-glow)' }}
     >
       {/* Header */}
       <div className="flex items-center gap-2 mb-3 pb-2 border-b" style={{ borderColor: 'var(--border)' }}>
-        <span className="text-xs font-mono px-2 py-0.5 rounded" style={{ background: 'rgba(191,87,0,0.15)', color: 'var(--amber)' }}>
+        <span className="text-xs font-mono px-2 py-0.5 rounded" style={{ background: 'var(--amber-dim)', color: 'var(--amber)' }}>
           {formatTime(isCreate ? timestamp : editedTimestamp)}
         </span>
         <span className="text-sm font-medium" style={{ color: 'var(--text-mid)' }}>

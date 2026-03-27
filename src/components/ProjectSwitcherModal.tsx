@@ -63,7 +63,7 @@ export function ProjectSwitcherModal({
                 >
                   <p className="font-semibold">{project.name}</p>
                   {project.production_name && (
-                    <p className="text-xs mt-1" style={{ color: currentProjectId === project.id ? 'rgba(255,255,255,0.7)' : 'var(--text-dim)' }}>{project.production_name}</p>
+                    <p className="text-xs mt-1" style={{ color: currentProjectId === project.id ? 'var(--text-mid)' : 'var(--text-dim)' }}>{project.production_name}</p>
                   )}
                 </button>
               ))}

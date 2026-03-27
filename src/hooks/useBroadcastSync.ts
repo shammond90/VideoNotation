@@ -84,6 +84,14 @@ export interface ConfigShowTimecodeMsg {
   type: 'CONFIG_SHOW_TIMECODE';
   show: boolean;
 }
+export interface ConfigThemeMsg {
+  type: 'CONFIG_THEME';
+  theme: string;
+}
+export interface CmdBrightnessMsg {
+  type: 'CMD_BRIGHTNESS';
+  brightness: number;
+}
 
 export type SyncMessage =
   | TimecodeUpdateMsg
@@ -101,7 +109,9 @@ export type SyncMessage =
   | CueAddedMsg
   | CueDeletedMsg
   | ActiveCueMsg
-  | ConfigShowTimecodeMsg;
+  | ConfigShowTimecodeMsg
+  | ConfigThemeMsg
+  | CmdBrightnessMsg;
 
 // ── Feature detection ──
 

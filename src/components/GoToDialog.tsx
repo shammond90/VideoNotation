@@ -100,7 +100,7 @@ export function GoToDialog({ annotations, cueTypeShortCodes, cueTypes, onSeek, o
   return (
     <div
       className="fixed inset-0 z-50 flex items-start justify-center pt-[20vh]"
-      style={{ background: 'rgba(0,0,0,0.5)' }}
+      style={{ background: 'var(--overlay)' }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
@@ -165,7 +165,7 @@ export function GoToDialog({ annotations, cueTypeShortCodes, cueTypes, onSeek, o
             type="button"
             onClick={handleSubmit}
             className="px-3 py-1 rounded text-xs font-medium"
-            style={{ background: 'var(--amber, #f59e0b)', color: '#000', cursor: 'pointer', border: 'none' }}
+            style={{ background: 'var(--amber)', color: 'var(--text-inv)', cursor: 'pointer', border: 'none' }}
           >
             Go
           </button>

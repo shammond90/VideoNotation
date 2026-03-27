@@ -65,9 +65,9 @@ export function VideoDropZone({ onFileSelected, onContinueWithoutVideo }: VideoD
         className="flex flex-col items-center justify-center w-full max-w-2xl p-16 rounded-2xl border-2 border-dashed cursor-pointer transition-all duration-200 select-none"
         style={{
           borderColor: isDragging ? 'var(--amber)' : 'var(--border-hi)',
-          background: isDragging ? 'rgba(191,87,0,0.07)' : 'var(--bg-card)',
+          background: isDragging ? 'var(--amber-dim)' : 'var(--bg-card)',
           transform: isDragging ? 'scale(1.02)' : undefined,
-          boxShadow: isDragging ? '0 0 32px rgba(191,87,0,0.15)' : undefined,
+          boxShadow: isDragging ? '0 0 32px var(--amber-glow)' : undefined,
         }}
       >
         <div className="w-16 h-16 rounded-xl flex items-center justify-center mb-4" style={{ background: 'var(--bg-panel)' }}>

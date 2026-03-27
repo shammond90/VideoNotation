@@ -85,7 +85,7 @@ export function FlagNotePopover({ initialNote, anchorRect, onSave, onClose }: Fl
           type="button"
           onClick={() => onSave(note)}
           className="text-[10px] px-2 py-1 rounded transition-colors font-medium"
-          style={{ background: 'var(--amber)', color: '#fff' }}
+          style={{ background: 'var(--amber)', color: 'var(--text-inv)' }}
           onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.85'; }}
           onMouseLeave={(e) => { e.currentTarget.style.opacity = '1'; }}
         >

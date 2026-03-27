@@ -9,6 +9,7 @@ import {
   SkipBack,
   SkipForward,
   Loader2,
+  Sun,
 } from 'lucide-react';
 import { formatTime } from '../utils/formatTime';
 import type { VideoPlayerState, VideoPlayerActions } from '../hooks/useVideoPlayer';
@@ -40,15 +41,18 @@ interface VideoPlayerProps {
   titleMarkers?: ScrubberTitleMarker[];
   sceneMarkers?: ScrubberSceneMarker[];
   sceneBands?: ScrubberSceneBand[];
+  videoBrightness?: number;
+  onVideoBrightnessChange?: (brightness: number) => void;
 }
 
 const SPEEDS = [1, 1.5, 2, 4, 8];
 
 export const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
-  ({ src, state, actions, onVideoError, showVideoTimecode, videoTimecodePosition, onVideoTimecodePositionChange, titleMarkers, sceneMarkers, sceneBands }, ref) => {
+  ({ src, state, actions, onVideoError, showVideoTimecode, videoTimecodePosition, onVideoTimecodePositionChange, titleMarkers, sceneMarkers, sceneBands, videoBrightness = 1.0, onVideoBrightnessChange }, ref) => {
     const progressRef = useRef<HTMLDivElement>(null);
     const videoContainerRef = useRef<HTMLDivElement>(null);
     const [isDragging, setIsDragging] = useState(false);
+    const [showBrightness, setShowBrightness] = useState(false);
 
     // ── Timecode overlay drag state ──
     const [isOverlayDragging, setIsOverlayDragging] = useState(false);
@@ -153,6 +157,7 @@ export const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
             onError={onVideoError}
             playsInline
             preload="auto"
+            style={videoBrightness !== 1.0 ? { filter: `brightness(${videoBrightness})` } : undefined}
           />
 
           {/* Timecode overlay */}
@@ -246,7 +251,7 @@ export const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
                   style={{
                     left: 3,
                     width: 2,
-                    background: '#5c6bc0',
+                    background: 'var(--title-color)',
                     opacity: 0.8,
                     pointerEvents: 'none',
                   }}
@@ -346,6 +351,32 @@ export const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
             </div>
 
             <div className="flex items-center gap-2">
+              {/* Brightness */}
+              <button
+                type="button"
+                onClick={() => setShowBrightness(prev => !prev)}
+                onDoubleClick={() => { onVideoBrightnessChange?.(1.0); setShowBrightness(false); }}
+                className="p-1.5 rounded-md transition-colors"
+                onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
+                onMouseLeave={e => (e.currentTarget.style.background = '')}
+                title={`Brightness ${Math.round(videoBrightness * 100)}% — double-click to reset`}
+                style={videoBrightness !== 1.0 ? { color: 'var(--amber)' } : undefined}
+              >
+                <Sun className="w-4 h-4" />
+              </button>
+              {showBrightness && (
+                <input
+                  type="range"
+                  min="0.2"
+                  max="1.8"
+                  step="0.05"
+                  value={videoBrightness}
+                  onChange={(e) => onVideoBrightnessChange?.(parseFloat(e.target.value))}
+                  className="w-20 h-1 cursor-pointer"
+                  style={{ accentColor: 'var(--amber)' }}
+                />
+              )}
+
               {/* Speed selector */}
               <select
                 value={state.playbackRate}
