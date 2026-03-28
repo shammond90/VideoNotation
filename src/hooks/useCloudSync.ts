@@ -23,11 +23,11 @@ export type CloudSaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 export function useCloudSync() {
   const { userId, isSignedIn, isLoaded, getSupabaseClient, validateSession } = useAuth();
   const [saveStatus, setSaveStatus] = useState<CloudSaveStatus>('idle');
-  const annotationDebounceRef = useRef<ReturnType<typeof setTimeout>>();
-  const configDebounceRef = useRef<ReturnType<typeof setTimeout>>();
-  const templateDebounceRef = useRef<ReturnType<typeof setTimeout>>();
-  const xlsxDebounceRef = useRef<ReturnType<typeof setTimeout>>();
-  const resetStatusRef = useRef<ReturnType<typeof setTimeout>>();
+  const annotationDebounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const configDebounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const templateDebounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const xlsxDebounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const resetStatusRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // Track which projects have been confirmed in the cloud this session
   const pushedProjectsRef = useRef(new Set<string>());

@@ -218,7 +218,6 @@ export default function App({
     saveStatus: cloudSaveStatus,
     cloudPushProject,
     cloudPushAnnotationsImmediate,
-    cloudDeleteAnnotation,
   } = useCloudSync();
 
   // ── Scrubber markers for scene/act grouping ──
@@ -274,7 +273,6 @@ export default function App({
   }, [annotationScope.fileName, annotationScope.fileSize]);
 
   // ── Cloud sync helper: push project + annotations to cloud (called at save-time) ──
-  const cloudSyncRef = useRef(false);
   const pushToCloud = useCallback(() => {
     if (!projectId || syncPaused) return;
     // Load full project from IndexedDB and push

@@ -13,7 +13,7 @@ import { ProjectSwitcherModal } from './components/ProjectSwitcherModal';
 import { SessionExpiredModal } from './components/SessionExpiredModal';
 import { ToastContainer } from './components/ToastContainer';
 import { parseImportedProject, importProject, deleteProject as deleteProjectFromStorage, saveProject as saveProjectToStorage, loadProject as loadProjectFromStorage } from './utils/projectStorage';
-import { detectSyncStatus, pullAllProjectAnnotations } from './utils/cloudStorage';
+import { detectSyncStatus } from './utils/cloudStorage';
 import type { ImportedProjectData } from './utils/projectStorage';
 import type { TemplateData } from './types';
 import { DEFAULT_CONFIG } from './types';
@@ -346,7 +346,7 @@ function AuthenticatedApp({ offlineMode = false }: { offlineMode?: boolean }) {
 
   /** Overwrite the local project + annotations with the cloud version. */
   const applyCloudVersion = useCallback(
-    async (localProject: Project, cloudProject: Project) => {
+    async (_localProject: Project, cloudProject: Project) => {
       // Save cloud project data to IndexedDB
       const now = Date.now();
       await saveProjectToStorage({ ...cloudProject, last_synced_at: now });

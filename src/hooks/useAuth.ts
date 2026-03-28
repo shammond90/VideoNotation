@@ -31,7 +31,7 @@ export function useAuth() {
     sessionExpired: false,
   });
 
-  const heartbeatRef = useRef<ReturnType<typeof setInterval>>();
+  const heartbeatRef = useRef<ReturnType<typeof setInterval>>(undefined);
   const initializedRef = useRef(false);
 
   // Keep a stable ref to getToken so the Supabase client's accessToken
