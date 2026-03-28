@@ -584,6 +584,9 @@ export interface Project {
   video_filesize: number | null;
   video_duration: number | null;
 
+  // Cloud sync tracking
+  last_synced_at?: number | null; // timestamp (ms) of last successful cloud sync
+
   // Configuration snapshot
   config_template_id?: string; // informational, not linked after creation
   config: AppConfig;

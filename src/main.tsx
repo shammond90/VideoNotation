@@ -1,6 +1,13 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { ClerkProvider } from '@clerk/clerk-react'
 import './index.css'
+
+const CLERK_PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string;
+
+if (!CLERK_PUBLISHABLE_KEY) {
+  throw new Error('Missing VITE_CLERK_PUBLISHABLE_KEY environment variable');
+}
 
 // Simple client-side routing: /video-window renders the popup view,
 // everything else renders the main app.
@@ -20,7 +27,9 @@ async function renderApp() {
     const { AppShell } = await import('./AppShell');
     root.render(
       <StrictMode>
-        <AppShell />
+        <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY}>
+          <AppShell />
+        </ClerkProvider>
       </StrictMode>,
     );
   }

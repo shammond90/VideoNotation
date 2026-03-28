@@ -6,15 +6,17 @@ interface HomeScreenProps {
   onProjectSelected: (projectId: string) => void;
   onCreateProject: () => void;
   onImportProject: () => void;
+  isRestoring?: boolean;
 }
 
 /**
- * Home screen â€” project list matching the Cuetation design system.
+ * Home screen — project list matching the Cuetation design system.
  */
 export function HomeScreen({
   onProjectSelected,
   onCreateProject,
   onImportProject,
+  isRestoring = false,
 }: HomeScreenProps) {
   const { projects, isLoading, error, loadAllProjects } = useProject();
 
@@ -104,8 +106,11 @@ export function HomeScreen({
       <div style={{ height: 1, background: 'var(--border)', margin: '24px 40px 0' }} />
 
       {/* Sort bar */}
-      <div className="font-mono" style={{ padding: '14px 40px', fontSize: 12, color: 'var(--text-dim)' }}>
+      <div className="font-mono" style={{ padding: '14px 40px', fontSize: 12, color: 'var(--text-dim)', display: 'flex', alignItems: 'center', gap: 8 }}>
         {projects.length} project{projects.length !== 1 ? 's' : ''}
+        {isRestoring && (
+          <span style={{ color: 'var(--amber)', fontSize: 11 }}>· Restoring from cloud…</span>
+        )}
       </div>
 
       {/* Empty state */}
