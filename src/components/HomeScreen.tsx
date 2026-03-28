@@ -25,9 +25,10 @@ export function HomeScreen({
 }: HomeScreenProps) {
   const { projects, isLoading, error, loadAllProjects } = useProject();
 
+  // Reload projects on mount and after cloud restore finishes
   useEffect(() => {
     loadAllProjects();
-  }, [loadAllProjects]);
+  }, [loadAllProjects, isRestoring]);
 
   if (isLoading) {
     return (
