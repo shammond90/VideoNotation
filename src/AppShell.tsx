@@ -91,6 +91,7 @@ export function AppShell() {
 function AuthenticatedApp({ offlineMode = false }: { offlineMode?: boolean }) {
   const { sessionExpired, signOut: handleSessionSignOut } = useAuth();
   const {
+    isCloudReady,
     cloudPushProject,
     cloudDeleteProject,
     cloudPullProjects,
@@ -141,37 +142,52 @@ function AuthenticatedApp({ offlineMode = false }: { offlineMode?: boolean }) {
   const [isRestoring, setIsRestoring] = useState(true);
   const restoreAttemptedRef = useRef(false);
 
-  // Load all projects on mount + restore from cloud
+  // Load all projects on mount
   useEffect(() => {
     loadAllProjects();
   }, [loadAllProjects]);
 
+  // Restore from cloud once auth is ready
   useEffect(() => {
     if (restoreAttemptedRef.current) return;
-    restoreAttemptedRef.current = true;
-
-    if (offlineMode) {
-      setIsRestoring(false);
-      return;
-    }
+    if (offlineMode) { setIsRestoring(false); return; }
+    if (!isCloudReady) return;          // wait until Clerk + Supabase initialised
+    restoreAttemptedRef.current = true; // one-shot after auth is confirmed
 
     (async () => {
       try {
         const cloudProjects = await cloudPullProjects();
         if (cloudProjects.length > 0) {
-          // Import cloud projects that don't exist locally
           const localProjects = await import('./utils/projectStorage').then(m => m.loadProjects());
-          const localIds = new Set(localProjects.map(p => p.id));
+          const localMap = new Map(localProjects.map(p => [p.id, p]));
           let restored = 0;
+          let updated = 0;
+
           for (const cp of cloudProjects) {
-            if (!localIds.has(cp.id)) {
+            const local = localMap.get(cp.id);
+
+            if (!local) {
+              // ── New project: import metadata + annotations ──
               await saveProjectToStorage({ ...cp, last_synced_at: Date.now() });
+              const groups = await cloudPullAllProjectAnnotations(cp.id);
+              for (const { videoKey, annotations } of groups) {
+                const [fileName, fileSizeStr] = videoKey.split(':');
+                await saveAnnotations(fileName, Number(fileSizeStr) || 0, annotations);
+              }
               restored++;
+            } else if (cp.updated_at > (local.updated_at ?? 0)) {
+              // ── Cloud is newer: overwrite local project metadata ──
+              await saveProjectToStorage({ ...cp, last_synced_at: Date.now() });
+              updated++;
             }
           }
-          if (restored > 0) {
+
+          if (restored > 0 || updated > 0) {
             await loadAllProjects();
-            addToast(`Restored ${restored} project${restored > 1 ? 's' : ''} from cloud.`, 'info');
+            const parts: string[] = [];
+            if (restored > 0) parts.push(`restored ${restored}`);
+            if (updated > 0) parts.push(`updated ${updated}`);
+            addToast(`Cloud sync: ${parts.join(', ')} project${restored + updated > 1 ? 's' : ''}.`, 'info');
           }
         }
 
@@ -204,7 +220,7 @@ function AuthenticatedApp({ offlineMode = false }: { offlineMode?: boolean }) {
         setIsRestoring(false);
       }
     })();
-  }, [cloudPullProjects, cloudPullConfigTemplates, cloudPullXlsxExportTemplates, loadAllProjects, addToast]);
+  }, [isCloudReady, offlineMode, cloudPullProjects, cloudPullAllProjectAnnotations, cloudPullConfigTemplates, cloudPullXlsxExportTemplates, loadAllProjects, addToast]);
 
   // ────────────────────────────────────
   // Navigation handlers
