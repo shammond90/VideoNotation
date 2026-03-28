@@ -207,18 +207,13 @@ export function useCloudSync() {
     }
   }, [isSignedIn, userId, getClient]);
 
-  /** Pull a single project from the cloud. Returns null if not found or offline. */
+  /** Pull a single project from the cloud. Returns null if not found. Throws on network/auth errors. */
   const cloudPullProject = useCallback(
     async (projectId: string): Promise<Project | null> => {
-      if (!isSignedIn) return null;
-      try {
-        const client = await getClient();
-        if (!client) return null;
-        return await pullProject(client, projectId);
-      } catch (err) {
-        console.error('Cloud pull project failed:', err);
-        return null;
-      }
+      if (!isSignedIn) throw new Error('Not signed in');
+      const client = await getClient();
+      if (!client) throw new Error('Could not get Supabase client');
+      return await pullProject(client, projectId);
     },
     [isSignedIn, getClient]
   );

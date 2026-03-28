@@ -184,8 +184,14 @@ function AuthenticatedApp({ offlineMode = false }: { offlineMode?: boolean }) {
               }
               restored++;
             } else if (cp.updated_at > (local.updated_at ?? 0)) {
-              // ── Cloud is newer: overwrite local project metadata ──
+              // ── Cloud is newer: overwrite local metadata + annotations ──
               await saveProjectToStorage({ ...cp, last_synced_at: Date.now() });
+              const groups = await cloudPullAllProjectAnnotations(cp.id);
+              console.log('[cloud-restore]   updated annotations:', groups.length, 'groups');
+              for (const { videoKey, annotations } of groups) {
+                const [fileName, fileSizeStr] = videoKey.split(':');
+                await saveAnnotations(fileName, Number(fileSizeStr) || 0, annotations);
+              }
               updated++;
             }
           }
