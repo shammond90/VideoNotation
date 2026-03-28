@@ -51,12 +51,15 @@ export function useCloudSync() {
 
   /** Get a Supabase client and validate the session. Returns null if invalid. */
   const getClient = useCallback(async (): Promise<SupabaseClient | null> => {
+    console.log('[cloud-sync] getClient called', { isSignedIn, userId });
     if (!isSignedIn || !userId) return null;
     try {
       const valid = await validateSession();
+      console.log('[cloud-sync] session valid:', valid);
       if (!valid) return null;
       return await getSupabaseClient();
-    } catch {
+    } catch (err) {
+      console.error('[cloud-sync] getClient error:', err);
       return null;
     }
   }, [isSignedIn, userId, getSupabaseClient, validateSession]);
@@ -188,13 +191,21 @@ export function useCloudSync() {
     if (!isSignedIn) return [];
     try {
       const client = await getClient();
-      if (!client) return [];
+      if (!client) { console.warn('[cloud-sync] getClient returned null'); return []; }
+      // Diagnostic: check what token Supabase is using
+      try {
+        const { data: { session } } = await client.auth.getSession();
+        console.log('[cloud-sync] supabase session:', session ? 'exists' : 'null');
+      } catch { /* third-party auth may not support getSession */ }
+      // Raw query to check what comes back
+      const { data, error } = await client.from('projects').select('id, user_id').limit(5);
+      console.log('[cloud-sync] raw projects query:', { data, error, userId });
       return await pullAllProjects(client);
     } catch (err) {
       console.error('Cloud pull projects failed:', err);
       return [];
     }
-  }, [isSignedIn, getClient]);
+  }, [isSignedIn, userId, getClient]);
 
   /** Pull a single project from the cloud. Returns null if not found or offline. */
   const cloudPullProject = useCallback(
