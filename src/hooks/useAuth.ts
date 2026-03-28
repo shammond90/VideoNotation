@@ -96,6 +96,7 @@ export function useAuth() {
   /** Check if this session is still the active one. */
   const validateSession = useCallback(async (): Promise<boolean> => {
     if (!user) return false;
+    if (!initializedRef.current) return true; // session not registered yet — don't block
     try {
       const supabase = await getSupabaseClient();
       const { data } = await supabase
