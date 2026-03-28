@@ -92,6 +92,7 @@ function AuthenticatedApp({ offlineMode = false }: { offlineMode?: boolean }) {
   const { sessionExpired, signOut: handleSessionSignOut } = useAuth();
   const {
     isCloudReady,
+    saveStatus: cloudSaveStatus,
     cloudPushProject,
     cloudDeleteProject,
     cloudPullProjects,
@@ -151,12 +152,17 @@ function AuthenticatedApp({ offlineMode = false }: { offlineMode?: boolean }) {
   useEffect(() => {
     if (restoreAttemptedRef.current) return;
     if (offlineMode) { setIsRestoring(false); return; }
-    if (!isCloudReady) return;          // wait until Clerk + Supabase initialised
-    restoreAttemptedRef.current = true; // one-shot after auth is confirmed
+    if (!isCloudReady) {
+      console.log('[cloud-restore] waiting for auth…', { isCloudReady });
+      return;
+    }
+    restoreAttemptedRef.current = true;
+    console.log('[cloud-restore] auth ready, pulling cloud projects…');
 
     (async () => {
       try {
         const cloudProjects = await cloudPullProjects();
+        console.log('[cloud-restore] cloudPullProjects returned', cloudProjects.length, 'projects');
         if (cloudProjects.length > 0) {
           const localProjects = await import('./utils/projectStorage').then(m => m.loadProjects());
           const localMap = new Map(localProjects.map(p => [p.id, p]));
@@ -165,11 +171,13 @@ function AuthenticatedApp({ offlineMode = false }: { offlineMode?: boolean }) {
 
           for (const cp of cloudProjects) {
             const local = localMap.get(cp.id);
+            console.log('[cloud-restore] project', cp.id, cp.name, local ? `local updated_at=${local.updated_at}` : 'NEW', `cloud updated_at=${cp.updated_at}`);
 
             if (!local) {
               // ── New project: import metadata + annotations ──
               await saveProjectToStorage({ ...cp, last_synced_at: Date.now() });
               const groups = await cloudPullAllProjectAnnotations(cp.id);
+              console.log('[cloud-restore]   imported', groups.length, 'annotation groups');
               for (const { videoKey, annotations } of groups) {
                 const [fileName, fileSizeStr] = videoKey.split(':');
                 await saveAnnotations(fileName, Number(fileSizeStr) || 0, annotations);
@@ -215,8 +223,9 @@ function AuthenticatedApp({ offlineMode = false }: { offlineMode?: boolean }) {
           }
         }
       } catch (err) {
-        console.error('Cloud restore failed:', err);
+        console.error('[cloud-restore] failed:', err);
       } finally {
+        console.log('[cloud-restore] done');
         setIsRestoring(false);
       }
     })();
@@ -668,6 +677,7 @@ function AuthenticatedApp({ offlineMode = false }: { offlineMode?: boolean }) {
           onCreateProject={handleCreateProject}
           onImportProject={handleImportProject}
           isRestoring={isRestoring}
+          cloudSaveStatus={cloudSaveStatus}
         />
         <input
           ref={importInputRef}

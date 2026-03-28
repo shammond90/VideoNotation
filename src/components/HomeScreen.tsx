@@ -1,12 +1,16 @@
 ﻿import { useEffect } from 'react';
+import { UserButton } from '@clerk/clerk-react';
+import { Cloud, CloudOff, Loader2, Check } from 'lucide-react';
 import type { Project } from '../types/index';
 import { useProject } from '../hooks/useProject';
+import type { CloudSaveStatus } from '../hooks/useCloudSync';
 
 interface HomeScreenProps {
   onProjectSelected: (projectId: string) => void;
   onCreateProject: () => void;
   onImportProject: () => void;
   isRestoring?: boolean;
+  cloudSaveStatus?: CloudSaveStatus;
 }
 
 /**
@@ -17,6 +21,7 @@ export function HomeScreen({
   onCreateProject,
   onImportProject,
   isRestoring = false,
+  cloudSaveStatus = 'idle',
 }: HomeScreenProps) {
   const { projects, isLoading, error, loadAllProjects } = useProject();
 
@@ -45,15 +50,56 @@ export function HomeScreen({
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--bg)', color: 'var(--text)' }}>
-      {/* Header */}
-      <div className="flex items-flex-end justify-between" style={{ padding: '32px 40px 0' }}>
+      {/* Top bar — matches cue-sheet header */}
+      <header style={{
+        height: 44,
+        background: 'var(--bg)',
+        borderBottom: '1px solid var(--border)',
+        display: 'flex',
+        alignItems: 'center',
+        padding: '0 16px',
+        flexShrink: 0,
+      }}>
+        <div className="font-display" style={{
+          fontSize: 17,
+          color: 'var(--text)',
+          letterSpacing: '-0.01em',
+          display: 'flex',
+          alignItems: 'center',
+        }}>
+          Cue<em style={{ fontStyle: 'italic', color: 'var(--amber)' }}>tation</em>
+        </div>
+        <div style={{ flex: 1 }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div
+            style={{
+              width: 28, height: 28,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              borderRadius: 'var(--r-sm)',
+              color: cloudSaveStatus === 'error' ? 'var(--red)' : cloudSaveStatus === 'saved' ? 'var(--green, #22c55e)' : 'var(--text-dim)',
+            }}
+            title={
+              cloudSaveStatus === 'saving' ? 'Syncing…' :
+              cloudSaveStatus === 'saved' ? 'Connected' :
+              cloudSaveStatus === 'error' ? 'Cloud error' :
+              'Cloud'
+            }
+          >
+            {cloudSaveStatus === 'saving' && <Loader2 className="w-4 h-4 animate-spin" />}
+            {cloudSaveStatus === 'saved' && <Check className="w-4 h-4" />}
+            {cloudSaveStatus === 'error' && <CloudOff className="w-4 h-4" />}
+            {cloudSaveStatus === 'idle' && <Cloud className="w-4 h-4" />}
+          </div>
+          <UserButton afterSignOutUrl="/" />
+        </div>
+      </header>
+
+      {/* Page header */}
+      <div className="flex items-flex-end justify-between" style={{ padding: '24px 40px 0' }}>
         <div>
           <h1 className="font-display" style={{ fontSize: 28, fontWeight: 400, letterSpacing: '-0.02em', color: 'var(--text)' }}>
-            Cue<em style={{ fontStyle: 'italic', color: 'var(--amber)' }}>tation</em>
-          </h1>
-          <p className="font-mono" style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 3, letterSpacing: '0.06em' }}>
             Your productions
-          </p>
+          </h1>
         </div>
         <div className="flex items-center gap-2">
           <button
