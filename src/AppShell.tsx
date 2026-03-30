@@ -20,7 +20,7 @@ import { DEFAULT_CONFIG } from './types';
 import App from './App';
 import { SavePromptModal } from './components/SavePromptModal';
 import type { Project } from './types/index';
-import { saveAnnotations } from './utils/storage';
+import { saveAnnotations, hasAnnotationData } from './utils/storage';
 import { loadCachedAuth } from './utils/authCache';
 import type { CachedAuth } from './utils/authCache';
 
@@ -136,8 +136,6 @@ function AuthenticatedApp({ offlineMode = false }: { offlineMode?: boolean }) {
     cloudProject: Project;
     pendingProjectId: string;
   } | null>(null);
-  // Projects deferred from syncing (in-memory only, lost on refresh)
-  const deferredProjectsRef = useRef(new Set<string>());
 
   // Cloud restore state
   const [isRestoring, setIsRestoring] = useState(true);
@@ -153,16 +151,13 @@ function AuthenticatedApp({ offlineMode = false }: { offlineMode?: boolean }) {
     if (restoreAttemptedRef.current) return;
     if (offlineMode) { setIsRestoring(false); return; }
     if (!isCloudReady) {
-      console.log('[cloud-restore] waiting for auth…', { isCloudReady });
       return;
     }
     restoreAttemptedRef.current = true;
-    console.log('[cloud-restore] auth ready, pulling cloud projects…');
 
     (async () => {
       try {
         const cloudProjects = await cloudPullProjects();
-        console.log('[cloud-restore] cloudPullProjects returned', cloudProjects.length, 'projects');
         if (cloudProjects.length > 0) {
           const localProjects = await import('./utils/projectStorage').then(m => m.loadProjects());
           const localMap = new Map(localProjects.map(p => [p.id, p]));
@@ -171,27 +166,24 @@ function AuthenticatedApp({ offlineMode = false }: { offlineMode?: boolean }) {
 
           for (const cp of cloudProjects) {
             const local = localMap.get(cp.id);
-            console.log('[cloud-restore] project', cp.id, cp.name, local ? `local updated_at=${local.updated_at}` : 'NEW', `cloud updated_at=${cp.updated_at}`);
 
             if (!local) {
-              // ── New project: import metadata + annotations ──
-              await saveProjectToStorage({ ...cp, last_synced_at: Date.now() });
-              const groups = await cloudPullAllProjectAnnotations(cp.id);
-              console.log('[cloud-restore]   imported', groups.length, 'annotation groups');
-              for (const { videoKey, annotations } of groups) {
-                const [fileName, fileSizeStr] = videoKey.split(':');
-                await saveAnnotations(fileName, Number(fileSizeStr) || 0, annotations);
-              }
+              // ── New project: import metadata only (annotations fetched on open) ──
+              await saveProjectToStorage({
+                ...cp,
+                last_synced_at: Date.now(),
+                local_base_version: cp.version,
+                has_local_changes: false,
+              });
               restored++;
             } else if (cp.updated_at > (local.updated_at ?? 0)) {
-              // ── Cloud is newer: overwrite local metadata + annotations ──
-              await saveProjectToStorage({ ...cp, last_synced_at: Date.now() });
-              const groups = await cloudPullAllProjectAnnotations(cp.id);
-              console.log('[cloud-restore]   updated annotations:', groups.length, 'groups');
-              for (const { videoKey, annotations } of groups) {
-                const [fileName, fileSizeStr] = videoKey.split(':');
-                await saveAnnotations(fileName, Number(fileSizeStr) || 0, annotations);
-              }
+              // ── Cloud is newer: overwrite local metadata only ──
+              await saveProjectToStorage({
+                ...cp,
+                last_synced_at: Date.now(),
+                local_base_version: cp.version,
+                has_local_changes: false,
+              });
               updated++;
             }
           }
@@ -231,11 +223,10 @@ function AuthenticatedApp({ offlineMode = false }: { offlineMode?: boolean }) {
       } catch (err) {
         console.error('[cloud-restore] failed:', err);
       } finally {
-        console.log('[cloud-restore] done');
         setIsRestoring(false);
       }
     })();
-  }, [isCloudReady, offlineMode, cloudPullProjects, cloudPullAllProjectAnnotations, cloudPullConfigTemplates, cloudPullXlsxExportTemplates, loadAllProjects, addToast]);
+  }, [isCloudReady, offlineMode, cloudPullProjects, cloudPullConfigTemplates, cloudPullXlsxExportTemplates, loadAllProjects, addToast]);
 
   // ────────────────────────────────────
   // Navigation handlers
@@ -308,7 +299,7 @@ function AuthenticatedApp({ offlineMode = false }: { offlineMode?: boolean }) {
         }
 
         // If this project was deferred earlier, skip conflict check
-        if (deferredProjectsRef.current.has(projectId)) {
+        if (localProject.sync_deferred) {
           await openProject(projectId);
           setAppState({ screen: 'cue-sheet' });
           return;
@@ -330,8 +321,23 @@ function AuthenticatedApp({ offlineMode = false }: { offlineMode?: boolean }) {
 
         switch (status) {
           case 'in-sync':
+            // For projects restored from cloud (metadata-only), pull annotations if missing
+            if (cloudProject && localProject.local_base_version > 0) {
+              const annotationGroups = await cloudPullAllProjectAnnotations(projectId);
+              for (const { videoKey, annotations } of annotationGroups) {
+                const [fileName, fileSizeStr] = videoKey.split(':');
+                const fileSize = Number(fileSizeStr) || 0;
+                const local = await hasAnnotationData(fileName, fileSize);
+                if (!local.exists && annotations.length > 0) {
+                  await saveAnnotations(fileName, fileSize, annotations);
+                }
+              }
+            }
+            await openProject(projectId);
+            setAppState({ screen: 'cue-sheet' });
+            break;
+
           case 'local-only':
-            // Nothing to do — open normally
             await openProject(projectId);
             setAppState({ screen: 'cue-sheet' });
             break;
@@ -378,9 +384,13 @@ function AuthenticatedApp({ offlineMode = false }: { offlineMode?: boolean }) {
   /** Overwrite the local project + annotations with the cloud version. */
   const applyCloudVersion = useCallback(
     async (_localProject: Project, cloudProject: Project) => {
-      // Save cloud project data to IndexedDB
-      const now = Date.now();
-      await saveProjectToStorage({ ...cloudProject, last_synced_at: now });
+      // Save cloud project data to IndexedDB with version tracking
+      await saveProjectToStorage({
+        ...cloudProject,
+        last_synced_at: Date.now(),
+        local_base_version: cloudProject.version,
+        has_local_changes: false,
+      });
 
       // Pull and overwrite annotations
       const annotationGroups = await cloudPullAllProjectAnnotations(cloudProject.id);
@@ -414,7 +424,7 @@ function AuthenticatedApp({ offlineMode = false }: { offlineMode?: boolean }) {
           case 'keep-local': {
             // Push local to cloud, overwriting cloud version
             const now = Date.now();
-            const updated = { ...localProject, last_synced_at: now };
+            const updated = { ...localProject, last_synced_at: now, sync_deferred: false };
             await saveProjectToStorage(updated);
             cloudPushProject(updated);
             await loadAllProjects();
@@ -432,6 +442,8 @@ function AuthenticatedApp({ offlineMode = false }: { offlineMode?: boolean }) {
               id: copyId,
               name: `${localProject.name} (local copy)`,
               last_synced_at: null,
+              local_base_version: 0,
+              has_local_changes: false,
             };
             await saveProjectToStorage(localCopy);
             cloudPushProject(localCopy);
@@ -465,6 +477,8 @@ function AuthenticatedApp({ offlineMode = false }: { offlineMode?: boolean }) {
               id: copyId,
               name: `${cloudProject.name} (cloud copy)`,
               last_synced_at: null,
+              local_base_version: 0,
+              has_local_changes: false,
             };
             await saveProjectToStorage(cloudCopy);
             cloudPushProject(cloudCopy);
@@ -484,7 +498,7 @@ function AuthenticatedApp({ offlineMode = false }: { offlineMode?: boolean }) {
 
             // Push local to cloud
             const now = Date.now();
-            const updated = { ...localProject, last_synced_at: now };
+            const updated = { ...localProject, last_synced_at: now, sync_deferred: false };
             await saveProjectToStorage(updated);
             cloudPushProject(updated);
             await loadAllProjects();
@@ -495,7 +509,9 @@ function AuthenticatedApp({ offlineMode = false }: { offlineMode?: boolean }) {
           }
 
           case 'resolve-later': {
-            deferredProjectsRef.current.add(pendingProjectId);
+            const deferred = { ...localProject, sync_deferred: true };
+            await saveProjectToStorage(deferred);
+            await loadAllProjects();
             await openProject(pendingProjectId);
             setAppState({ screen: 'cue-sheet' });
             addToast('Sync deferred — cloud push disabled for this project until resolved.', 'warning');
@@ -735,7 +751,7 @@ function AuthenticatedApp({ offlineMode = false }: { offlineMode?: boolean }) {
           projectName={currentProject.name}
           videoFilename={currentProject.video_filename}
           videoFilesize={currentProject.video_filesize}
-          syncPaused={offlineMode || deferredProjectsRef.current.has(currentProject.id)}
+          syncPaused={offlineMode || (currentProject.sync_deferred ?? false)}
           onGoHome={handleGoHome}
           onSwitchProject={handleOpenSwitcher}
           onVideoLoaded={handleVideoLoaded}

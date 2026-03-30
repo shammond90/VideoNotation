@@ -1,6 +1,6 @@
 ﻿import { useEffect } from 'react';
 import { UserButton } from '@clerk/clerk-react';
-import { Cloud, CloudOff, Loader2, Check } from 'lucide-react';
+import { Cloud, CloudOff, Loader2, Check, RefreshCw } from 'lucide-react';
 import type { Project } from '../types/index';
 import { useProject } from '../hooks/useProject';
 import type { CloudSaveStatus } from '../hooks/useCloudSync';
@@ -72,25 +72,7 @@ export function HomeScreen({
         </div>
         <div style={{ flex: 1 }} />
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <div
-            style={{
-              width: 28, height: 28,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              borderRadius: 'var(--r-sm)',
-              color: cloudSaveStatus === 'error' ? 'var(--red)' : cloudSaveStatus === 'saved' ? 'var(--green, #22c55e)' : 'var(--text-dim)',
-            }}
-            title={
-              cloudSaveStatus === 'saving' ? 'Syncing…' :
-              cloudSaveStatus === 'saved' ? 'Connected' :
-              cloudSaveStatus === 'error' ? 'Cloud error' :
-              'Cloud'
-            }
-          >
-            {cloudSaveStatus === 'saving' && <Loader2 className="w-4 h-4 animate-spin" />}
-            {cloudSaveStatus === 'saved' && <Check className="w-4 h-4" />}
-            {cloudSaveStatus === 'error' && <CloudOff className="w-4 h-4" />}
-            {cloudSaveStatus === 'idle' && <Cloud className="w-4 h-4" />}
-          </div>
+          <HomeCloudIndicator cloudSaveStatus={cloudSaveStatus} projects={projects} />
           <UserButton afterSignOutUrl="/" />
         </div>
       </header>
@@ -282,6 +264,7 @@ function ProjectCard({ project, onSelect }: { project: Project; onSelect: () => 
           <span className="font-mono" style={{ fontSize: 10, color: 'var(--text-dim)' }}>
             Modified <span style={{ color: 'var(--text-mid)' }}>{lastModified}</span>
           </span>
+          <SyncBadge project={project} />
         </div>
         <div className="font-mono" style={{ fontSize: 10, color: 'var(--text-dim)' }}>
           {project.video_filename ? (
@@ -295,8 +278,88 @@ function ProjectCard({ project, onSelect }: { project: Project; onSelect: () => 
   );
 }
 
+/**
+ * Sync state badge for a project card.
+ */
+function SyncBadge({ project }: { project: Project }) {
+  if (project.sync_deferred) {
+    return (
+      <span title="Sync deferred — conflict unresolved" style={{ display: 'flex', alignItems: 'center', gap: 3, color: 'var(--red)' }}>
+        <CloudOff className="w-3 h-3" />
+        <span className="font-mono" style={{ fontSize: 9 }}>Deferred</span>
+      </span>
+    );
+  }
+  if (project.local_base_version === 0) {
+    return (
+      <span title="Local only — not yet synced" style={{ display: 'flex', alignItems: 'center', gap: 3, color: 'var(--text-dim)' }}>
+        <span className="font-mono" style={{ fontSize: 9 }}>Local</span>
+      </span>
+    );
+  }
+  if (project.has_local_changes) {
+    return (
+      <span title="Local changes not yet synced" style={{ display: 'flex', alignItems: 'center', gap: 3, color: 'var(--amber)' }}>
+        <RefreshCw className="w-3 h-3" />
+        <span className="font-mono" style={{ fontSize: 9 }}>Unsynced</span>
+      </span>
+    );
+  }
+  return (
+    <span title="Synced with cloud" style={{ display: 'flex', alignItems: 'center', gap: 3, color: 'var(--green, #22c55e)' }}>
+      <Cloud className="w-3 h-3" />
+      <span className="font-mono" style={{ fontSize: 9 }}>Synced</span>
+    </span>
+  );
+}
+
 function truncate(str: string, max: number): string {
   return str.length > max ? str.slice(0, max - 1) + '\u2026' : str;
+}
+
+/**
+ * Global cloud indicator for the HomeScreen top bar.
+ * Green = all synced, Yellow = some projects have unsynced changes, Red = error or deferred.
+ */
+function HomeCloudIndicator({ cloudSaveStatus, projects }: { cloudSaveStatus: CloudSaveStatus; projects: Project[] }) {
+  const hasDeferred = projects.some(p => p.sync_deferred);
+  const hasUnsynced = projects.some(p => p.has_local_changes && !p.sync_deferred);
+
+  // Transient states override static badges
+  if (cloudSaveStatus === 'saving') {
+    return (
+      <div style={{ width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-dim)' }} title="Syncing…">
+        <Loader2 className="w-4 h-4 animate-spin" />
+      </div>
+    );
+  }
+  if (cloudSaveStatus === 'saved') {
+    return (
+      <div style={{ width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--green, #22c55e)' }} title="Saved to cloud">
+        <Check className="w-4 h-4" />
+      </div>
+    );
+  }
+  if (cloudSaveStatus === 'error' || hasDeferred) {
+    return (
+      <div style={{ width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--red)' }}
+        title={hasDeferred ? 'Sync blocked — unresolved conflict' : 'Cloud sync error'}>
+        <CloudOff className="w-4 h-4" />
+      </div>
+    );
+  }
+  if (hasUnsynced) {
+    return (
+      <div style={{ width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--yellow, #eab308)' }} title="Some projects have unsynced changes">
+        <Cloud className="w-4 h-4" />
+      </div>
+    );
+  }
+  return (
+    <div style={{ width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--green, #22c55e)' }} title="All projects synced">
+      <Cloud className="w-4 h-4" />
+    </div>
+  );
 }
 
 function formatRelativeTime(timestamp: number): string {

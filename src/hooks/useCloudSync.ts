@@ -23,7 +23,6 @@ export type CloudSaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 export function useCloudSync() {
   const { userId, isSignedIn, isLoaded, getSupabaseClient, validateSession } = useAuth();
   const [saveStatus, setSaveStatus] = useState<CloudSaveStatus>('idle');
-  const annotationDebounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const configDebounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const templateDebounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const xlsxDebounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -35,7 +34,6 @@ export function useCloudSync() {
   // Clear timers on unmount
   useEffect(() => {
     return () => {
-      clearTimeout(annotationDebounceRef.current);
       clearTimeout(configDebounceRef.current);
       clearTimeout(templateDebounceRef.current);
       clearTimeout(xlsxDebounceRef.current);
@@ -51,15 +49,12 @@ export function useCloudSync() {
 
   /** Get a Supabase client and validate the session. Returns null if invalid. */
   const getClient = useCallback(async (): Promise<SupabaseClient | null> => {
-    console.log('[cloud-sync] getClient called', { isSignedIn, userId });
     if (!isSignedIn || !userId) return null;
     try {
       const valid = await validateSession();
-      console.log('[cloud-sync] session valid:', valid);
       if (!valid) return null;
       return await getSupabaseClient();
-    } catch (err) {
-      console.error('[cloud-sync] getClient error:', err);
+    } catch {
       return null;
     }
   }, [isSignedIn, userId, getSupabaseClient, validateSession]);
@@ -72,13 +67,15 @@ export function useCloudSync() {
         setSaveStatus('saving');
         const client = await getClient();
         if (!client) return;
-        await pushProject(client, project, userId);
+        const newVersion = await pushProject(client, project, userId);
         pushedProjectsRef.current.add(project.id);
-        // Update last_synced_at locally
+        // Update version tracking fields locally
         const { loadProject, saveProject } = await import('../utils/projectStorage');
         const fresh = await loadProject(project.id);
         if (fresh) {
           fresh.last_synced_at = Date.now();
+          fresh.local_base_version = newVersion;
+          fresh.has_local_changes = false;
           await saveProject(fresh);
         }
         showSaved();
@@ -113,28 +110,6 @@ export function useCloudSync() {
       }
     },
     [userId]
-  );
-
-  /** Push annotations to the cloud (debounced 2s). Ensures project exists first. */
-  const cloudPushAnnotations = useCallback(
-    (annotations: Annotation[], projectId: string, videoKey: string) => {
-      if (!isSignedIn || !userId) return;
-      clearTimeout(annotationDebounceRef.current);
-      annotationDebounceRef.current = setTimeout(async () => {
-        try {
-          setSaveStatus('saving');
-          const client = await getClient();
-          if (!client) return;
-          await ensureProjectInCloud(projectId, client);
-          await pushAnnotations(client, annotations, projectId, userId, videoKey);
-          showSaved();
-        } catch (err) {
-          console.error('Cloud push annotations failed:', err);
-          setSaveStatus('error');
-        }
-      }, 2000);
-    },
-    [isSignedIn, userId, getClient, showSaved, ensureProjectInCloud]
   );
 
   /** Push annotations to the cloud immediately (no debounce). For use at save-time. */
@@ -191,21 +166,13 @@ export function useCloudSync() {
     if (!isSignedIn) return [];
     try {
       const client = await getClient();
-      if (!client) { console.warn('[cloud-sync] getClient returned null'); return []; }
-      // Diagnostic: check what token Supabase is using
-      try {
-        const { data: { session } } = await client.auth.getSession();
-        console.log('[cloud-sync] supabase session:', session ? 'exists' : 'null');
-      } catch { /* third-party auth may not support getSession */ }
-      // Raw query to check what comes back
-      const { data, error } = await client.from('projects').select('id, user_id').limit(5);
-      console.log('[cloud-sync] raw projects query:', { data, error, userId });
+      if (!client) return [];
       return await pullAllProjects(client);
     } catch (err) {
       console.error('Cloud pull projects failed:', err);
       return [];
     }
-  }, [isSignedIn, userId, getClient]);
+  }, [isSignedIn, getClient]);
 
   /** Pull a single project from the cloud. Returns null if not found. Throws on network/auth errors. */
   const cloudPullProject = useCallback(
@@ -322,7 +289,6 @@ export function useCloudSync() {
     saveStatus,
     isCloudReady: isLoaded && isSignedIn,
     cloudPushProject,
-    cloudPushAnnotations,
     cloudPushAnnotationsImmediate,
     cloudDeleteProject,
     cloudDeleteAnnotation,

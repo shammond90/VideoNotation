@@ -304,6 +304,8 @@ function migrateAnnotation(raw: any): Annotation {
     flagged: raw.flagged ?? false,
     flagNote: raw.flagNote ?? '',
     sort_order: raw.sort_order ?? 0,
+    version: raw.version ?? 1,
+    deleted: raw.deleted ?? false,
   };
 }
 

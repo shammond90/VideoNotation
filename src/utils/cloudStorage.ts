@@ -34,6 +34,9 @@ function rowToProject(row: any): Project {
     created_at: row.created_at,
     updated_at: row.updated_at,
     last_synced_at: row.last_synced_at ?? null,
+    version: row.version ?? 1,
+    local_base_version: row.version ?? 1, // when pulling from cloud, base = cloud version
+    has_local_changes: false,             // freshly pulled = no local changes
     production_name: row.production_name ?? undefined,
     choreographer: row.choreographer ?? undefined,
     venue: row.venue ?? undefined,
@@ -66,6 +69,7 @@ function annotationToRow(annotation: Annotation, projectId: string, userId: stri
     link_cue_id: annotation.cue.linkCueId || null,
     created_at: annotation.createdAt,
     updated_at: annotation.updatedAt,
+    deleted_at: annotation.deleted ? new Date().toISOString() : null,
   };
 }
 
@@ -81,19 +85,22 @@ function rowToAnnotation(row: any): Annotation {
     flagged: row.flagged ?? false,
     flagNote: row.flag_note ?? '',
     sort_order: row.sort_order ?? 0,
+    version: row.version ?? 1,
+    deleted: !!row.deleted_at,
   };
 }
 
 // ── Cloud CRUD operations ──
 
-/** Push (upsert) a project to Supabase. */
-export async function pushProject(supabase: SupabaseClient, project: Project, userId: string): Promise<void> {
+/** Push (upsert) a project to Supabase. Returns the new cloud version. */
+export async function pushProject(supabase: SupabaseClient, project: Project, userId: string): Promise<number> {
   const row = projectToRow(project, userId);
-  const { error } = await supabase.from('projects').upsert(row, { onConflict: 'id' });
+  const { data, error } = await supabase.from('projects').upsert(row, { onConflict: 'id' }).select('version').single();
   if (error) throw new Error(`pushProject failed: ${error.message}`);
+  return data.version;
 }
 
-/** Push (upsert) annotations for a project+videoKey to Supabase. Replaces the full set. */
+/** Push annotations for a project+videoKey to Supabase. Upserts local annotations and soft-deletes removed ones. */
 export async function pushAnnotations(
   supabase: SupabaseClient,
   annotations: Annotation[],
@@ -101,19 +108,33 @@ export async function pushAnnotations(
   userId: string,
   videoKey: string
 ): Promise<void> {
-  // Delete existing annotations for this project+videoKey, then insert fresh
-  const { error: deleteError } = await supabase
+  // 1. Fetch current cloud annotation IDs (RLS already filters deleted_at IS NULL)
+  const { data: cloudRows, error: fetchError } = await supabase
     .from('annotations')
-    .delete()
+    .select('id')
     .eq('project_id', projectId)
     .eq('video_key', videoKey);
-  if (deleteError) throw new Error(`pushAnnotations delete failed: ${deleteError.message}`);
+  if (fetchError) throw new Error(`pushAnnotations fetch failed: ${fetchError.message}`);
 
-  if (annotations.length === 0) return;
+  const cloudIds = new Set((cloudRows ?? []).map((r: any) => r.id as string));
+  const localIds = new Set(annotations.map(a => a.id));
 
-  const rows = annotations.map(a => annotationToRow(a, projectId, userId, videoKey));
-  const { error: insertError } = await supabase.from('annotations').insert(rows);
-  if (insertError) throw new Error(`pushAnnotations insert failed: ${insertError.message}`);
+  // 2. Upsert all local annotations
+  if (annotations.length > 0) {
+    const rows = annotations.map(a => annotationToRow(a, projectId, userId, videoKey));
+    const { error: upsertError } = await supabase.from('annotations').upsert(rows, { onConflict: 'id' });
+    if (upsertError) throw new Error(`pushAnnotations upsert failed: ${upsertError.message}`);
+  }
+
+  // 3. Soft-delete cloud annotations that no longer exist locally
+  const toSoftDelete = [...cloudIds].filter(id => !localIds.has(id));
+  if (toSoftDelete.length > 0) {
+    const { error: softDeleteError } = await supabase
+      .from('annotations')
+      .update({ deleted_at: new Date().toISOString() })
+      .in('id', toSoftDelete);
+    if (softDeleteError) throw new Error(`pushAnnotations soft-delete failed: ${softDeleteError.message}`);
+  }
 }
 
 /** Delete a project from Supabase (cascade deletes its annotations). */
@@ -160,13 +181,12 @@ export type SyncStatus =
   | 'conflict';
 
 /**
- * Compare a local project against its cloud counterpart and return a sync status.
- * - `in-sync`: same updated_at (or both null)
+ * Compare a local project against its cloud counterpart using version counters.
+ * - `in-sync`: local_base_version matches cloud version and no local changes
  * - `cloud-only`: no local version
- * - `local-only`: no cloud version
- * - `local-newer`: local updated_at > cloud updated_at → auto-push
- * - `cloud-newer-no-local-edits`: cloud updated_at > local, and local hasn't been
- *   edited since last_synced_at → safe to auto-pull
+ * - `local-only`: no cloud version (or never synced)
+ * - `local-newer`: local has changes, cloud hasn't changed since last sync
+ * - `cloud-newer-no-local-edits`: cloud version bumped, local has no edits → safe to auto-pull
  * - `conflict`: both sides changed since last sync → prompt user
  */
 export function detectSyncStatus(
@@ -177,22 +197,23 @@ export function detectSyncStatus(
   if (!local && cloud) return 'cloud-only';
   if (local && !cloud) return 'local-only';
 
-  // Both exist
   const l = local!;
   const c = cloud!;
 
-  if (l.updated_at === c.updated_at) return 'in-sync';
+  // Never synced — treat as local-only (will do an initial push)
+  if (l.local_base_version === 0) return 'local-only';
 
-  if (l.updated_at > c.updated_at) return 'local-newer';
+  if (l.local_base_version === c.version) {
+    // Cloud hasn't changed since our last sync
+    return l.has_local_changes ? 'local-newer' : 'in-sync';
+  }
 
-  // Cloud is newer. Check if local was edited since last sync.
-  const lastSync = l.last_synced_at ?? 0;
-  if (l.updated_at <= lastSync) {
-    // Local hasn't changed since last sync → safe to auto-pull
+  // Cloud version is different (higher) from our base
+  if (!l.has_local_changes) {
     return 'cloud-newer-no-local-edits';
   }
 
-  // Both sides have changes → conflict
+  // Both sides have changes
   return 'conflict';
 }
 

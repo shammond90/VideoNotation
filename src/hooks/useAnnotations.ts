@@ -81,6 +81,8 @@ export function useAnnotations(fileName: string, fileSize: number, videoDuration
           flagged: false,
           flagNote: '',
           sort_order: tieCount,
+          version: 1,
+          deleted: false,
         };
         createdAnnotation = newAnnotation;
         let withNew = sortAnnotations([...prev, newAnnotation]);

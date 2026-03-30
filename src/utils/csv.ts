@@ -109,6 +109,8 @@ export function importAnnotationsFromCSV(file: File): Promise<Annotation[]> {
               flagged: row.flagged === 'true' || row.flagged === '1',
               flagNote: row.flag_note || '',
               sort_order: row.sort_order != null ? parseInt(row.sort_order, 10) || 0 : 0,
+              version: 1,
+              deleted: false,
             };
           });
           resolve(annotations);

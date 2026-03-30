@@ -24,7 +24,7 @@ import { useCloudSync } from './hooks/useCloudSync';
 import { UserButton } from '@clerk/clerk-react';
 import type { CueFields } from './types';
 import { RESERVED_CUE_TYPES } from './types';
-import { Film, Settings, X as XIcon, ExternalLink, Cloud, CloudOff, Loader2, Check, AlertTriangle } from 'lucide-react';
+import { Film, Settings, X as XIcon, ExternalLink, Cloud, CloudOff, Loader2, Check } from 'lucide-react';
 
 interface AppProps {
   projectId?: string;
@@ -275,10 +275,16 @@ export default function App({
   // ── Cloud sync helper: push project + annotations to cloud (called at save-time) ──
   const pushToCloud = useCallback(() => {
     if (!projectId || syncPaused) return;
-    // Load full project from IndexedDB and push
-    import('./utils/projectStorage').then(({ loadProject }) =>
-      loadProject(projectId).then((project) => {
-        if (project) cloudPushProject(project);
+    // Load full project from IndexedDB, mark dirty, and push
+    import('./utils/projectStorage').then(({ loadProject, saveProject }) =>
+      loadProject(projectId).then(async (project) => {
+        if (project) {
+          if (!project.has_local_changes) {
+            project.has_local_changes = true;
+            await saveProject(project);
+          }
+          cloudPushProject(project);
+        }
       })
     );
     // Push current annotations
@@ -328,8 +334,6 @@ export default function App({
           const currentFileSize = annotationScope.fileName ? annotationScope.fileSize : 0;
           backupAnnotations(currentFileName, currentFileSize, annotationsRef.current);
           cuesDirtyRef.current = false;
-          // Push to cloud when tab is hidden
-          pushToCloudRef.current();
         }
         if (isConfigOpenRef.current) saveConfigBackup();
       }
@@ -340,8 +344,6 @@ export default function App({
         const currentFileSize = annotationScope.fileName ? annotationScope.fileSize : 0;
         backupAnnotations(currentFileName, currentFileSize, annotationsRef.current);
         cuesDirtyRef.current = false;
-        // Push to cloud before unload
-        pushToCloudRef.current();
         // Show browser warning for unsaved changes
         e.preventDefault();
       }
@@ -1116,17 +1118,23 @@ export default function App({
               width: 28, height: 28,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               borderRadius: 'var(--r-sm)',
-              color: syncPaused ? 'var(--yellow, #eab308)' : cloudSaveStatus === 'error' ? 'var(--red)' : cloudSaveStatus === 'saved' ? 'var(--green, #22c55e)' : 'var(--text-dim)',
+              color: syncPaused ? 'var(--red)'
+                : cloudSaveStatus === 'error' ? 'var(--red)'
+                : cloudSaveStatus === 'saving' ? 'var(--text-dim)'
+                : cloudSaveStatus === 'saved' ? 'var(--green, #22c55e)'
+                : hasUnsavedChanges ? 'var(--yellow, #eab308)'
+                : 'var(--green, #22c55e)',
             }}
             title={
               syncPaused ? 'Cloud sync paused — conflict unresolved' :
               cloudSaveStatus === 'saving' ? 'Saving to cloud…' :
               cloudSaveStatus === 'saved' ? 'Saved to cloud' :
               cloudSaveStatus === 'error' ? 'Cloud save failed' :
-              'Cloud sync'
+              hasUnsavedChanges ? 'Local changes not yet synced' :
+              'In sync'
             }
           >
-            {syncPaused && <AlertTriangle className="w-4 h-4" />}
+            {syncPaused && <CloudOff className="w-4 h-4" />}
             {!syncPaused && cloudSaveStatus === 'saving' && <Loader2 className="w-4 h-4 animate-spin" />}
             {!syncPaused && cloudSaveStatus === 'saved' && <Check className="w-4 h-4" />}
             {!syncPaused && cloudSaveStatus === 'error' && <CloudOff className="w-4 h-4" />}

@@ -68,6 +68,9 @@ export async function createProject(
     video_path: null,
     video_filesize: null,
     video_duration: null,
+    version: 1,
+    local_base_version: 0,
+    has_local_changes: false,
   };
 
   const db = await getDB();
@@ -154,6 +157,7 @@ export async function updateProjectVideo(
     project.video_duration = null;
   }
 
+  project.has_local_changes = true;
   await saveProject(project);
 }
 
@@ -174,6 +178,7 @@ export async function updateProjectMetadata(
   if (!project) throw new Error(`Project ${projectId} not found`);
 
   Object.assign(project, metadata);
+  project.has_local_changes = true;
   await saveProject(project);
 }
 
@@ -222,6 +227,7 @@ export async function updateProjectConfig(
   project.config = config;
   if (columns) project.columns = columns;
   if (exportTemplates) project.export_templates = exportTemplates;
+  project.has_local_changes = true;
   await saveProject(project);
 }
 
@@ -326,6 +332,9 @@ export function parseImportedProject(json: unknown): ImportedProjectData {
     config: (proj.config && typeof proj.config === 'object' ? proj.config : { ...DEFAULT_CONFIG }) as AppConfig,
     columns: (Array.isArray(proj.columns) ? proj.columns : [...DEFAULT_VISIBLE_COLUMNS]) as ColumnConfig[],
     export_templates: (Array.isArray(proj.export_templates) ? proj.export_templates : []) as Project['export_templates'],
+    version: typeof proj.version === 'number' ? proj.version : 1,
+    local_base_version: typeof proj.local_base_version === 'number' ? proj.local_base_version : 0,
+    has_local_changes: typeof proj.has_local_changes === 'boolean' ? proj.has_local_changes : false,
   };
 
   // Backward-compat: migrate theatreMode boolean → theme enum in imported config
