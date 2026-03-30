@@ -177,12 +177,13 @@ function AuthenticatedApp({ offlineMode = false }: { offlineMode?: boolean }) {
               });
               restored++;
             } else if (cp.updated_at > (local.updated_at ?? 0)) {
-              // ── Cloud is newer: overwrite local metadata only ──
+              // ── Cloud is newer: overwrite local metadata, keep old base version
+              //    so project open detects the version gap and pulls annotations ──
               await saveProjectToStorage({
                 ...cp,
                 last_synced_at: Date.now(),
-                local_base_version: cp.version,
-                has_local_changes: false,
+                local_base_version: local.local_base_version,
+                has_local_changes: local.has_local_changes,
               });
               updated++;
             }
