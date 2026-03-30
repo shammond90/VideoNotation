@@ -350,14 +350,29 @@ function AuthenticatedApp({ offlineMode = false }: { offlineMode?: boolean }) {
             cloudPushProject(localProject);
             break;
 
-          case 'cloud-newer-no-local-edits':
-            // Auto-pull cloud version to local
-            await applyCloudVersion(localProject, cloudProject!);
-            addToast('Project updated from cloud.', 'info');
-            await loadAllProjects();
-            await openProject(projectId);
-            setAppState({ screen: 'cue-sheet' });
+          case 'cloud-newer-no-local-edits': {
+            // Check if local annotations exist — if so, prompt user instead of auto-pulling
+            const annoKey = localProject.video_filename
+              ? { fileName: localProject.video_filename, fileSize: localProject.video_filesize ?? 0 }
+              : { fileName: projectId, fileSize: 0 };
+            const localAnnos = await hasAnnotationData(annoKey.fileName, annoKey.fileSize);
+            if (localAnnos.exists) {
+              // Local has annotations + cloud is newer → user decides
+              setSyncConflict({
+                localProject,
+                cloudProject: cloudProject!,
+                pendingProjectId: projectId,
+              });
+            } else {
+              // No local annotations (metadata-only restore) → safe to auto-pull
+              await applyCloudVersion(localProject, cloudProject!);
+              addToast('Project updated from cloud.', 'info');
+              await loadAllProjects();
+              await openProject(projectId);
+              setAppState({ screen: 'cue-sheet' });
+            }
             break;
+          }
 
           case 'conflict':
             // Show conflict modal
