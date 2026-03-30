@@ -33,6 +33,8 @@ interface AppProps {
   videoFilename?: string | null;
   videoFilesize?: number | null;
   syncPaused?: boolean;
+  syncDeferred?: boolean;
+  onResolveSync?: () => void;
   onGoHome?: () => void;
   onSwitchProject?: () => void;
   onVideoLoaded?: (file: File, duration: number) => void;
@@ -50,6 +52,8 @@ export default function App({
   videoFilename: projectVideoFilename = null,
   videoFilesize: projectVideoFilesize = null,
   syncPaused = false,
+  syncDeferred = false,
+  onResolveSync,
   onGoHome,
   onSwitchProject,
   onVideoLoaded,
@@ -1113,33 +1117,84 @@ export default function App({
             ↓ Export
           </button>
           {/* Cloud save indicator */}
-          <div
-            style={{
-              width: 28, height: 28,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              borderRadius: 'var(--r-sm)',
-              color: syncPaused ? 'var(--red)'
-                : cloudSaveStatus === 'error' ? 'var(--red)'
-                : cloudSaveStatus === 'saving' ? 'var(--text-dim)'
-                : cloudSaveStatus === 'saved' ? 'var(--green, #22c55e)'
-                : hasUnsavedChanges ? 'var(--yellow, #eab308)'
-                : 'var(--green, #22c55e)',
-            }}
-            title={
-              syncPaused ? 'Cloud sync paused — conflict unresolved' :
-              cloudSaveStatus === 'saving' ? 'Saving to cloud…' :
-              cloudSaveStatus === 'saved' ? 'Saved to cloud' :
-              cloudSaveStatus === 'error' ? 'Cloud save failed' :
-              hasUnsavedChanges ? 'Local changes not yet synced' :
-              'In sync'
-            }
-          >
-            {syncPaused && <CloudOff className="w-4 h-4" />}
-            {!syncPaused && cloudSaveStatus === 'saving' && <Loader2 className="w-4 h-4 animate-spin" />}
-            {!syncPaused && cloudSaveStatus === 'saved' && <Check className="w-4 h-4" />}
-            {!syncPaused && cloudSaveStatus === 'error' && <CloudOff className="w-4 h-4" />}
-            {!syncPaused && cloudSaveStatus === 'idle' && <Cloud className="w-4 h-4" />}
-          </div>
+          {syncDeferred && onResolveSync ? (
+            <button
+              type="button"
+              onClick={onResolveSync}
+              style={{
+                height: 28,
+                padding: '0 10px',
+                background: 'transparent',
+                color: 'var(--amber)',
+                border: '1px solid var(--amber)',
+                borderRadius: 'var(--r-sm)',
+                fontSize: 11,
+                fontWeight: 600,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                transition: 'all 0.15s',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--amber)'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-inv)'; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--amber)'; }}
+              title="This project has an unresolved sync conflict. Click to resolve."
+            >
+              <CloudOff className="w-3.5 h-3.5" />
+              Resolve Sync
+            </button>
+          ) : (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                height: 28,
+                padding: '0 6px',
+                borderRadius: 'var(--r-sm)',
+              }}
+              title={
+                syncPaused ? 'Offline — no cloud connection' :
+                cloudSaveStatus === 'saving' ? 'Saving to cloud…' :
+                cloudSaveStatus === 'saved' && !hasUnsavedChanges ? 'Saved to cloud' :
+                cloudSaveStatus === 'error' ? 'Cloud save failed' :
+                'Local changes not yet synced'
+              }
+            >
+              <span style={{
+                fontSize: 11,
+                fontWeight: 500,
+                whiteSpace: 'nowrap',
+                color: syncPaused ? 'var(--red)'
+                  : cloudSaveStatus === 'error' ? 'var(--red)'
+                  : cloudSaveStatus === 'saving' ? 'var(--text-dim)'
+                  : cloudSaveStatus === 'saved' && !hasUnsavedChanges ? 'var(--green, #22c55e)'
+                  : 'var(--yellow, #eab308)',
+              }}>
+                {syncPaused ? 'Offline'
+                  : cloudSaveStatus === 'saving' ? 'Syncing'
+                  : cloudSaveStatus === 'error' ? 'Out of Sync'
+                  : cloudSaveStatus === 'saved' && !hasUnsavedChanges ? 'Synced'
+                  : 'Out of Sync'}
+              </span>
+              <span style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: syncPaused ? 'var(--red)'
+                  : cloudSaveStatus === 'error' ? 'var(--red)'
+                  : cloudSaveStatus === 'saving' ? 'var(--text-dim)'
+                  : cloudSaveStatus === 'saved' && !hasUnsavedChanges ? 'var(--green, #22c55e)'
+                  : 'var(--yellow, #eab308)',
+              }}>
+                {syncPaused && <CloudOff className="w-4 h-4" />}
+                {!syncPaused && cloudSaveStatus === 'saving' && <Loader2 className="w-4 h-4 animate-spin" />}
+                {!syncPaused && cloudSaveStatus === 'saved' && !hasUnsavedChanges && <Check className="w-4 h-4" />}
+                {!syncPaused && cloudSaveStatus === 'error' && <CloudOff className="w-4 h-4" />}
+                {!syncPaused && cloudSaveStatus === 'idle' && <Cloud className="w-4 h-4" />}
+                {!syncPaused && cloudSaveStatus === 'saved' && hasUnsavedChanges && <Cloud className="w-4 h-4" />}
+              </span>
+            </div>
+          )}
           {/* User menu */}
           <UserButton afterSignOutUrl="/" />
         </div>

@@ -136,6 +136,7 @@ function AuthenticatedApp({ offlineMode = false }: { offlineMode?: boolean }) {
     cloudProject: Project;
     pendingProjectId: string;
   } | null>(null);
+  const [syncResolveKey, setSyncResolveKey] = useState(0);
 
   // Cloud restore state
   const [isRestoring, setIsRestoring] = useState(true);
@@ -534,6 +535,8 @@ function AuthenticatedApp({ offlineMode = false }: { offlineMode?: boolean }) {
             break;
           }
         }
+        // Force App remount so annotations reload from storage
+        setSyncResolveKey(k => k + 1);
       } catch (err) {
         console.error('Sync resolution failed:', err);
         addToast('Failed to resolve sync conflict. Opening local version.', 'error', {
@@ -545,6 +548,32 @@ function AuthenticatedApp({ offlineMode = false }: { offlineMode?: boolean }) {
     },
     [syncConflict, applyCloudVersion, cloudPushProject, cloudPullAllProjectAnnotations, loadAllProjects, openProject, addToast]
   );
+
+  /** Re-trigger the sync conflict modal from within the cue-sheet. */
+  const handleResolveSync = useCallback(async () => {
+    if (!currentProject) return;
+    const localProject = currentProject;
+    let cloudProject: Project | null = null;
+    try {
+      cloudProject = await cloudPullProject(currentProject.id);
+    } catch {
+      addToast('Cannot reach cloud. Try again when online.', 'error');
+      return;
+    }
+    if (!cloudProject) {
+      const updated = { ...localProject, sync_deferred: false };
+      await saveProjectToStorage(updated);
+      await loadAllProjects();
+      setSyncResolveKey(k => k + 1);
+      addToast('Cloud version no longer exists. Sync conflict cleared.', 'info');
+      return;
+    }
+    setSyncConflict({
+      localProject,
+      cloudProject,
+      pendingProjectId: currentProject.id,
+    });
+  }, [currentProject, cloudPullProject, addToast, loadAllProjects]);
 
   const handleVideoLoaded = useCallback(
     async (file: File, duration: number) => {
@@ -762,12 +791,14 @@ function AuthenticatedApp({ offlineMode = false }: { offlineMode?: boolean }) {
       <>
         {sessionExpired && <SessionExpiredModal onSignOut={handleSessionSignOut} />}
         <App
-          key={currentProject.id}
+          key={`${currentProject.id}_${syncResolveKey}`}
           projectId={currentProject.id}
           projectName={currentProject.name}
           videoFilename={currentProject.video_filename}
           videoFilesize={currentProject.video_filesize}
-          syncPaused={offlineMode || (currentProject.sync_deferred ?? false)}
+          syncPaused={offlineMode}
+          syncDeferred={currentProject.sync_deferred ?? false}
+          onResolveSync={handleResolveSync}
           onGoHome={handleGoHome}
           onSwitchProject={handleOpenSwitcher}
           onVideoLoaded={handleVideoLoaded}
@@ -785,6 +816,13 @@ function AuthenticatedApp({ offlineMode = false }: { offlineMode?: boolean }) {
             setUnsavedChanges(false);
           }}
         />
+        {syncConflict && (
+          <SyncConflictModal
+            localProject={syncConflict.localProject}
+            cloudProject={syncConflict.cloudProject}
+            onResolve={handleSyncResolution}
+          />
+        )}
         <SavePromptModal
           isOpen={savePromptOpen}
           onSave={handleSaveAndNavigate}
