@@ -328,7 +328,7 @@ function AuthenticatedApp({ offlineMode = false }: { offlineMode?: boolean }) {
               const local = await hasAnnotationData(projectId, 0);
               if (!local.exists) {
                 const annotationGroups = await cloudPullAllProjectAnnotations(projectId);
-                for (const { videoKey, annotations } of annotationGroups) {
+                for (const { annotations } of annotationGroups) {
                   if (annotations.length > 0) {
                     await saveAnnotations(projectId, 0, annotations);
                   }
