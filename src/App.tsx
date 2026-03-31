@@ -1157,9 +1157,10 @@ export default function App({
               title={
                 syncPaused ? 'Offline — no cloud connection' :
                 cloudSaveStatus === 'saving' ? 'Saving to cloud…' :
+                cloudSaveStatus === 'saved' ? 'Saved to cloud' :
                 cloudSaveStatus === 'error' ? 'Cloud save failed' :
                 hasUnsavedChanges ? 'Local changes not yet synced' :
-                'Saved to cloud'
+                'In sync'
               }
             >
               <span style={{
@@ -1169,11 +1170,13 @@ export default function App({
                 color: syncPaused ? 'var(--red)'
                   : cloudSaveStatus === 'error' ? 'var(--red)'
                   : cloudSaveStatus === 'saving' ? 'var(--text-dim)'
+                  : cloudSaveStatus === 'saved' ? 'var(--green, #22c55e)'
                   : hasUnsavedChanges ? 'var(--yellow, #eab308)'
                   : 'var(--green, #22c55e)',
               }}>
                 {syncPaused ? 'Offline'
                   : cloudSaveStatus === 'saving' ? 'Syncing'
+                  : cloudSaveStatus === 'saved' ? 'Synced'
                   : cloudSaveStatus === 'error' ? 'Out of Sync'
                   : hasUnsavedChanges ? 'Out of Sync'
                   : 'Synced'}
@@ -1183,14 +1186,16 @@ export default function App({
                 color: syncPaused ? 'var(--red)'
                   : cloudSaveStatus === 'error' ? 'var(--red)'
                   : cloudSaveStatus === 'saving' ? 'var(--text-dim)'
+                  : cloudSaveStatus === 'saved' ? 'var(--green, #22c55e)'
                   : hasUnsavedChanges ? 'var(--yellow, #eab308)'
                   : 'var(--green, #22c55e)',
               }}>
                 {syncPaused && <CloudOff className="w-4 h-4" />}
                 {!syncPaused && cloudSaveStatus === 'saving' && <Loader2 className="w-4 h-4 animate-spin" />}
+                {!syncPaused && cloudSaveStatus === 'saved' && <Check className="w-4 h-4" />}
                 {!syncPaused && cloudSaveStatus === 'error' && <CloudOff className="w-4 h-4" />}
-                {!syncPaused && cloudSaveStatus !== 'saving' && cloudSaveStatus !== 'error' && !hasUnsavedChanges && <Check className="w-4 h-4" />}
-                {!syncPaused && cloudSaveStatus !== 'saving' && cloudSaveStatus !== 'error' && hasUnsavedChanges && <Cloud className="w-4 h-4" />}
+                {!syncPaused && cloudSaveStatus === 'idle' && !hasUnsavedChanges && <Check className="w-4 h-4" />}
+                {!syncPaused && cloudSaveStatus === 'idle' && hasUnsavedChanges && <Cloud className="w-4 h-4" />}
               </span>
             </div>
           )}
