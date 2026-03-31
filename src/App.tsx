@@ -45,6 +45,8 @@ interface AppProps {
   onDeleteProject?: () => void;
   onDeleteAllProjects?: () => Promise<void>;
   onSave?: () => void;
+  onConfigTemplatesChanged?: () => void;
+  onXlsxTemplatesChanged?: () => void;
 }
 
 export default function App({
@@ -66,6 +68,8 @@ export default function App({
   onDeleteProject,
   onDeleteAllProjects,
   onSave,
+  onConfigTemplatesChanged,
+  onXlsxTemplatesChanged,
 }: AppProps = {}) {
   const [videoFile, setVideoFile] = useState<File | null>(initialVideoFile || null);
   const [videoSrc, setVideoSrc] = useState<string>('');
@@ -1705,6 +1709,7 @@ export default function App({
         annotationCount={annotations.length}
         onGoHome={onGoHome}
         onDeleteAllProjects={onDeleteAllProjects}
+        onTemplatesChanged={onConfigTemplatesChanged}
       />
 
       {/* Export Dialog — CSV vs XLSX chooser */}
@@ -1730,6 +1735,7 @@ export default function App({
         hiddenCueTypes={config.hiddenCueTypes}
         hiddenFieldKeys={config.hiddenFieldKeys}
         addToast={addToast}
+        onTemplatesChanged={onXlsxTemplatesChanged}
       />
 
       {/* Hidden import input */}

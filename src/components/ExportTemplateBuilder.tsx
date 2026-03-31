@@ -242,6 +242,8 @@ interface ExportTemplateBuilderProps {
   hiddenCueTypes?: string[];
   hiddenFieldKeys?: string[];
   addToast: (message: string, type?: 'success' | 'info' | 'warning' | 'error', duration?: number) => void;
+  /** Called after any XLSX template mutation (save, delete). */
+  onTemplatesChanged?: () => void;
 }
 
 export function ExportTemplateBuilder({
@@ -256,6 +258,7 @@ export function ExportTemplateBuilder({
   hiddenCueTypes,
   hiddenFieldKeys,
   addToast,
+  onTemplatesChanged,
 }: ExportTemplateBuilderProps) {
   // ── State ──
   const [columns, setColumns] = useState<ExportTemplateColumn[]>([...LOCKED_EXPORT_COLUMNS]);
@@ -473,7 +476,8 @@ export function ExportTemplateBuilder({
     setTemplateName(template.name);
     localStorage.setItem(LAST_TEMPLATE_KEY, template.id);
     addToast('Template saved', 'success', 3000);
-  }, [templateName, columns, colorOverrides, includeSkipped, excludedCueTypes, savedTemplates, selectedTemplateId, addToast]);
+    onTemplatesChanged?.();
+  }, [templateName, columns, colorOverrides, includeSkipped, excludedCueTypes, savedTemplates, selectedTemplateId, addToast, onTemplatesChanged]);
 
   const handleLoadTemplate = useCallback((templateId: string) => {
     const tpl = savedTemplates.find((t) => t.id === templateId);
@@ -491,13 +495,13 @@ export function ExportTemplateBuilder({
     await deleteXlsxExportTemplate(templateId);
     const all = await loadXlsxExportTemplates();
     setSavedTemplates(all);
+    onTemplatesChanged?.();
     if (selectedTemplateId === templateId) {
       setSelectedTemplateId('');
       setTemplateName('');
       localStorage.removeItem(LAST_TEMPLATE_KEY);
     }
-  }, [selectedTemplateId]);
-
+  }, [selectedTemplateId, onTemplatesChanged]);
   // ── Export ──
 
   const handleExport = useCallback(async () => {

@@ -99,7 +99,9 @@ function AuthenticatedApp({ offlineMode = false }: { offlineMode?: boolean }) {
     cloudPullProject,
     cloudPullAllProjectAnnotations,
     cloudPullConfigTemplates,
+    cloudPushConfigTemplates,
     cloudPullXlsxExportTemplates,
+    cloudPushXlsxExportTemplates,
   } = useCloudSync();
   const {
     projects,
@@ -199,28 +201,44 @@ function AuthenticatedApp({ offlineMode = false }: { offlineMode?: boolean }) {
           }
         }
 
-        // Restore config templates
+        // Restore config templates (add new + update stale)
         const cloudConfigTemplates = await cloudPullConfigTemplates();
         if (cloudConfigTemplates.length > 0) {
           const { loadConfigTemplates, saveConfigTemplates } = await import('./utils/configTemplates');
           const localTemplates = await loadConfigTemplates();
-          const localIds = new Set(localTemplates.map(t => t.id));
-          const newTemplates = cloudConfigTemplates.filter(t => !localIds.has(t.id));
-          if (newTemplates.length > 0) {
-            await saveConfigTemplates([...localTemplates, ...newTemplates]);
+          const localMap = new Map(localTemplates.map(t => [t.id, t]));
+          let changed = false;
+          for (const ct of cloudConfigTemplates) {
+            const local = localMap.get(ct.id);
+            if (!local) {
+              localMap.set(ct.id, ct);
+              changed = true;
+            } else if (ct.updatedAt > local.updatedAt) {
+              localMap.set(ct.id, ct);
+              changed = true;
+            }
           }
+          if (changed) await saveConfigTemplates([...localMap.values()]);
         }
 
-        // Restore XLSX export templates
+        // Restore XLSX export templates (add new + update stale)
         const cloudXlsxTemplates = await cloudPullXlsxExportTemplates();
         if (cloudXlsxTemplates.length > 0) {
           const { loadXlsxExportTemplates, saveXlsxExportTemplates } = await import('./utils/configTemplates');
           const localXlsx = await loadXlsxExportTemplates();
-          const localIds = new Set(localXlsx.map(t => t.id));
-          const newXlsx = cloudXlsxTemplates.filter(t => !localIds.has(t.id));
-          if (newXlsx.length > 0) {
-            await saveXlsxExportTemplates([...localXlsx, ...newXlsx]);
+          const localMap = new Map(localXlsx.map(t => [t.id, t]));
+          let changed = false;
+          for (const ct of cloudXlsxTemplates) {
+            const local = localMap.get(ct.id);
+            if (!local) {
+              localMap.set(ct.id, ct);
+              changed = true;
+            } else if (ct.updatedAt > local.updatedAt) {
+              localMap.set(ct.id, ct);
+              changed = true;
+            }
           }
+          if (changed) await saveXlsxExportTemplates([...localMap.values()]);
         }
       } catch (err) {
         console.error('[cloud-restore] failed:', err);
@@ -810,6 +828,16 @@ function AuthenticatedApp({ offlineMode = false }: { offlineMode?: boolean }) {
             setUnsavedChanges(false);
           }}
           onDeleteAllProjects={deleteAllProjects}
+          onConfigTemplatesChanged={async () => {
+            const { loadConfigTemplates } = await import('./utils/configTemplates');
+            const all = await loadConfigTemplates();
+            cloudPushConfigTemplates(all);
+          }}
+          onXlsxTemplatesChanged={async () => {
+            const { loadXlsxExportTemplates } = await import('./utils/configTemplates');
+            const all = await loadXlsxExportTemplates();
+            cloudPushXlsxExportTemplates(all);
+          }}
           onSave={() => {
             // Save will be handled by App component
             setUnsavedChanges(false);

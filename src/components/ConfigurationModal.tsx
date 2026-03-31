@@ -132,6 +132,8 @@ interface ConfigurationModalProps {
   onGoHome?: () => void;
   /** Callback to delete all projects (used for Factory Reset). */
   onDeleteAllProjects?: () => Promise<void>;
+  /** Called after any config template mutation (save, rename, delete, set-default, import). */
+  onTemplatesChanged?: () => void;
 }
 
 // ── Sortable column item ──
@@ -628,6 +630,7 @@ export function ConfigurationModal({
   annotationCount,
   onGoHome,
   onDeleteAllProjects,
+  onTemplatesChanged,
 }: ConfigurationModalProps) {
   const { confirmState, showConfirm } = useConfirm();
   const [newTypeName, setNewTypeName] = useState('');
@@ -1852,6 +1855,7 @@ export function ConfigurationModal({
                         };
                         await saveConfigTemplate(template);
                         await refreshTemplates();
+                        onTemplatesChanged?.();
                         setNewTemplateName('');
                       }
                     }}
@@ -1881,6 +1885,7 @@ export function ConfigurationModal({
                       };
                       await saveConfigTemplate(template);
                       await refreshTemplates();
+                      onTemplatesChanged?.();
                       setNewTemplateName('');
                     }}
                     className="flex items-center gap-1.5 px-3 py-2 text-sm bg-[var(--amber)] text-white rounded-md hover:brightness-110 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
@@ -1928,6 +1933,7 @@ export function ConfigurationModal({
                     try {
                       await importTemplateFromJSON(file);
                       await refreshTemplates();
+                      onTemplatesChanged?.();
                       addToast?.('Template imported', 'success');
                     } catch (err) {
                       addToast?.('This doesn\u2019t look like a valid template file.', 'error', {
@@ -1969,6 +1975,7 @@ export function ConfigurationModal({
                                     if (e.key === 'Enter') {
                                       await renameConfigTemplate(tpl.id, editingTemplateName);
                                       await refreshTemplates();
+                                      onTemplatesChanged?.();
                                       setEditingTemplateId(null);
                                     }
                                     if (e.key === 'Escape') setEditingTemplateId(null);
@@ -1981,6 +1988,7 @@ export function ConfigurationModal({
                                   onClick={async () => {
                                     await renameConfigTemplate(tpl.id, editingTemplateName);
                                     await refreshTemplates();
+                                    onTemplatesChanged?.();
                                     setEditingTemplateId(null);
                                   }}
                                   className="p-1 text-emerald-400 hover:text-emerald-300 rounded"
@@ -2028,6 +2036,7 @@ export function ConfigurationModal({
                                       const isCurrentDefault = tpl.isDefault;
                                       await setDefaultTemplate(isCurrentDefault ? null : tpl.id);
                                       await refreshTemplates();
+                                      onTemplatesChanged?.();
                                       addToast?.(
                                         isCurrentDefault
                                           ? `"${tpl.name}" is no longer the default template.`
@@ -2068,6 +2077,7 @@ export function ConfigurationModal({
                                         onClick={async () => {
                                           await deleteConfigTemplate(tpl.id);
                                           await refreshTemplates();
+                                          onTemplatesChanged?.();
                                           setDeletingTemplateId(null);
                                         }}
                                         className="text-[10px] text-red-400 hover:text-red-300 font-medium px-1"
