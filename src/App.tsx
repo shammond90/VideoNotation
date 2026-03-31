@@ -1634,6 +1634,8 @@ export default function App({
           saveConfigBackup();
           isConfigOpenRef.current = false;
           setIsConfigOpen(false);
+          // Push project (including updated config) to cloud
+          pushToCloudRef.current();
         }}
         liveConfig={config}
         cueTypes={config.cueTypes}
