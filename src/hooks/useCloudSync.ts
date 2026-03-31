@@ -19,6 +19,7 @@ import type { XlsxExportTemplate } from '../utils/configTemplates';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export type CloudSaveStatus = 'idle' | 'saving' | 'saved' | 'error';
+export type PushResult = 'success' | 'conflict' | 'skipped';
 
 export function useCloudSync() {
   const { userId, isSignedIn, isLoaded, getSupabaseClient, validateSession } = useAuth();
@@ -59,14 +60,25 @@ export function useCloudSync() {
     }
   }, [isSignedIn, userId, getSupabaseClient, validateSession]);
 
-  /** Push a project to the cloud (immediate, since annotations depend on it). */
+  /** Push a project to the cloud (immediate, since annotations depend on it).
+   *  Returns 'conflict' if the cloud version has advanced since our last sync. */
   const cloudPushProject = useCallback(
-    async (project: Project) => {
-      if (!isSignedIn || !userId) return;
+    async (project: Project): Promise<PushResult> => {
+      if (!isSignedIn || !userId) return 'skipped';
       try {
         setSaveStatus('saving');
         const client = await getClient();
-        if (!client) return;
+        if (!client) return 'skipped';
+
+        // Pre-push version check: if cloud version has advanced, don't overwrite
+        if (project.local_base_version > 0) {
+          const cloudProject = await pullProject(client, project.id);
+          if (cloudProject && cloudProject.version > project.local_base_version) {
+            setSaveStatus('idle');
+            return 'conflict';
+          }
+        }
+
         const newVersion = await pushProject(client, project, userId);
         pushedProjectsRef.current.add(project.id);
         // Update version tracking fields locally
@@ -79,9 +91,11 @@ export function useCloudSync() {
           await saveProject(fresh);
         }
         showSaved();
+        return 'success';
       } catch (err) {
         console.error('Cloud push project failed:', err);
         setSaveStatus('error');
+        return 'skipped';
       }
     },
     [isSignedIn, userId, getClient, showSaved]

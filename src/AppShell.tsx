@@ -799,6 +799,7 @@ function AuthenticatedApp({ offlineMode = false }: { offlineMode?: boolean }) {
           syncPaused={offlineMode}
           syncDeferred={currentProject.sync_deferred ?? false}
           onResolveSync={handleResolveSync}
+          onPushConflict={handleResolveSync}
           onGoHome={handleGoHome}
           onSwitchProject={handleOpenSwitcher}
           onVideoLoaded={handleVideoLoaded}

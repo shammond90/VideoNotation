@@ -24,7 +24,7 @@ import { useCloudSync } from './hooks/useCloudSync';
 import { UserButton } from '@clerk/clerk-react';
 import type { CueFields } from './types';
 import { RESERVED_CUE_TYPES } from './types';
-import { Film, Settings, X as XIcon, ExternalLink, Cloud, CloudOff, Loader2, Check } from 'lucide-react';
+import { Film, Settings, X as XIcon, ExternalLink, Cloud, CloudOff, Loader2, Check, AlertCircle } from 'lucide-react';
 
 interface AppProps {
   projectId?: string;
@@ -35,6 +35,7 @@ interface AppProps {
   syncPaused?: boolean;
   syncDeferred?: boolean;
   onResolveSync?: () => void;
+  onPushConflict?: () => void;
   onGoHome?: () => void;
   onSwitchProject?: () => void;
   onVideoLoaded?: (file: File, duration: number) => void;
@@ -54,6 +55,7 @@ export default function App({
   syncPaused = false,
   syncDeferred = false,
   onResolveSync,
+  onPushConflict,
   onGoHome,
   onSwitchProject,
   onVideoLoaded,
@@ -277,24 +279,28 @@ export default function App({
   }, [annotationScope.fileName, annotationScope.fileSize]);
 
   // ── Cloud sync helper: push project + annotations to cloud (called at save-time) ──
-  const pushToCloud = useCallback(() => {
-    if (!projectId || syncPaused) return;
-    // Load full project from IndexedDB, mark dirty, and push
-    import('./utils/projectStorage').then(({ loadProject, saveProject }) =>
-      loadProject(projectId).then(async (project) => {
-        if (project) {
-          if (!project.has_local_changes) {
-            project.has_local_changes = true;
-            await saveProject(project);
-          }
-          cloudPushProject(project);
-        }
-      })
-    );
-    // Push current annotations
+  const pushToCloud = useCallback(async () => {
+    if (!projectId || syncPaused || syncDeferred) return;
+    const { loadProject, saveProject } = await import('./utils/projectStorage');
+    const project = await loadProject(projectId);
+    if (!project) return;
+
+    if (!project.has_local_changes) {
+      project.has_local_changes = true;
+      await saveProject(project);
+    }
+
+    // Pre-push version check happens inside cloudPushProject
+    const result = await cloudPushProject(project);
+    if (result === 'conflict') {
+      onPushConflict?.();
+      return; // Don't push annotations — conflict detected
+    }
+
+    // Push annotations only after successful project push
     const videoKey = `${annotationScope.fileName || 'no-video'}:${annotationScope.fileSize || 0}`;
     cloudPushAnnotationsImmediate(annotationsRef.current, projectId, videoKey);
-  }, [projectId, syncPaused, annotationScope.fileName, annotationScope.fileSize, cloudPushProject, cloudPushAnnotationsImmediate]);
+  }, [projectId, syncPaused, syncDeferred, annotationScope.fileName, annotationScope.fileSize, cloudPushProject, cloudPushAnnotationsImmediate, onPushConflict]);
   const pushToCloudRef = useRef(pushToCloud);
   pushToCloudRef.current = pushToCloud;
 
@@ -1156,11 +1162,11 @@ export default function App({
               }}
               title={
                 syncPaused ? 'Offline — no cloud connection' :
-                cloudSaveStatus === 'saving' ? 'Saving to cloud…' :
-                cloudSaveStatus === 'saved' ? 'Saved to cloud' :
-                cloudSaveStatus === 'error' ? 'Cloud save failed' :
+                cloudSaveStatus === 'saving' ? 'Syncing to cloud…' :
+                cloudSaveStatus === 'saved' ? 'Synced to cloud' :
+                cloudSaveStatus === 'error' ? 'Sync failed' :
                 hasUnsavedChanges ? 'Local changes not yet synced' :
-                'In sync'
+                'Annotations match cloud'
               }
             >
               <span style={{
@@ -1171,15 +1177,15 @@ export default function App({
                   : cloudSaveStatus === 'error' ? 'var(--red)'
                   : cloudSaveStatus === 'saving' ? 'var(--text-dim)'
                   : cloudSaveStatus === 'saved' ? 'var(--green, #22c55e)'
-                  : hasUnsavedChanges ? 'var(--yellow, #eab308)'
+                  : hasUnsavedChanges ? 'var(--amber, #f59e0b)'
                   : 'var(--green, #22c55e)',
               }}>
                 {syncPaused ? 'Offline'
-                  : cloudSaveStatus === 'saving' ? 'Syncing'
+                  : cloudSaveStatus === 'saving' ? 'Syncing...'
                   : cloudSaveStatus === 'saved' ? 'Synced'
-                  : cloudSaveStatus === 'error' ? 'Out of Sync'
+                  : cloudSaveStatus === 'error' ? 'Sync Failed'
                   : hasUnsavedChanges ? 'Out of Sync'
-                  : 'Synced'}
+                  : 'In Sync'}
               </span>
               <span style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -1187,14 +1193,14 @@ export default function App({
                   : cloudSaveStatus === 'error' ? 'var(--red)'
                   : cloudSaveStatus === 'saving' ? 'var(--text-dim)'
                   : cloudSaveStatus === 'saved' ? 'var(--green, #22c55e)'
-                  : hasUnsavedChanges ? 'var(--yellow, #eab308)'
+                  : hasUnsavedChanges ? 'var(--amber, #f59e0b)'
                   : 'var(--green, #22c55e)',
               }}>
                 {syncPaused && <CloudOff className="w-4 h-4" />}
                 {!syncPaused && cloudSaveStatus === 'saving' && <Loader2 className="w-4 h-4 animate-spin" />}
                 {!syncPaused && cloudSaveStatus === 'saved' && <Check className="w-4 h-4" />}
-                {!syncPaused && cloudSaveStatus === 'error' && <CloudOff className="w-4 h-4" />}
-                {!syncPaused && cloudSaveStatus === 'idle' && !hasUnsavedChanges && <Check className="w-4 h-4" />}
+                {!syncPaused && cloudSaveStatus === 'error' && <span className="relative"><Cloud className="w-4 h-4" /><AlertCircle className="w-2.5 h-2.5 absolute -top-0.5 -right-0.5" /></span>}
+                {!syncPaused && cloudSaveStatus === 'idle' && !hasUnsavedChanges && <Cloud className="w-4 h-4" />}
                 {!syncPaused && cloudSaveStatus === 'idle' && hasUnsavedChanges && <Cloud className="w-4 h-4" />}
               </span>
             </div>
