@@ -325,13 +325,13 @@ function AuthenticatedApp({ offlineMode = false }: { offlineMode?: boolean }) {
           case 'in-sync':
             // For projects restored from cloud (metadata-only), pull annotations if missing
             if (cloudProject && localProject.local_base_version > 0) {
-              const annotationGroups = await cloudPullAllProjectAnnotations(projectId);
-              for (const { videoKey, annotations } of annotationGroups) {
-                const [fileName, fileSizeStr] = videoKey.split(':');
-                const fileSize = Number(fileSizeStr) || 0;
-                const local = await hasAnnotationData(fileName, fileSize);
-                if (!local.exists && annotations.length > 0) {
-                  await saveAnnotations(fileName, fileSize, annotations);
+              const local = await hasAnnotationData(projectId, 0);
+              if (!local.exists) {
+                const annotationGroups = await cloudPullAllProjectAnnotations(projectId);
+                for (const { videoKey, annotations } of annotationGroups) {
+                  if (annotations.length > 0) {
+                    await saveAnnotations(projectId, 0, annotations);
+                  }
                 }
               }
             }
@@ -353,10 +353,7 @@ function AuthenticatedApp({ offlineMode = false }: { offlineMode?: boolean }) {
 
           case 'cloud-newer-no-local-edits': {
             // Check if local annotations exist — if so, prompt user instead of auto-pulling
-            const annoKey = localProject.video_filename
-              ? { fileName: localProject.video_filename, fileSize: localProject.video_filesize ?? 0 }
-              : { fileName: projectId, fileSize: 0 };
-            const localAnnos = await hasAnnotationData(annoKey.fileName, annoKey.fileSize);
+            const localAnnos = await hasAnnotationData(projectId, 0);
             if (localAnnos.exists) {
               // Local has annotations + cloud is newer → user decides
               setSyncConflict({
