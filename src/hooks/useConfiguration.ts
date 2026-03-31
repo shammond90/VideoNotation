@@ -31,14 +31,18 @@ function migrateFieldDefinitions(cfg: AppConfig): AppConfig {
   return result;
 }
 
-export function useConfiguration() {
+export function useConfiguration(projectConfig?: AppConfig) {
   const [config, setConfig] = useState<AppConfig>(DEFAULT_CONFIG);
   const [configLoaded, setConfigLoaded] = useState(false);
   const initialLoadDone = useRef(false);
 
-  // Load config from IndexedDB on mount
+  // Load config on mount: use project config if provided, otherwise load from global IDB
   useEffect(() => {
-    loadConfig().then((loaded) => {
+    const source = projectConfig
+      ? Promise.resolve(projectConfig)
+      : loadConfig();
+
+    source.then((loaded) => {
       let migrated = migrateFieldDefinitions(loaded);
       // Backward-compat: migrate theatreMode boolean → theme enum
       if (!('theme' in migrated) || typeof (migrated as any).theme !== 'string') {
@@ -60,6 +64,7 @@ export function useConfiguration() {
       setConfigLoaded(true);
       initialLoadDone.current = true;
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Auto-save whenever config changes (skip the initial default)

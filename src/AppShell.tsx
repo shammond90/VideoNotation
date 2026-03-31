@@ -791,6 +791,7 @@ function AuthenticatedApp({ offlineMode = false }: { offlineMode?: boolean }) {
           key={`${currentProject.id}_${syncResolveKey}`}
           projectId={currentProject.id}
           projectName={currentProject.name}
+          projectConfig={currentProject.config}
           videoFilename={currentProject.video_filename}
           videoFilesize={currentProject.video_filesize}
           syncPaused={offlineMode}

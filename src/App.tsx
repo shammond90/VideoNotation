@@ -22,13 +22,14 @@ import { VideoReconnectBanner } from './components/VideoReconnectBanner';
 import { GoToDialog } from './components/GoToDialog';
 import { useCloudSync } from './hooks/useCloudSync';
 import { UserButton } from '@clerk/clerk-react';
-import type { CueFields } from './types';
+import type { CueFields, AppConfig } from './types';
 import { RESERVED_CUE_TYPES } from './types';
 import { Film, Settings, X as XIcon, ExternalLink, Cloud, CloudOff, Loader2, Check, AlertCircle } from 'lucide-react';
 
 interface AppProps {
   projectId?: string;
   projectName?: string;
+  projectConfig?: AppConfig;
   initialVideoFile?: File;
   videoFilename?: string | null;
   videoFilesize?: number | null;
@@ -49,6 +50,7 @@ interface AppProps {
 export default function App({
   projectId,
   projectName,
+  projectConfig,
   initialVideoFile,
   videoFilename: projectVideoFilename = null,
   videoFilesize: projectVideoFilesize = null,
@@ -200,7 +202,7 @@ export default function App({
     reorderCueTypes,
     toggleCueTypeHidden,
     toggleFieldHidden,
-  } = useConfiguration();
+  } = useConfiguration(projectConfig);
 
   const {
     annotations,
