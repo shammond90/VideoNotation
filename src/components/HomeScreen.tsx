@@ -1,14 +1,26 @@
-﻿import { useEffect } from 'react';
+﻿import { useEffect, useState, useRef, useCallback } from 'react';
 import { UserButton } from '@clerk/clerk-react';
-import { Cloud, CloudOff, Loader2, Check, RefreshCw } from 'lucide-react';
+import { Cloud, CloudOff, Loader2, Check, RefreshCw, MoreVertical, Pencil, Trash2 } from 'lucide-react';
 import type { Project } from '../types/index';
 import { useProject } from '../hooks/useProject';
 import type { CloudSaveStatus } from '../hooks/useCloudSync';
+import { useConfirm } from '../hooks/useConfirm';
+import { ConfirmDialog } from './ConfirmDialog';
+import { EditProjectModal } from './EditProjectModal';
 
 interface HomeScreenProps {
   onProjectSelected: (projectId: string) => void;
   onCreateProject: () => void;
   onImportProject: () => void;
+  onEditProject?: (projectId: string, updates: {
+    name: string;
+    production_name?: string;
+    choreographer?: string;
+    venue?: string;
+    year?: string;
+    notes?: string;
+  }) => Promise<void>;
+  onDeleteProject?: (projectId: string) => Promise<void>;
   isRestoring?: boolean;
   cloudSaveStatus?: CloudSaveStatus;
 }
@@ -20,15 +32,45 @@ export function HomeScreen({
   onProjectSelected,
   onCreateProject,
   onImportProject,
+  onEditProject,
+  onDeleteProject,
   isRestoring = false,
   cloudSaveStatus = 'idle',
 }: HomeScreenProps) {
   const { projects, isLoading, error, loadAllProjects } = useProject();
+  const { confirmState, showConfirm } = useConfirm();
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
 
   // Reload projects on mount and after cloud restore finishes
   useEffect(() => {
     loadAllProjects();
   }, [loadAllProjects, isRestoring]);
+
+  const handleEdit = useCallback((project: Project) => {
+    setEditingProject(project);
+  }, []);
+
+  const handleEditSave = useCallback(async (projectId: string, updates: Parameters<NonNullable<typeof onEditProject>>[1]) => {
+    setEditingProject(null);
+    await onEditProject?.(projectId, updates);
+    loadAllProjects();
+  }, [onEditProject, loadAllProjects]);
+
+  const handleDelete = useCallback(async (project: Project) => {
+    const confirmed = await showConfirm({
+      title: 'Delete Project',
+      message: `This will permanently delete "${project.name}" and all its annotations from this device and the cloud.`,
+      detail: `Type the project name to confirm.`,
+      confirmLabel: 'Delete',
+      cancelLabel: 'Cancel',
+      variant: 'danger',
+      icon: 'trash',
+      requireText: project.name,
+    });
+    if (!confirmed) return;
+    await onDeleteProject?.(project.id);
+    loadAllProjects();
+  }, [showConfirm, onDeleteProject, loadAllProjects]);
 
   if (isLoading) {
     return (
@@ -180,24 +222,88 @@ export function HomeScreen({
               key={project.id}
               project={project}
               onSelect={() => onProjectSelected(project.id)}
+              onEdit={() => handleEdit(project)}
+              onDelete={() => handleDelete(project)}
             />
           ))}
         </div>
       )}
+
+      {/* Edit project modal */}
+      {editingProject && (
+        <EditProjectModal
+          project={editingProject}
+          onSave={handleEditSave}
+          onCancel={() => setEditingProject(null)}
+        />
+      )}
+
+      {/* Delete confirmation dialog */}
+      <ConfirmDialog {...confirmState} />
     </div>
   );
 }
 
 /**
- * Individual project card.
+ * Individual project card with three-dot menu and right-click context menu.
  */
-function ProjectCard({ project, onSelect }: { project: Project; onSelect: () => void }) {
+function ProjectCard({ project, onSelect, onEdit, onDelete }: {
+  project: Project;
+  onSelect: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
   const lastModified = formatRelativeTime(project.updated_at);
   const prodLine = [project.production_name, project.venue, project.year].filter(Boolean).join(' \u00B7 ');
+
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const dotRef = useRef<HTMLButtonElement>(null);
+
+  // Close menu on outside click
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuOpen(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    document.addEventListener('keydown', handleEsc);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('keydown', handleEsc);
+    };
+  }, [menuOpen]);
+
+  const openMenuAtButton = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setMenuPos({ x: rect.right, y: rect.bottom + 4 });
+    setMenuOpen(true);
+  };
+
+  const openMenuAtCursor = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setMenuPos({ x: e.clientX, y: e.clientY });
+    setMenuOpen(true);
+  };
+
+  const handleMenuAction = (action: 'edit' | 'delete') => {
+    setMenuOpen(false);
+    if (action === 'edit') onEdit();
+    else onDelete();
+  };
 
   return (
     <div
       onClick={onSelect}
+      onContextMenu={openMenuAtCursor}
       style={{
         background: 'var(--bg-card)',
         border: '1px solid var(--border)',
@@ -216,6 +322,8 @@ function ProjectCard({ project, onSelect }: { project: Project; onSelect: () => 
         el.style.boxShadow = 'var(--shadow-md)';
         const bar = el.querySelector('.card-top-bar') as HTMLDivElement | null;
         if (bar) bar.style.opacity = '1';
+        const dot = el.querySelector('.card-dot-btn') as HTMLButtonElement | null;
+        if (dot) dot.style.opacity = '1';
       }}
       onMouseLeave={e => {
         const el = e.currentTarget as HTMLDivElement;
@@ -225,6 +333,8 @@ function ProjectCard({ project, onSelect }: { project: Project; onSelect: () => 
         el.style.boxShadow = '';
         const bar = el.querySelector('.card-top-bar') as HTMLDivElement | null;
         if (bar) bar.style.opacity = '0';
+        const dot = el.querySelector('.card-dot-btn') as HTMLButtonElement | null;
+        if (dot && !menuOpen) dot.style.opacity = '0';
       }}
     >
       {/* Amber top accent bar on hover */}
@@ -240,9 +350,95 @@ function ProjectCard({ project, onSelect }: { project: Project; onSelect: () => 
         }}
       />
 
+      {/* Three-dot menu button — visible on hover */}
+      <button
+        ref={dotRef}
+        className="card-dot-btn"
+        onClick={openMenuAtButton}
+        style={{
+          position: 'absolute',
+          top: 8, right: 8,
+          width: 26, height: 26,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'transparent',
+          border: 'none',
+          borderRadius: 'var(--r-sm)',
+          color: 'var(--text-mid)',
+          cursor: 'pointer',
+          opacity: menuOpen ? 1 : 0,
+          transition: 'opacity 0.15s, background 0.15s',
+          zIndex: 2,
+        }}
+        onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text)'; }}
+        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-mid)'; }}
+      >
+        <MoreVertical className="w-4 h-4" />
+      </button>
+
+      {/* Dropdown menu (portal-like via fixed position) */}
+      {menuOpen && menuPos && (
+        <div
+          ref={menuRef}
+          style={{
+            position: 'fixed',
+            top: menuPos.y,
+            left: menuPos.x,
+            transform: 'translateX(-100%)',
+            zIndex: 9999,
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border-hi)',
+            borderRadius: 'var(--r-md, 8px)',
+            boxShadow: 'var(--shadow-lg, 0 8px 24px rgba(0,0,0,0.3))',
+            padding: '4px 0',
+            minWidth: 140,
+          }}
+        >
+          <button
+            onClick={(e) => { e.stopPropagation(); handleMenuAction('edit'); }}
+            style={{
+              width: '100%',
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '8px 14px',
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--text)',
+              fontSize: 13,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              transition: 'background 0.1s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+          >
+            <Pencil className="w-3.5 h-3.5" style={{ color: 'var(--text-mid)' }} />
+            Edit
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); handleMenuAction('delete'); }}
+            style={{
+              width: '100%',
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '8px 14px',
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--red)',
+              fontSize: 13,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              transition: 'background 0.1s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            Delete
+          </button>
+        </div>
+      )}
+
       {/* Card header */}
       <div style={{ marginBottom: 12 }}>
-        <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--text)', letterSpacing: '-0.01em' }}>
+        <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--text)', letterSpacing: '-0.01em', paddingRight: 28 }}>
           {project.name}
         </div>
         {prodLine ? (

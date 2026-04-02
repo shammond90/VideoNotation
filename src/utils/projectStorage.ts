@@ -1,7 +1,7 @@
 import { openDB } from 'idb';
 import type { Project, AppConfig, ColumnConfig, Annotation } from '../types/index';
 import { DEFAULT_CONFIG, DEFAULT_VISIBLE_COLUMNS } from '../types/index';
-import { loadAnnotations, saveAnnotations, saveConfig } from './storage';
+import { loadAnnotations, saveAnnotations, saveConfig, clearStorageFamily, getAnnotationStorageKey } from './storage';
 import { deleteVideoHandle } from './videoHandleStorage';
 import { loadXlsxExportTemplates, saveXlsxExportTemplates } from './configTemplates';
 import type { XlsxExportTemplate } from './configTemplates';
@@ -110,6 +110,8 @@ export async function saveProject(project: Project): Promise<void> {
 export async function deleteProject(projectId: string): Promise<void> {
   const db = await getDB();
   await db.delete(PROJECTS_STORE, projectId);
+  // Clean up stored annotation data (keyed by projectId)
+  await clearStorageFamily(getAnnotationStorageKey(projectId, 0)).catch(() => {});
   // Clean up any stored video handle
   await deleteVideoHandle(projectId).catch(() => {});
 }
@@ -167,6 +169,7 @@ export async function updateProjectVideo(
 export async function updateProjectMetadata(
   projectId: string,
   metadata: {
+    name?: string;
     production_name?: string;
     choreographer?: string;
     venue?: string;

@@ -12,7 +12,7 @@ import type { SyncResolution } from './components/SyncConflictModal';
 import { ProjectSwitcherModal } from './components/ProjectSwitcherModal';
 import { SessionExpiredModal } from './components/SessionExpiredModal';
 import { ToastContainer } from './components/ToastContainer';
-import { parseImportedProject, importProject, deleteProject as deleteProjectFromStorage, saveProject as saveProjectToStorage, loadProject as loadProjectFromStorage } from './utils/projectStorage';
+import { parseImportedProject, importProject, deleteProject as deleteProjectFromStorage, saveProject as saveProjectToStorage, loadProject as loadProjectFromStorage, updateProjectMetadata } from './utils/projectStorage';
 import { detectSyncStatus } from './utils/cloudStorage';
 import type { ImportedProjectData } from './utils/projectStorage';
 import type { TemplateData } from './types';
@@ -296,6 +296,45 @@ function AuthenticatedApp({ offlineMode = false }: { offlineMode?: boolean }) {
       }
     },
     [createNewProject]
+  );
+
+  // ── Edit project metadata from HomeScreen ──
+  const handleEditProject = useCallback(
+    async (projectId: string, updates: {
+      name: string;
+      production_name?: string;
+      choreographer?: string;
+      venue?: string;
+      year?: string;
+      notes?: string;
+    }) => {
+      try {
+        await updateProjectMetadata(projectId, updates);
+        // Push updated project to cloud
+        if (!offlineMode) {
+          const fresh = await loadProjectFromStorage(projectId);
+          if (fresh) await cloudPushProject(fresh);
+        }
+      } catch (err) {
+        console.error('Failed to update project metadata:', err);
+        addToast('Failed to update project.', 'error');
+      }
+    },
+    [offlineMode, cloudPushProject, addToast]
+  );
+
+  // ── Delete project from HomeScreen ──
+  const handleDeleteProject = useCallback(
+    async (projectId: string) => {
+      try {
+        await deleteProjectFromStorage(projectId);
+        if (!offlineMode) cloudDeleteProject(projectId);
+      } catch (err) {
+        console.error('Failed to delete project:', err);
+        addToast('Failed to delete project.', 'error');
+      }
+    },
+    [offlineMode, cloudDeleteProject, addToast]
   );
 
   const handleCreateProjectCancel = useCallback(() => {
@@ -758,6 +797,8 @@ function AuthenticatedApp({ offlineMode = false }: { offlineMode?: boolean }) {
           onProjectSelected={handleProjectSelected}
           onCreateProject={handleCreateProject}
           onImportProject={handleImportProject}
+          onEditProject={handleEditProject}
+          onDeleteProject={handleDeleteProject}
           isRestoring={isRestoring}
           cloudSaveStatus={cloudSaveStatus}
         />
