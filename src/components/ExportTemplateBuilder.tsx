@@ -67,7 +67,7 @@ function ColumnGapDropZone({ index, isPoolDragging }: { index: number; isPoolDra
     <div
       ref={setNodeRef}
       className={`h-1.5 -my-0.5 rounded-full transition-all ${
-        isOver ? 'bg-[var(--amber)] h-2 -my-0.5 shadow-[0_0_8px_var(--amber)]' : 'bg-[var(--border-hi)]/30 hover:bg-[var(--border-hi)]/60'
+        isOver ? 'bg-(--amber) h-2 -my-0.5 shadow-[0_0_8px_var(--amber)]' : 'bg-(--border-hi)/30 hover:bg-(--border-hi)/60'
       }`}
     />
   );
@@ -80,7 +80,7 @@ function ColumnDropTarget({ columnId, children }: { columnId: string; children: 
     <div
       ref={setNodeRef}
       className={`flex-1 min-h-[32px] flex flex-wrap gap-1 p-1.5 rounded border border-dashed transition-colors ${
-        isOver ? 'border-[var(--amber-hi)] bg-[var(--amber)]/10' : 'border-[var(--border-hi)]/50 bg-[var(--bg-card)]/30'
+        isOver ? 'border-(--amber-hi) bg-(--amber)/10' : 'border-(--border-hi)/50 bg-(--bg-card)/30'
       }`}
     >
       {children}
@@ -116,12 +116,12 @@ function SortableColumnCard({
     <div
       ref={setNodeRef}
       style={style}
-      className="flex items-start gap-2 bg-[var(--bg-panel)]/60 rounded-lg border border-[var(--border-hi)]/50 p-2.5 group"
+      className="flex items-start gap-2 bg-(--bg-panel)/60 rounded-lg border border-(--border-hi)/50 p-2.5 group"
     >
       {/* Drag handle */}
       <button
         type="button"
-        className="cursor-grab active:cursor-grabbing text-[var(--text-dim)] hover:text-[var(--text-mid)] touch-none mt-1 shrink-0"
+        className="cursor-grab active:cursor-grabbing text-(--text-dim) hover:text-(--text-mid) touch-none mt-1 shrink-0"
         {...attributes}
         {...listeners}
       >
@@ -142,14 +142,14 @@ function SortableColumnCard({
                 type="text"
                 value={column.name}
                 onChange={(e) => onNameChange(column.id, e.target.value)}
-                className="flex-1 bg-[var(--bg-card)] border border-[var(--border-hi)] rounded px-2 py-0.5 text-xs text-[var(--text)] focus:border-[var(--amber)] focus:outline-none min-w-0"
+                className="flex-1 bg-(--bg-card) border border-(--border-hi) rounded px-2 py-0.5 text-xs text-(--text) focus:border-(--amber) focus:outline-none min-w-0"
                 placeholder="Column name"
               />
               {column.customName && (
                 <button
                   type="button"
                   onClick={() => onResetName(column.id)}
-                  className="p-0.5 text-[var(--text-dim)] hover:text-[var(--text-mid)] shrink-0"
+                  className="p-0.5 text-(--text-dim) hover:text-(--text-mid) shrink-0"
                   title="Reset to auto-name"
                 >
                   <RotateCcw className="w-3 h-3" />
@@ -163,12 +163,12 @@ function SortableColumnCard({
         {!column.locked && (
           <ColumnDropTarget columnId={column.id}>
             {column.fieldKeys.length === 0 ? (
-              <span className="text-[10px] text-[var(--text-dim)] italic px-1">Drop fields here</span>
+              <span className="text-[10px] text-(--text-dim) italic px-1">Drop fields here</span>
             ) : (
               column.fieldKeys.map((fk) => (
                 <span
                   key={fk}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[var(--amber)]/30 text-[var(--amber)] text-[10px] font-medium"
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-(--amber)/30 text-(--amber) text-[10px] font-medium"
                 >
                   {CUE_FIELD_LABELS[fk as keyof typeof CUE_FIELD_LABELS] ?? VIRTUAL_COLUMN_LABELS[fk] ?? fk}
                   <button
@@ -190,7 +190,7 @@ function SortableColumnCard({
         <button
           type="button"
           onClick={() => onRemoveColumn(column.id)}
-          className="p-1 text-[var(--text-dim)] hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-0.5"
+          className="p-1 text-(--text-dim) hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-0.5"
           title="Remove column"
         >
           <Trash2 className="w-3.5 h-3.5" />
@@ -216,11 +216,11 @@ function DraggablePoolField({ fieldKey, label }: { fieldKey: string; label: stri
     <div
       ref={setNodeRef}
       style={style}
-      className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[var(--bg-panel)]/50 rounded border border-[var(--border-hi)]/40 text-xs text-[var(--text-mid)] cursor-grab active:cursor-grabbing hover:bg-[var(--bg-panel)] hover:border-[var(--border-hi)] transition-colors select-none"
+      className="flex items-center gap-1.5 px-2.5 py-1.5 bg-(--bg-panel)/50 rounded border border-(--border-hi)/40 text-xs text-(--text-mid) cursor-grab active:cursor-grabbing hover:bg-(--bg-panel) hover:border-(--border-hi) transition-colors select-none"
       {...attributes}
       {...listeners}
     >
-      <GripVertical className="w-3 h-3 text-[var(--text-dim)] shrink-0" />
+      <GripVertical className="w-3 h-3 text-(--text-dim) shrink-0" />
       {label}
     </div>
   );
@@ -543,22 +543,22 @@ export function ExportTemplateBuilder({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col">
+      <div className="bg-(--bg-card) border border-(--border) rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)] shrink-0">
-          <h2 className="text-lg font-semibold text-[var(--text)]">Export XLSX — Template Builder</h2>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-(--border) shrink-0">
+          <h2 className="text-lg font-semibold text-(--text)">Export XLSX — Template Builder</h2>
           <button
             type="button"
             onClick={onClose}
-            className="p-1 text-[var(--text-mid)] hover:text-[var(--text)] hover:bg-[var(--bg-panel)] rounded-md transition-colors"
+            className="p-1 text-(--text-mid) hover:text-(--text) hover:bg-(--bg-panel) rounded-md transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Template selector bar */}
-        <div className="flex items-center gap-3 px-6 py-3 border-b border-[var(--border)]/50 shrink-0 bg-[var(--bg-card)]/50">
-          <label className="text-xs text-[var(--text-mid)] font-medium shrink-0">Template:</label>
+        <div className="flex items-center gap-3 px-6 py-3 border-b border-(--border)/50 shrink-0 bg-(--bg-card)/50">
+          <label className="text-xs text-(--text-mid) font-medium shrink-0">Template:</label>
           <div className="relative flex-1 max-w-xs">
             <select
               value={selectedTemplateId}
@@ -571,26 +571,26 @@ export function ExportTemplateBuilder({
                   setColorOverrides({});
                 }
               }}
-              className="w-full bg-[var(--bg-panel)] border border-[var(--border-hi)] rounded-md px-3 py-1.5 text-xs text-[var(--text)] appearance-none pr-8 focus:border-[var(--amber)] focus:outline-none"
+              className="w-full bg-(--bg-panel) border border-(--border-hi) rounded-md px-3 py-1.5 text-xs text-(--text) appearance-none pr-8 focus:border-(--amber) focus:outline-none"
             >
               <option value="">New template…</option>
               {savedTemplates.map((t) => (
                 <option key={t.id} value={t.id}>{t.name}</option>
               ))}
             </select>
-            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-mid)] pointer-events-none" />
+            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-(--text-mid) pointer-events-none" />
           </div>
           <input
             type="text"
             value={templateName}
             onChange={(e) => setTemplateName(e.target.value)}
             placeholder="Template name"
-            className="flex-1 max-w-xs bg-[var(--bg-panel)] border border-[var(--border-hi)] rounded-md px-3 py-1.5 text-xs text-[var(--text)] focus:border-[var(--amber)] focus:outline-none"
+            className="flex-1 max-w-xs bg-(--bg-panel) border border-(--border-hi) rounded-md px-3 py-1.5 text-xs text-(--text) focus:border-(--amber) focus:outline-none"
           />
           <button
             type="button"
             onClick={handleSaveTemplate}
-            className="flex items-center gap-1 px-3 py-1.5 text-xs bg-[var(--amber)] text-white rounded-md hover:bg-[var(--amber)] transition-colors shrink-0"
+            className="flex items-center gap-1 px-3 py-1.5 text-xs bg-(--amber) text-white rounded-md hover:bg-(--amber) transition-colors shrink-0"
           >
             <Save className="w-3 h-3" />
             Save
@@ -599,7 +599,7 @@ export function ExportTemplateBuilder({
             <button
               type="button"
               onClick={() => handleDeleteTemplate(selectedTemplateId)}
-              className="p-1.5 text-[var(--text-dim)] hover:text-red-400 hover:bg-[var(--bg-panel)] rounded-md transition-colors shrink-0"
+              className="p-1.5 text-(--text-dim) hover:text-red-400 hover:bg-(--bg-panel) rounded-md transition-colors shrink-0"
               title="Delete template"
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -616,15 +616,15 @@ export function ExportTemplateBuilder({
             onDragEnd={handleDragEnd}
           >
             {/* Left: Field Pool */}
-            <div className="w-56 border-r border-[var(--border)] flex flex-col shrink-0">
-              <div className="px-3 pt-3 pb-2 border-b border-[var(--border)]/50">
-                <h3 className="text-xs font-semibold text-[var(--text-mid)] uppercase tracking-wider mb-2">Field Pool</h3>
+            <div className="w-56 border-r border-(--border) flex flex-col shrink-0">
+              <div className="px-3 pt-3 pb-2 border-b border-(--border)/50">
+                <h3 className="text-xs font-semibold text-(--text-mid) uppercase tracking-wider mb-2">Field Pool</h3>
                 <input
                   type="text"
                   value={poolSearch}
                   onChange={(e) => setPoolSearch(e.target.value)}
                   placeholder="Search fields…"
-                  className="w-full bg-[var(--bg-panel)]/50 border border-[var(--border-hi)]/50 rounded px-2 py-1 text-xs text-[var(--text-mid)] focus:border-[var(--amber)] focus:outline-none"
+                  className="w-full bg-(--bg-panel)/50 border border-(--border-hi)/50 rounded px-2 py-1 text-xs text-(--text-mid) focus:border-(--amber) focus:outline-none"
                 />
               </div>
               <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1 annotation-scroll">
@@ -634,21 +634,21 @@ export function ExportTemplateBuilder({
                   ))}
                 </SortableContext>
                 {poolFields.length === 0 && (
-                  <p className="text-[10px] text-[var(--text-dim)] italic text-center py-4">No matching fields</p>
+                  <p className="text-[10px] text-(--text-dim) italic text-center py-4">No matching fields</p>
                 )}
               </div>
             </div>
 
             {/* Right: Column Builder + options */}
             <div className="flex-1 flex flex-col min-h-0">
-              <div className="flex items-center gap-2 px-4 pt-3 pb-2 border-b border-[var(--border)]/50">
-                <h3 className="text-xs font-semibold text-[var(--text-mid)] uppercase tracking-wider flex-1">
+              <div className="flex items-center gap-2 px-4 pt-3 pb-2 border-b border-(--border)/50">
+                <h3 className="text-xs font-semibold text-(--text-mid) uppercase tracking-wider flex-1">
                   Columns ({columns.length})
                 </h3>
                 <button
                   type="button"
                   onClick={addColumn}
-                  className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-medium bg-[var(--bg-panel)] text-[var(--text-mid)] rounded hover:bg-[var(--bg-hover)] transition-colors"
+                  className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-medium bg-(--bg-panel) text-(--text-mid) rounded hover:bg-(--bg-hover) transition-colors"
                 >
                   <Plus className="w-3 h-3" />
                   Add Column
@@ -676,7 +676,7 @@ export function ExportTemplateBuilder({
                 </SortableContext>
 
                 {userColumnCount === 0 && (
-                  <div className="text-center py-8 text-[var(--text-dim)]">
+                  <div className="text-center py-8 text-(--text-dim)">
                     <p className="text-sm font-medium mb-1">No custom columns yet</p>
                     <p className="text-xs">Drag fields from the pool into this area, or click "Add Column"</p>
                   </div>
@@ -684,10 +684,10 @@ export function ExportTemplateBuilder({
               </div>
 
               {/* Bottom options: cue type + skipped */}
-              <div className="border-t border-[var(--border)]/50 px-4 py-3 space-y-3 shrink-0">
+              <div className="border-t border-(--border)/50 px-4 py-3 space-y-3 shrink-0">
                 {/* Cue type overrides */}
                 <div>
-                  <h4 className="text-[10px] font-semibold text-[var(--text-mid)] uppercase tracking-wider mb-2">Cue Types</h4>
+                  <h4 className="text-[10px] font-semibold text-(--text-mid) uppercase tracking-wider mb-2">Cue Types</h4>
                   <div className="flex flex-wrap gap-2">
                     {cueTypes.filter(ct => !(hiddenCueTypes ?? []).includes(ct)).map((ct) => {
                       const isExcluded = excludedCueTypes.has(ct);
@@ -698,7 +698,7 @@ export function ExportTemplateBuilder({
                             type="color"
                             value={effectiveColor}
                             onChange={(e) => setColorOverrides((prev) => ({ ...prev, [ct]: e.target.value }))}
-                            className="w-5 h-5 rounded border border-[var(--border-hi)] cursor-pointer"
+                            className="w-5 h-5 rounded border border-(--border-hi) cursor-pointer"
                           />
                           <button
                             type="button"
@@ -710,8 +710,8 @@ export function ExportTemplateBuilder({
                             })}
                             className={`text-[10px] select-none transition-colors ${
                               isExcluded
-                                ? 'line-through text-[var(--text-dim)] opacity-50'
-                                : 'text-[var(--text-mid)] hover:text-[var(--text)]'
+                                ? 'line-through text-(--text-dim) opacity-50'
+                                : 'text-(--text-mid) hover:text-(--text)'
                             }`}
                             title={isExcluded ? 'Click to include in export' : 'Click to exclude from export'}
                           >
@@ -729,10 +729,10 @@ export function ExportTemplateBuilder({
                     type="checkbox"
                     checked={includeSkipped}
                     onChange={(e) => setIncludeSkipped(e.target.checked)}
-                    className="w-4 h-4 rounded border-[var(--border-hi)] bg-[var(--bg-hover)] text-[var(--amber)] focus:ring-[var(--border-focus)] focus:ring-offset-0 cursor-pointer"
+                    className="w-4 h-4 rounded border-(--border-hi) bg-(--bg-hover) text-(--amber) focus:ring-(--border-focus) focus:ring-offset-0 cursor-pointer"
                   />
-                  <span className="text-xs text-[var(--text-mid)]">Include skipped cues</span>
-                  <span className="text-[10px] text-[var(--text-dim)]">(italicised in export)</span>
+                  <span className="text-xs text-(--text-mid)">Include skipped cues</span>
+                  <span className="text-[10px] text-(--text-dim)">(italicised in export)</span>
                 </label>
               </div>
             </div>
@@ -740,7 +740,7 @@ export function ExportTemplateBuilder({
             {/* Drag overlay */}
             <DragOverlay>
               {activePoolField && (
-                <div className="px-2.5 py-1.5 bg-[var(--amber)]/80 rounded border border-[var(--amber-hi)] text-xs text-white font-medium shadow-lg">
+                <div className="px-2.5 py-1.5 bg-(--amber)/80 rounded border border-(--amber-hi) text-xs text-white font-medium shadow-lg">
                   {CUE_FIELD_LABELS[activePoolField as keyof typeof CUE_FIELD_LABELS]
                     ?? VIRTUAL_COLUMN_LABELS[activePoolField]
                     ?? activePoolField}
@@ -751,8 +751,8 @@ export function ExportTemplateBuilder({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-3 border-t border-[var(--border)] shrink-0">
-          <p className="text-[10px] text-[var(--text-dim)]">
+        <div className="flex items-center justify-between px-6 py-3 border-t border-(--border) shrink-0">
+          <p className="text-[10px] text-(--text-dim)">
             {includedCueCount === totalCueCount
               ? `${totalCueCount} cues`
               : `${includedCueCount}/${totalCueCount} cues`
@@ -762,7 +762,7 @@ export function ExportTemplateBuilder({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-xs bg-[var(--bg-panel)] text-[var(--text-mid)] rounded-md hover:bg-[var(--bg-hover)] transition-colors"
+              className="px-4 py-2 text-xs bg-(--bg-panel) text-(--text-mid) rounded-md hover:bg-(--bg-hover) transition-colors"
             >
               Cancel
             </button>

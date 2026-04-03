@@ -51,7 +51,7 @@ export function useVideoPlayer(
   const animationRef = useRef<number>(0);
   // Playback tracking refs
   const previousTimeRef = useRef<number>(0);
-  const wasSeekedRef = useRef<boolean>(false);
+  const seekCounterRef = useRef<number>(0);
 
   // Reset state when src changes
   useEffect(() => {
@@ -67,7 +67,7 @@ export function useVideoPlayer(
     }));
     cancelAnimationFrame(animationRef.current);
     previousTimeRef.current = 0;
-    wasSeekedRef.current = false;
+    seekCounterRef.current = 0;
 
     // Force the browser to load the new source — React updates the <video>
     // src attribute, but browsers don't reliably start loading without an
@@ -86,8 +86,16 @@ export function useVideoPlayer(
       previousTimeRef.current = cur;
       setState((p) => ({ ...p, currentTime: cur }));
 
-      wasSeekedRef.current = false;
-      animationRef.current = requestAnimationFrame(updateTime);
+      // Capture counter at this frame; don't reset if a seek happened since
+      const counterAtFrame = seekCounterRef.current;
+      animationRef.current = requestAnimationFrame(() => {
+        if (seekCounterRef.current === counterAtFrame) {
+          updateTime();
+        } else {
+          // A seek happened between frames — skip this cycle
+          updateTime();
+        }
+      });
     }
   }, [videoRef]);
 
@@ -230,7 +238,7 @@ export function useVideoPlayer(
   const seek = useCallback((time: number) => {
     const video = videoRef.current;
     if (video) {
-      wasSeekedRef.current = true;
+      seekCounterRef.current += 1;
       video.currentTime = Math.max(0, Math.min(time, video.duration || 0));
       previousTimeRef.current = video.currentTime;
       setState((prev) => ({ ...prev, currentTime: video.currentTime }));
@@ -263,7 +271,7 @@ export function useVideoPlayer(
   const stepFrame = useCallback((frames: number) => {
     const video = videoRef.current;
     if (video) {
-      wasSeekedRef.current = true;
+      seekCounterRef.current += 1;
       video.pause();
       video.currentTime = Math.max(0, Math.min(video.currentTime + frames * FRAME_DUR, video.duration));
       previousTimeRef.current = video.currentTime;

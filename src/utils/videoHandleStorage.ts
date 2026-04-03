@@ -5,7 +5,7 @@
  * `video-handle:{projectId}`. FileSystemFileHandle is structured-cloneable and
  * can be stored directly.
  */
-import { openDB, type IDBPDatabase } from 'idb';
+import { getDB, STORE_NAME } from './idb';
 
 // Chromium-specific File System Access API extensions (not in standard lib types)
 interface FileSystemPermissionDescriptor {
@@ -21,27 +21,6 @@ interface ChromiumFileSystemFileHandle extends FileSystemFileHandle {
 
 export const supportsFileSystemAccess =
   typeof window !== 'undefined' && 'showOpenFilePicker' in window;
-
-// ── IndexedDB helpers (mirror storage.ts pattern) ──
-
-const DB_NAME = 'cuetation-db';
-const DB_VERSION = 1;
-const STORE_NAME = 'keyval';
-
-let dbPromise: Promise<IDBPDatabase> | null = null;
-
-function getDB(): Promise<IDBPDatabase> {
-  if (!dbPromise) {
-    dbPromise = openDB(DB_NAME, DB_VERSION, {
-      upgrade(db) {
-        if (!db.objectStoreNames.contains(STORE_NAME)) {
-          db.createObjectStore(STORE_NAME);
-        }
-      },
-    });
-  }
-  return dbPromise;
-}
 
 function handleKey(projectId: string): string {
   return `video-handle:${projectId}`;

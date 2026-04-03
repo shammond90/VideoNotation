@@ -62,10 +62,15 @@ export function useConfiguration() {
     });
   }, []);
 
-  // Auto-save whenever config changes (skip the initial default)
+  // Auto-save whenever config changes (debounced, skip the initial default)
+  const configSaveTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => {
     if (!initialLoadDone.current) return;
-    saveConfig(config);
+    clearTimeout(configSaveTimerRef.current);
+    configSaveTimerRef.current = setTimeout(() => {
+      saveConfig(config);
+    }, 500);
+    return () => clearTimeout(configSaveTimerRef.current);
   }, [config]);
 
   const setCueTypes = useCallback((types: string[]) => {

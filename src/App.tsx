@@ -194,6 +194,15 @@ export default function App({
     setCueTypeHotkey,
   } = useConfiguration();
 
+  // Reverse lookup map: combo string → cue type name (O(1) per keypress)
+  const hotkeyReverseLookup = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const [type, combo] of Object.entries(config.cueTypeHotkeys)) {
+      if (combo) map.set(combo, type);
+    }
+    return map;
+  }, [config.cueTypeHotkeys]);
+
   const {
     annotations,
     activeId,
@@ -294,25 +303,24 @@ export default function App({
   }, [projectId, config, configLoaded]);
 
   // Lifecycle cue + config backup (visibility change + beforeunload)
+  const backupCuesIfDirty = useCallback(() => {
+    if (!cuesDirtyRef.current) return;
+    const currentFileName = annotationScope.fileName || 'no-video';
+    const currentFileSize = annotationScope.fileName ? annotationScope.fileSize : 0;
+    backupAnnotations(currentFileName, currentFileSize, annotationsRef.current);
+    cuesDirtyRef.current = false;
+  }, [annotationScope]);
+
   useEffect(() => {
     const handleVisibility = () => {
       if (document.visibilityState === 'hidden') {
-        if (cuesDirtyRef.current) {
-          const currentFileName = annotationScope.fileName || 'no-video';
-          const currentFileSize = annotationScope.fileName ? annotationScope.fileSize : 0;
-          backupAnnotations(currentFileName, currentFileSize, annotationsRef.current);
-          cuesDirtyRef.current = false;
-        }
+        backupCuesIfDirty();
         if (isConfigOpenRef.current) saveConfigBackup();
       }
     };
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (cuesDirtyRef.current) {
-        const currentFileName = annotationScope.fileName || 'no-video';
-        const currentFileSize = annotationScope.fileName ? annotationScope.fileSize : 0;
-        backupAnnotations(currentFileName, currentFileSize, annotationsRef.current);
-        cuesDirtyRef.current = false;
-        // Show browser warning for unsaved changes
+        backupCuesIfDirty();
         e.preventDefault();
       }
       if (isConfigOpenRef.current) saveConfigBackup();
@@ -323,7 +331,7 @@ export default function App({
       document.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, [annotationScope, saveConfigBackup]);
+  }, [backupCuesIfDirty, saveConfigBackup]);
 
   // Compute which cue types are in use
   const usedCueTypes = useMemo(() => {
@@ -425,19 +433,29 @@ export default function App({
         tempVideo.src = url;
         tempVideo.onloadedmetadata = () => {
           onVideoLoaded(file, tempVideo.duration);
+          tempVideo.src = '';
+          tempVideo.remove();
+        };
+        tempVideo.onerror = () => {
+          tempVideo.src = '';
+          tempVideo.remove();
         };
       }
 
       // Check for no-video annotations to migrate, or existing annotations on this video
       (async () => {
-        const migrated = await migrateNoVideoAnnotations(file.name, file.size);
-        if (migrated > 0) {
-          addToast(`Migrated ${migrated} annotation${migrated !== 1 ? 's' : ''} to this video`, 'info');
-        } else {
-          const { exists, count } = await hasAnnotationData(file.name, file.size);
-          if (exists) {
-            addToast(`Restored ${count} annotation${count !== 1 ? 's' : ''} from previous session`, 'info');
+        try {
+          const migrated = await migrateNoVideoAnnotations(file.name, file.size);
+          if (migrated > 0) {
+            addToast(`Migrated ${migrated} annotation${migrated !== 1 ? 's' : ''} to this video`, 'info');
+          } else {
+            const { exists, count } = await hasAnnotationData(file.name, file.size);
+            if (exists) {
+              addToast(`Restored ${count} annotation${count !== 1 ? 's' : ''} from previous session`, 'info');
+            }
           }
+        } catch (err) {
+          console.error('Annotation migration failed:', err);
         }
       })();
     },
@@ -501,6 +519,7 @@ export default function App({
       input.onchange = () => {
         const file = input.files?.[0];
         if (file) onPicked(file);
+        input.remove();
       };
       input.click();
     }
@@ -614,6 +633,20 @@ export default function App({
     setIsAnnotating(true);
   }, [videoSrc, isNoVideoMode, isAnnotating, playerState.currentTime, isDualWindow, broadcastSend]);
 
+  // Resume video playback if autoplay-after-cue is enabled
+  const resumePlaybackIfEnabled = useCallback(() => {
+    if (!config.autoplayAfterCue) return;
+    if (isDualWindow) {
+      broadcastSend({ type: 'CMD_PLAY' });
+    } else {
+      try {
+        videoRef.current?.play().catch(() => {});
+      } catch {
+        // ignore
+      }
+    }
+  }, [isDualWindow, broadcastSend, config.autoplayAfterCue]);
+
   // Save cue — close form and resume playback
   const handleSaveCue = useCallback(
     (cue: CueFields, overrideTimestamp?: number) => {
@@ -622,39 +655,17 @@ export default function App({
       setIsAnnotating(false);
       setPreselectedCueType(null);
       addToast('Cue saved', 'success');
-      // Resume playback after saving (if autoplay enabled)
-      if (config.autoplayAfterCue) {
-        if (isDualWindow) {
-          broadcastSend({ type: 'CMD_PLAY' });
-        } else {
-          try {
-            videoRef.current?.play().catch(() => {});
-          } catch {
-            // ignore
-          }
-        }
-      }
+      resumePlaybackIfEnabled();
     },
-    [annotateTimestamp, addAnnotation, addToast, isDualWindow, broadcastSend, config.autoplayAfterCue],
+    [annotateTimestamp, addAnnotation, addToast, resumePlaybackIfEnabled],
   );
 
   // Cancel note — close form and resume playback
   const handleCancelNote = useCallback(() => {
     setIsAnnotating(false);
     setPreselectedCueType(null);
-    // Resume playback (if autoplay enabled)
-    if (config.autoplayAfterCue) {
-      if (isDualWindow) {
-        broadcastSend({ type: 'CMD_PLAY' });
-      } else {
-        try {
-          videoRef.current?.play().catch(() => {});
-        } catch {
-          // ignore
-        }
-      }
-    }
-  }, [isDualWindow, broadcastSend, config.autoplayAfterCue]);
+    resumePlaybackIfEnabled();
+  }, [resumePlaybackIfEnabled]);
 
   // Seek to annotation timestamp
   const handleSeek = useCallback(
@@ -820,8 +831,7 @@ export default function App({
         parts.push(key);
         const combo = parts.join('+');
 
-        const hotkeys = config.cueTypeHotkeys;
-        const matchedType = Object.entries(hotkeys).find(([, hk]) => hk === combo)?.[0];
+        const matchedType = hotkeyReverseLookup.get(combo);
         if (matchedType) {
           e.preventDefault();
           setPreselectedCueType(matchedType);
@@ -936,7 +946,7 @@ export default function App({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleTogglePlay, handleEnterAnnotate, handleExplicitSave, playerActions, playerState.playbackRate, playerState.currentTime, addToast, isNoVideoMode, isConfigOpen, handleSeek, isDualWindow, broadcastSend, config.cueTypeHotkeys]);
+  }, [handleTogglePlay, handleEnterAnnotate, handleExplicitSave, playerActions, playerState.playbackRate, playerState.currentTime, addToast, isNoVideoMode, isConfigOpen, handleSeek, isDualWindow, broadcastSend, hotkeyReverseLookup]);
 
   // Cleanup video URL on unmount
   useEffect(() => {

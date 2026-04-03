@@ -178,16 +178,6 @@ export async function updateProjectMetadata(
 }
 
 /**
- * Get cue count for a project.
- * Returns the number of annotations stored for this project.
- */
-export async function getProjectCueCount(_projectId: string): Promise<number> {
-  // Cue count will be tracked when annotations are stored per project.
-  // For now returns 0 — will be updated when storage migration is complete.
-  return 0;
-}
-
-/**
  * Efficiently check if a video file exists at the stored path and matches filesize.
  * Note: This is a best-effort check. Actual file verification happens when user selects a file.
  */

@@ -1,31 +1,8 @@
-import { openDB } from 'idb';
 import type { ConfigTemplate, TemplateData } from '../types';
+import { idbGet, idbSet } from './idb';
 
-const DB_NAME = 'cuetation-db';
-const DB_VERSION = 1;
-const STORE_NAME = 'keyval';
 const STORAGE_KEY = 'config-templates';
 const XLSX_TEMPLATES_KEY = 'xlsx-export-templates';
-
-async function getDB() {
-  return openDB(DB_NAME, DB_VERSION, {
-    upgrade(db) {
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME);
-      }
-    },
-  });
-}
-
-async function idbGet<T>(key: string): Promise<T | undefined> {
-  const db = await getDB();
-  return db.get(STORE_NAME, key);
-}
-
-async function idbSet<T>(key: string, value: T): Promise<void> {
-  const db = await getDB();
-  await db.put(STORE_NAME, value, key);
-}
 
 /** Load all saved config templates from IndexedDB. */
 export async function loadConfigTemplates(): Promise<ConfigTemplate[]> {

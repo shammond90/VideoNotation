@@ -209,7 +209,7 @@ function OverflowChips({ chips, showTimestamp, timestamp, onSeek, isActive, isSt
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onSeek(timestamp); e.currentTarget.blur(); }}
-              className={`text-[10px] font-mono px-1.5 py-0.5 rounded transition-colors cursor-pointer shrink-0 ${isActive ? 'bg-emerald-500/30 text-emerald-300' : isStandby ? 'bg-amber-500/30 text-amber-300' : isWarning ? 'bg-blue-500/30 text-blue-300' : 'bg-[var(--bg-panel)] text-[var(--text-mid)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'}`}
+              className={`text-[10px] font-mono px-1.5 py-0.5 rounded transition-colors cursor-pointer shrink-0 ${isActive ? 'bg-emerald-500/30 text-emerald-300' : isStandby ? 'bg-amber-500/30 text-amber-300' : isWarning ? 'bg-blue-500/30 text-blue-300' : 'bg-(--bg-panel) text-(--text-mid) hover:bg-(--bg-hover) hover:text-(--text)'}`}
             >
               {formatTime(timestamp)}
             </button>
@@ -1272,8 +1272,8 @@ export function AnnotationPanel({
             : isActive ? 'bg-emerald-900/30 border-emerald-500/60 shadow-sm shadow-emerald-500/10'
             : isStandby ? 'bg-amber-900/20 border-amber-500/50 shadow-sm shadow-amber-500/10'
             : isWarning ? 'bg-blue-900/20 border-blue-500/50 shadow-sm shadow-blue-500/10'
-            : isExpanded ? 'hover:border-[var(--border-hi)]'
-            : 'opacity-60 hover:opacity-100 hover:border-[var(--border-hi)]'
+            : isExpanded ? 'hover:border-(--border-hi)'
+            : 'opacity-60 hover:opacity-100 hover:border-(--border-hi)'
         }`}
         style={{
           background: (isActive || isStandby || isWarning) ? undefined : 'var(--bg-card)',
@@ -1362,8 +1362,8 @@ export function AnnotationPanel({
 
             {isDeleting && (
               <div className="flex items-center gap-2 text-sm px-3 pb-2 pt-1 border-t" style={{ borderColor: 'var(--border)' }}>
-                <span className="text-[var(--danger)] text-xs">Delete this cue?</span>
-                <button type="button" onClick={(e) => { e.stopPropagation(); onDelete(annotation.id); setDeletingId(null); }} className="text-xs px-2 py-0.5 bg-[var(--danger)] text-white rounded hover:bg-[var(--danger-hi)]">Yes</button>
+                <span className="text-(--danger) text-xs">Delete this cue?</span>
+                <button type="button" onClick={(e) => { e.stopPropagation(); onDelete(annotation.id); setDeletingId(null); }} className="text-xs px-2 py-0.5 bg-(--danger) text-white rounded hover:bg-(--danger-hi)">Yes</button>
                 <button type="button" onClick={(e) => { e.stopPropagation(); setDeletingId(null); }} className="text-xs px-2 py-0.5 rounded" style={{ background: 'var(--bg-panel)', color: 'var(--text-mid)' }} onMouseEnter={e=>(e.currentTarget.style.background='var(--bg-hover)')} onMouseLeave={e=>(e.currentTarget.style.background='var(--bg-panel)')}>No</button>
               </div>
             )}
@@ -1452,8 +1452,8 @@ export function AnnotationPanel({
                   onClick={() => setIsFilterOpen((prev) => !prev)}
                   className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded-md transition-colors ${
                     typeFilter.size < visibleCueTypes.length
-                      ? 'bg-[var(--amber-dim)] text-[var(--amber)]'
-                      : 'text-[var(--text-mid)] hover:text-[var(--text)] hover:bg-[var(--bg-hover)]'
+                      ? 'bg-(--amber-dim) text-(--amber)'
+                      : 'text-(--text-mid) hover:text-(--text) hover:bg-(--bg-hover)'
                   }`}
                 >
                   <Filter className="w-3.5 h-3.5" />
@@ -1470,7 +1470,7 @@ export function AnnotationPanel({
                   className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded-md transition-colors ${
                     statusFilter.size < CUE_STATUSES.length
                       ? 'bg-violet-500/20 text-violet-400'
-                      : 'text-[var(--text-mid)] hover:text-[var(--text)] hover:bg-[var(--bg-hover)]'
+                      : 'text-(--text-mid) hover:text-(--text) hover:bg-(--bg-hover)'
                   }`}
                 >
                   <Filter className="w-3.5 h-3.5" />
@@ -1486,8 +1486,8 @@ export function AnnotationPanel({
                   onClick={() => setFlaggedOnly((p) => !p)}
                   className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded-md transition-colors ${
                     flaggedOnly
-                      ? 'bg-[var(--red-dim)] text-red-400'
-                      : 'text-[var(--text-mid)] hover:text-[var(--text)] hover:bg-[var(--bg-hover)]'
+                      ? 'bg-(--red-dim) text-red-400'
+                      : 'text-(--text-mid) hover:text-(--text) hover:bg-(--bg-hover)'
                   }`}
                 >
                   <Flag className="w-3.5 h-3.5" />
@@ -1507,7 +1507,7 @@ export function AnnotationPanel({
                         className={`text-[10px] font-bold px-2 py-1 rounded-md border transition-colors ${
                           isActive
                             ? ''
-                            : 'bg-[var(--bg-panel)] border-[var(--border)] text-[var(--text-dim)] line-through hover:text-[var(--text)] hover:border-[var(--border-hi)]'
+                            : 'bg-(--bg-panel) border-(--border) text-(--text-dim) line-through hover:text-(--text) hover:border-(--border-hi)'
                         }`}
                         style={isActive ? { background: `${color}33`, borderColor: `${color}80`, color } : undefined}
                       >
@@ -1555,7 +1555,7 @@ export function AnnotationPanel({
                         className={`text-[10px] font-bold px-2 py-1 rounded-md border transition-colors ${
                           isActive
                             ? ''
-                            : 'bg-[var(--bg-panel)] border-[var(--border)] text-[var(--text-dim)] line-through hover:text-[var(--text)] hover:border-[var(--border-hi)]'
+                            : 'bg-(--bg-panel) border-(--border) text-(--text-dim) line-through hover:text-(--text) hover:border-(--border-hi)'
                         }`}
                         style={isActive ? { background: `${color}22`, borderColor: `${color}80`, color } : undefined}
                       >
@@ -1721,7 +1721,7 @@ export function AnnotationPanel({
                         <div className="shrink-0 flex items-center gap-1.5 ml-2 pl-2" style={{ borderLeft: '1px solid var(--border)' }}>
                           {pastStatusColor && <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: pastStatusColor }} />}
                           {pastIsFlagged && <span style={{ color: 'var(--flag)', fontSize: 9 }}><Flag className="w-2.5 h-2.5" /></span>}
-                          {showTimestamp && <button type="button" onClick={(e) => { e.stopPropagation(); onSeek(annotation.timestamp); e.currentTarget.blur(); }} className="font-mono text-[9px] shrink-0 cursor-pointer hover:text-[var(--text-mid)] transition-colors" style={{ color: 'var(--text-dim)', background: 'none', border: 'none', padding: 0 }}>{formatTime(annotation.timestamp)}</button>}
+                          {showTimestamp && <button type="button" onClick={(e) => { e.stopPropagation(); onSeek(annotation.timestamp); e.currentTarget.blur(); }} className="font-mono text-[9px] shrink-0 cursor-pointer hover:text-(--text-mid) transition-colors" style={{ color: 'var(--text-dim)', background: 'none', border: 'none', padding: 0 }}>{formatTime(annotation.timestamp)}</button>}
                         </div>
                       </div>
                     );

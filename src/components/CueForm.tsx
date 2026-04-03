@@ -25,15 +25,15 @@ interface CueFormProps {
 }
 
 const inputClass =
-  'w-full bg-[var(--bg-input)] text-[var(--text)] rounded px-2 py-1.5 text-xs border border-[var(--border)] focus:border-[var(--amber)] focus:ring-1 focus:ring-[var(--border-focus)] outline-none placeholder-[var(--text-dim)]';
+  'w-full bg-(--bg-input) text-(--text) rounded px-2 py-1.5 text-xs border border-(--border) focus:border-(--amber) focus:ring-1 focus:ring-(--border-focus) outline-none placeholder-(--text-dim)';
 
 const inputErrorClass =
-  'w-full bg-[var(--bg-input)] text-[var(--text)] rounded px-2 py-1.5 text-xs border border-[var(--danger)] focus:border-[var(--danger)] focus:ring-1 focus:ring-[var(--danger)] outline-none placeholder-[var(--text-dim)]';
+  'w-full bg-(--bg-input) text-(--text) rounded px-2 py-1.5 text-xs border border-(--danger) focus:border-(--danger) focus:ring-1 focus:ring-(--danger) outline-none placeholder-(--text-dim)';
 
 const readOnlyClass =
-  'w-full bg-[var(--bg-card)] text-[var(--text-mid)] rounded px-2 py-1.5 text-xs border border-[var(--border)] outline-none cursor-not-allowed';
+  'w-full bg-(--bg-card) text-(--text-mid) rounded px-2 py-1.5 text-xs border border-(--border) outline-none cursor-not-allowed';
 
-const labelClass = 'text-[10px] uppercase tracking-wider text-[var(--text-mid)] mb-0.5 block font-mono';
+const labelClass = 'text-[10px] uppercase tracking-wider text-(--text-mid) mb-0.5 block font-mono';
 
 /** Map column count to literal Tailwind grid-cols class (needed for JIT scanning) */
 const gridColsClass = (n: number) =>
@@ -153,7 +153,7 @@ function CheckboxField({
           type="checkbox"
           checked={checked}
           onChange={(e) => onChange(name, e.target.checked ? 'true' : 'false')}
-          className="w-3.5 h-3.5 rounded border-[var(--border)] bg-[var(--bg-input)] text-[var(--amber)] focus:ring-[var(--border-focus)] focus:ring-offset-0 cursor-pointer"
+          className="w-3.5 h-3.5 rounded border-(--border) bg-(--bg-input) text-(--amber) focus:ring-(--border-focus) focus:ring-offset-0 cursor-pointer"
         />
         <span className={labelClass} style={{ marginBottom: 0, display: 'inline' }}>
           {label}

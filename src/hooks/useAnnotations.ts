@@ -1,18 +1,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import type { Annotation, CueFields, CueStatus } from '../types';
-import { loadAnnotations, saveAnnotations } from '../utils/storage';
+import { loadAnnotations, saveAnnotations, migrateAnnotation } from '../utils/storage';
 import { recalculateAllDurations } from '../utils/duration';
-
-/** Silent migration: ensure every annotation has the new F2.7/F2.13/F2.14 fields */
-function migrateAnnotation(a: any): Annotation {
-  return {
-    ...a,
-    status: a.status ?? 'provisional',
-    flagged: a.flagged ?? false,
-    flagNote: a.flagNote ?? '',
-    sort_order: a.sort_order ?? 0,
-  };
-}
 
 /** Structural priority: TITLE first, then SCENE, then regular cues */
 function structuralPriority(type: string): number {
@@ -52,6 +41,9 @@ export function useAnnotations(fileName: string, fileSize: number, videoDuration
     });
     return () => { cancelled = true; };
   }, [effectiveFileName, effectiveFileSize, videoDuration]);
+
+  // Clean up debounce timer on unmount
+  useEffect(() => () => clearTimeout(saveTimeoutRef.current), []);
 
   // Debounced save
   const debouncedSave = useCallback(

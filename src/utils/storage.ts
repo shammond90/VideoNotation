@@ -1,52 +1,6 @@
-import { openDB, type IDBPDatabase } from 'idb';
 import type { Annotation, AppConfig } from '../types';
 import { DEFAULT_CONFIG, DEFAULT_CUE_TYPE_COLORS, RESERVED_CUE_TYPES, EDITABLE_FIELD_KEYS, getDefaultFieldsForType, getDefaultColumnsForTitleScene } from '../types';
-
-// ── IndexedDB Setup ──
-
-const DB_NAME = 'cuetation-db';
-const DB_VERSION = 1;
-const STORE_NAME = 'keyval';
-
-let dbPromise: Promise<IDBPDatabase> | null = null;
-
-function getDB(): Promise<IDBPDatabase> {
-  if (!dbPromise) {
-    dbPromise = openDB(DB_NAME, DB_VERSION, {
-      upgrade(db) {
-        if (!db.objectStoreNames.contains(STORE_NAME)) {
-          db.createObjectStore(STORE_NAME);
-        }
-      },
-    });
-  }
-  return dbPromise;
-}
-
-/** Low-level get from IndexedDB. */
-async function idbGet<T>(key: string): Promise<T | undefined> {
-  const db = await getDB();
-  return db.get(STORE_NAME, key);
-}
-
-/** Low-level put to IndexedDB. */
-async function idbSet<T>(key: string, value: T): Promise<void> {
-  const db = await getDB();
-  await db.put(STORE_NAME, value, key);
-}
-
-/** Low-level delete from IndexedDB. */
-async function idbDelete(key: string): Promise<void> {
-  const db = await getDB();
-  await db.delete(STORE_NAME, key);
-}
-
-/** Get all keys from IndexedDB. */
-async function idbKeys(): Promise<string[]> {
-  const db = await getDB();
-  const keys = await db.getAllKeys(STORE_NAME);
-  return keys.map(String);
-}
+import { getDB, idbGet, idbSet, idbDelete, idbKeys, STORE_NAME } from './idb';
 
 // ── Constants ──
 
@@ -264,7 +218,7 @@ export async function clearPrimaryData(baseKey: string): Promise<void> {
 
 // ── Annotation migration helper ──
 
-function migrateAnnotation(raw: any): Annotation {
+export function migrateAnnotation(raw: any): Annotation {
   const cue = raw.cue ?? {};
   return {
     id: raw.id,

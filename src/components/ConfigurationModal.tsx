@@ -159,11 +159,11 @@ function SortableColumnItem({
     <div
       ref={setNodeRef}
       style={style}
-      className="flex items-center gap-3 px-3 py-2 bg-[var(--bg-panel-a50)] rounded-md border border-[var(--border-hi-a50)] hover:bg-[var(--bg-panel)]"
+      className="flex items-center gap-3 px-3 py-2 bg-(--bg-panel-a50) rounded-md border border-(--border-hi-a50) hover:bg-(--bg-panel)"
     >
       <button
         type="button"
-        className="cursor-grab active:cursor-grabbing text-[var(--text-dim)] hover:text-[var(--text-mid)] touch-none"
+        className="cursor-grab active:cursor-grabbing text-(--text-dim) hover:text-(--text-mid) touch-none"
         {...attributes}
         {...listeners}
       >
@@ -174,10 +174,10 @@ function SortableColumnItem({
           type="checkbox"
           checked={column.visible}
           onChange={onToggle}
-          className="w-4 h-4 rounded border-[var(--border-hi)] bg-[var(--bg-hover)] text-[var(--amber)] focus:ring-[var(--border-focus)] focus:ring-offset-0 cursor-pointer"
+          className="w-4 h-4 rounded border-(--border-hi) bg-(--bg-hover) text-(--amber) focus:ring-(--border-focus) focus:ring-offset-0 cursor-pointer"
         />
-        <span className="text-sm text-[var(--text)]">{column.label}</span>
-        <span className="text-[10px] text-[var(--text-dim)] font-mono">({column.key})</span>
+        <span className="text-sm text-(--text)">{column.label}</span>
+        <span className="text-[10px] text-(--text-dim) font-mono">({column.key})</span>
       </label>
     </div>
   );
@@ -213,7 +213,7 @@ function SortableCueTypeRow({
         ) : (
           <button
             type="button"
-            className="cursor-grab active:cursor-grabbing text-[var(--text-dim)] hover:text-[var(--text-mid)] touch-none shrink-0"
+            className="cursor-grab active:cursor-grabbing text-(--text-dim) hover:text-(--text-mid) touch-none shrink-0"
             {...attributes}
             {...listeners}
           >
@@ -265,16 +265,16 @@ function SortableFieldItem({
       style={style}
       className={`flex items-center gap-2 px-2 py-1.5 rounded-md border ${
         isLocked
-          ? 'bg-[var(--bg-panel)]/30 border-[var(--border-hi)]/30'
-          : 'bg-[var(--bg-panel-a50)] border-[var(--border-hi-a50)] hover:bg-[var(--bg-panel)]'
+          ? 'bg-(--bg-panel)/30 border-(--border-hi)/30'
+          : 'bg-(--bg-panel-a50) border-(--border-hi-a50) hover:bg-(--bg-panel)'
       }`}
     >
       {isLocked ? (
-        <Lock className="w-3.5 h-3.5 text-[var(--text-dim)] shrink-0" />
+        <Lock className="w-3.5 h-3.5 text-(--text-dim) shrink-0" />
       ) : (
         <button
           type="button"
-          className="cursor-grab active:cursor-grabbing text-[var(--text-dim)] hover:text-[var(--text-mid)] touch-none shrink-0"
+          className="cursor-grab active:cursor-grabbing text-(--text-dim) hover:text-(--text-mid) touch-none shrink-0"
           {...attributes}
           {...listeners}
         >
@@ -287,9 +287,9 @@ function SortableFieldItem({
           checked={isActive}
           onChange={onToggle}
           disabled={isLocked}
-          className="w-3.5 h-3.5 rounded border-[var(--border-hi)] bg-[var(--bg-hover)] text-[var(--amber)] focus:ring-[var(--border-focus)] focus:ring-offset-0 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-3.5 h-3.5 rounded border-(--border-hi) bg-(--bg-hover) text-(--amber) focus:ring-(--border-focus) focus:ring-offset-0 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         />
-        <span className={`text-[11px] ${isActive ? 'text-[var(--text)]' : 'text-[var(--text-dim)]'}`}>
+        <span className={`text-[11px] ${isActive ? 'text-(--text)' : 'text-(--text-dim)'}`}>
           {label}
         </span>
       </label>
@@ -301,7 +301,7 @@ function SortableFieldItem({
           className={`text-[10px] px-1.5 py-0.5 rounded transition-colors shrink-0 ${
             isMandatory
               ? 'text-red-400 bg-red-500/15 hover:bg-red-500/25'
-              : 'text-[var(--text-dim)] hover:text-[var(--text-mid)] hover:bg-[var(--bg-hover)]'
+              : 'text-(--text-dim) hover:text-(--text-mid) hover:bg-(--bg-hover)'
           }`}
           title={isMandatory ? 'Remove mandatory requirement' : 'Mark as mandatory'}
         >
@@ -384,84 +384,84 @@ function ProjectAdminTab({ liveConfig }: { liveConfig: AppConfig }) {
   }, []);
 
   if (isLoading) {
-    return <p className="text-sm text-[var(--text-mid)]">Loading projects...</p>;
+    return <p className="text-sm text-(--text-mid)">Loading projects...</p>;
   }
 
   if (projects.length === 0) {
-    return <p className="text-sm text-[var(--text-mid)]">No projects found.</p>;
+    return <p className="text-sm text-(--text-mid)">No projects found.</p>;
   }
 
   return (
     <div className="space-y-4">
-      <p className="text-xs text-[var(--text-mid)]">
+      <p className="text-xs text-(--text-mid)">
         Manage all projects. Edit metadata or delete unused projects.
       </p>
       <div className="space-y-3">
         {projects.map((project) => (
           <div
             key={project.id}
-            className="p-4 bg-[var(--bg-panel)]/30 border border-[var(--border-hi)]/40 rounded-lg"
+            className="p-4 bg-(--bg-panel)/30 border border-(--border-hi)/40 rounded-lg"
           >
             {editingId === project.id ? (
               /* Inline edit form */
               <div className="space-y-2">
                 <div>
-                  <label className="text-xs text-[var(--text-mid)] block mb-0.5">Project Name</label>
+                  <label className="text-xs text-(--text-mid) block mb-0.5">Project Name</label>
                   <input
                     type="text"
                     value={editForm.name}
                     onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
-                    className="w-full bg-[var(--bg)] border border-[var(--border-hi)] rounded px-2 py-1 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="w-full bg-(--bg) border border-(--border-hi) rounded px-2 py-1 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-[var(--text-mid)] block mb-0.5">Production</label>
+                  <label className="text-xs text-(--text-mid) block mb-0.5">Production</label>
                   <input
                     type="text"
                     value={editForm.production_name}
                     onChange={(e) => setEditForm((f) => ({ ...f, production_name: e.target.value }))}
-                    className="w-full bg-[var(--bg)] border border-[var(--border-hi)] rounded px-2 py-1 text-sm text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--border-focus)]"
+                    className="w-full bg-(--bg) border border-(--border-hi) rounded px-2 py-1 text-sm text-(--text) focus:outline-none focus:ring-1 focus:ring-(--border-focus)"
                     placeholder="Production name"
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-[var(--text-mid)] block mb-0.5">Choreographer</label>
+                  <label className="text-xs text-(--text-mid) block mb-0.5">Choreographer</label>
                   <input
                     type="text"
                     value={editForm.choreographer}
                     onChange={(e) => setEditForm((f) => ({ ...f, choreographer: e.target.value }))}
-                    className="w-full bg-[var(--bg)] border border-[var(--border-hi)] rounded px-2 py-1 text-sm text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--border-focus)]"
+                    className="w-full bg-(--bg) border border-(--border-hi) rounded px-2 py-1 text-sm text-(--text) focus:outline-none focus:ring-1 focus:ring-(--border-focus)"
                     placeholder="Choreographer"
                   />
                 </div>
                 <div className="flex gap-2">
                   <div className="flex-1">
-                    <label className="text-xs text-[var(--text-mid)] block mb-0.5">Venue</label>
+                    <label className="text-xs text-(--text-mid) block mb-0.5">Venue</label>
                     <input
                       type="text"
                       value={editForm.venue}
                       onChange={(e) => setEditForm((f) => ({ ...f, venue: e.target.value }))}
-                      className="w-full bg-[var(--bg)] border border-[var(--border-hi)] rounded px-2 py-1 text-sm text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--border-focus)]"
+                      className="w-full bg-(--bg) border border-(--border-hi) rounded px-2 py-1 text-sm text-(--text) focus:outline-none focus:ring-1 focus:ring-(--border-focus)"
                       placeholder="Venue"
                     />
                   </div>
                   <div className="w-24">
-                    <label className="text-xs text-[var(--text-mid)] block mb-0.5">Year</label>
+                    <label className="text-xs text-(--text-mid) block mb-0.5">Year</label>
                     <input
                       type="text"
                       value={editForm.year}
                       onChange={(e) => setEditForm((f) => ({ ...f, year: e.target.value }))}
-                      className="w-full bg-[var(--bg)] border border-[var(--border-hi)] rounded px-2 py-1 text-sm text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--border-focus)]"
+                      className="w-full bg-(--bg) border border-(--border-hi) rounded px-2 py-1 text-sm text-(--text) focus:outline-none focus:ring-1 focus:ring-(--border-focus)"
                       placeholder="Year"
                     />
                   </div>
                 </div>
                 <div>
-                  <label className="text-xs text-[var(--text-mid)] block mb-0.5">Notes</label>
+                  <label className="text-xs text-(--text-mid) block mb-0.5">Notes</label>
                   <textarea
                     value={editForm.notes}
                     onChange={(e) => setEditForm((f) => ({ ...f, notes: e.target.value }))}
-                    className="w-full bg-[var(--bg)] border border-[var(--border-hi)] rounded px-2 py-1 text-sm text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--border-focus)] resize-none"
+                    className="w-full bg-(--bg) border border-(--border-hi) rounded px-2 py-1 text-sm text-(--text) focus:outline-none focus:ring-1 focus:ring-(--border-focus) resize-none"
                     rows={2}
                     placeholder="Notes"
                   />
@@ -469,14 +469,14 @@ function ProjectAdminTab({ liveConfig }: { liveConfig: AppConfig }) {
                 <div className="flex justify-end gap-2 pt-1">
                   <button
                     onClick={cancelEditing}
-                    className="text-xs text-[var(--text-mid)] hover:text-[var(--text)] px-3 py-1 rounded transition-colors"
+                    className="text-xs text-(--text-mid) hover:text-(--text) px-3 py-1 rounded transition-colors"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={handleSaveEdit}
                     disabled={!editForm.name.trim()}
-                    className="text-xs bg-[var(--amber)] hover:bg-[var(--amber)] text-white font-semibold px-3 py-1 rounded transition-colors disabled:opacity-50"
+                    className="text-xs bg-(--amber) hover:bg-(--amber) text-white font-semibold px-3 py-1 rounded transition-colors disabled:opacity-50"
                   >
                     Save
                   </button>
@@ -486,26 +486,26 @@ function ProjectAdminTab({ liveConfig }: { liveConfig: AppConfig }) {
               /* Display mode */
               <div className="flex justify-between items-start gap-4">
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-[var(--text)] text-sm">{project.name}</p>
+                  <p className="font-semibold text-(--text) text-sm">{project.name}</p>
                   {project.production_name && (
-                    <p className="text-xs text-[var(--text-mid)] mt-0.5">{project.production_name}</p>
+                    <p className="text-xs text-(--text-mid) mt-0.5">{project.production_name}</p>
                   )}
                   {project.choreographer && (
-                    <p className="text-xs text-[var(--text-dim)] mt-0.5">Choreo: {project.choreographer}</p>
+                    <p className="text-xs text-(--text-dim) mt-0.5">Choreo: {project.choreographer}</p>
                   )}
                   {(project.venue || project.year) && (
-                    <p className="text-xs text-[var(--text-dim)] mt-0.5">
+                    <p className="text-xs text-(--text-dim) mt-0.5">
                       {project.venue}{project.venue && project.year ? ' • ' : ''}{project.year}
                     </p>
                   )}
-                  <p className="text-xs text-[var(--text-dim)] mt-1">
+                  <p className="text-xs text-(--text-dim) mt-1">
                     {project.video_filename ? `Video: ${project.video_filename}` : 'No video assigned'}
                   </p>
                 </div>
                 <div className="flex gap-2 flex-shrink-0">
                   <button
                     onClick={() => startEditing(project)}
-                    className="flex items-center gap-1 text-xs text-[var(--text-mid)] hover:text-[var(--text)] hover:bg-[var(--bg-hover)]/40 rounded-md px-2 py-1 transition-colors"
+                    className="flex items-center gap-1 text-xs text-(--text-mid) hover:text-(--text) hover:bg-(--bg-hover)/40 rounded-md px-2 py-1 transition-colors"
                   >
                     <Pencil className="w-3 h-3" />
                     Edit
@@ -521,7 +521,7 @@ function ProjectAdminTab({ liveConfig }: { liveConfig: AppConfig }) {
                       a.click();
                       URL.revokeObjectURL(url);
                     }}
-                    className="flex items-center gap-1 text-xs text-[var(--text-mid)] hover:text-[var(--text)] hover:bg-[var(--bg-hover)]/40 rounded-md px-2 py-1 transition-colors"
+                    className="flex items-center gap-1 text-xs text-(--text-mid) hover:text-(--text) hover:bg-(--bg-hover)/40 rounded-md px-2 py-1 transition-colors"
                   >
                     <Download className="w-3 h-3" />
                     Export
@@ -536,7 +536,7 @@ function ProjectAdminTab({ liveConfig }: { liveConfig: AppConfig }) {
                       </button>
                       <button
                         onClick={() => setDeleteConfirmId(null)}
-                        className="text-xs bg-[var(--bg-hover)] hover:bg-[var(--border-hi)] text-white font-semibold py-1 px-3 rounded transition-colors"
+                        className="text-xs bg-(--bg-hover) hover:bg-(--border-hi) text-white font-semibold py-1 px-3 rounded transition-colors"
                       >
                         Cancel
                       </button>
@@ -649,24 +649,24 @@ function HotkeyInput({
         placeholder="Key"
         title={value ? `Hotkey: ${value} — click to change, right-click to clear` : 'Click to assign a hotkey'}
         onContextMenu={(e) => { e.preventDefault(); if (value) onChange(''); }}
-        className={`w-16 h-6 text-center text-[10px] font-mono bg-[var(--bg-hover)] text-[var(--text)] rounded border cursor-pointer outline-none placeholder-[var(--text-dim)] ${
+        className={`w-16 h-6 text-center text-[10px] font-mono bg-(--bg-hover) text-(--text) rounded border cursor-pointer outline-none placeholder-(--text-dim) ${
           recording
-            ? 'border-[var(--amber)] ring-1 ring-[var(--border-focus)]'
+            ? 'border-(--amber) ring-1 ring-(--border-focus)'
             : value
-              ? 'border-[var(--amber)]/50'
-              : 'border-[var(--border-hi)]'
+              ? 'border-(--amber)/50'
+              : 'border-(--border-hi)'
         }`}
       />
       {value && !recording && (
         <button
           type="button"
           onClick={() => onChange('')}
-          className="absolute -right-1 -top-1 w-3 h-3 rounded-full bg-[var(--bg-hover)] border border-[var(--border-hi)] text-[var(--text-dim)] hover:text-red-400 flex items-center justify-center text-[8px] leading-none"
+          className="absolute -right-1 -top-1 w-3 h-3 rounded-full bg-(--bg-hover) border border-(--border-hi) text-(--text-dim) hover:text-red-400 flex items-center justify-center text-[8px] leading-none"
           title="Clear hotkey"
         >×</button>
       )}
       {conflict && (
-        <div className="absolute top-full left-0 mt-1 z-50 text-[9px] text-orange-400 bg-[var(--bg-panel)] border border-orange-500/30 rounded px-1.5 py-0.5 whitespace-nowrap shadow-lg">
+        <div className="absolute top-full left-0 mt-1 z-50 text-[9px] text-orange-400 bg-(--bg-panel) border border-orange-500/30 rounded px-1.5 py-0.5 whitespace-nowrap shadow-lg">
           Already used by {conflict}
         </div>
       )}
@@ -1063,13 +1063,13 @@ export function ConfigurationModal({
                     }
                   }}
                   placeholder="New type name..."
-                  className="flex-1 bg-[var(--bg-panel)] text-[var(--text)] rounded px-3 py-2 text-sm border border-[var(--border-hi)] focus:border-[var(--amber)] focus:ring-1 focus:ring-[var(--border-focus)] outline-none placeholder-[var(--text-dim)]"
+                  className="flex-1 bg-(--bg-panel) text-(--text) rounded px-3 py-2 text-sm border border-(--border-hi) focus:border-(--amber) focus:ring-1 focus:ring-(--border-focus) outline-none placeholder-(--text-dim)"
                 />
                 <button
                   type="button"
                   onClick={handleAddType}
                   disabled={!newTypeName.trim()}
-                  className="flex items-center gap-1.5 px-4 py-2 text-sm bg-[var(--amber)] text-white rounded-md hover:bg-[var(--amber)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm bg-(--amber) text-white rounded-md hover:bg-(--amber) transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <Plus className="w-4 h-4" />
                   Add
@@ -1105,7 +1105,7 @@ export function ConfigurationModal({
                     <SortableCueTypeRow key={type} type={type} isReserved={isReserved}>
                     <React.Fragment>
                     <div
-                      className="flex items-center justify-between px-3 py-2 bg-[var(--bg-panel-a50)] rounded-md border border-[var(--border-hi-a50)]"
+                      className="flex items-center justify-between px-3 py-2 bg-(--bg-panel-a50) rounded-md border border-(--border-hi-a50)"
                     >
                       <div className="flex items-center gap-2 flex-1 min-w-0">
                         {isEditing ? (
@@ -1125,12 +1125,12 @@ export function ConfigurationModal({
                                 }
                               }}
                               autoFocus
-                              className="flex-1 bg-[var(--bg-hover)] text-[var(--text)] rounded px-2 py-1 text-sm border border-[var(--amber)] focus:ring-1 focus:ring-[var(--border-focus)] outline-none"
+                              className="flex-1 bg-(--bg-hover) text-(--text) rounded px-2 py-1 text-sm border border-(--amber) focus:ring-1 focus:ring-(--border-focus) outline-none"
                             />
                             <button
                               type="button"
                               onClick={handleSaveEdit}
-                              className="p-1 text-emerald-400 hover:text-emerald-300 hover:bg-[var(--bg-hover)] rounded transition-colors"
+                              className="p-1 text-emerald-400 hover:text-emerald-300 hover:bg-(--bg-hover) rounded transition-colors"
                               title="Save"
                             >
                               <Check className="w-4 h-4" />
@@ -1138,7 +1138,7 @@ export function ConfigurationModal({
                             <button
                               type="button"
                               onClick={handleCancelEdit}
-                              className="p-1 text-[var(--text-dim)] hover:text-[var(--text-mid)] hover:bg-[var(--bg-hover)] rounded transition-colors"
+                              className="p-1 text-(--text-dim) hover:text-(--text-mid) hover:bg-(--bg-hover) rounded transition-colors"
                               title="Cancel"
                             >
                               <X className="w-4 h-4" />
@@ -1146,7 +1146,7 @@ export function ConfigurationModal({
                           </div>
                         ) : (
                           <>
-                            <span className="text-sm text-[var(--text)] font-medium">{type}</span>
+                            <span className="text-sm text-(--text) font-medium">{type}</span>
                             {isReserved && (
                               <span className="flex items-center gap-1 text-[10px] text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">
                                 <Lock className="w-3 h-3" />
@@ -1174,14 +1174,14 @@ export function ConfigurationModal({
                           <button
                             type="button"
                             onClick={() => setExpandedFieldType((prev) => (prev === type ? null : type))}
-                            className="p-1 text-[var(--text-mid)] hover:text-[var(--amber-hi)] hover:bg-[var(--bg-hover)] rounded transition-colors"
+                            className="p-1 text-(--text-mid) hover:text-(--amber-hi) hover:bg-(--bg-hover) rounded transition-colors"
                             title="Configure visible fields"
                           >
                             {expandedFieldType === type ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
                           </button>
                           {/* Colour picker */}
                           <label
-                            className="relative w-6 h-6 rounded cursor-pointer border border-[var(--border-hi)] shrink-0 overflow-hidden"
+                            className="relative w-6 h-6 rounded cursor-pointer border border-(--border-hi) shrink-0 overflow-hidden"
                             style={{ backgroundColor: cueTypeColors[type] || '#6b7280' }}
                             title={`Colour: ${cueTypeColors[type] || '#6b7280'}`}
                           >
@@ -1200,7 +1200,7 @@ export function ConfigurationModal({
                             placeholder="SC"
                             maxLength={4}
                             title="Short code (max 4 characters)"
-                            className="w-10 h-6 text-center text-xs bg-[var(--bg-hover)] text-[var(--text)] rounded border border-[var(--border-hi)] focus:border-[var(--amber)] focus:ring-1 focus:ring-[var(--border-focus)] outline-none placeholder-[var(--text-dim)]"
+                            className="w-10 h-6 text-center text-xs bg-(--bg-hover) text-(--text) rounded border border-(--border-hi) focus:border-(--amber) focus:ring-1 focus:ring-(--border-focus) outline-none placeholder-(--text-dim)"
                           />
                           {/* Hotkey recorder */}
                           {onSetCueTypeHotkey && (
@@ -1213,7 +1213,7 @@ export function ConfigurationModal({
                           )}
                           {/* Font colour picker (Production badge text) */}
                           <label
-                            className="relative w-6 h-6 rounded cursor-pointer border border-[var(--border-hi)] shrink-0 overflow-hidden flex items-center justify-center"
+                            className="relative w-6 h-6 rounded cursor-pointer border border-(--border-hi) shrink-0 overflow-hidden flex items-center justify-center"
                             style={{ backgroundColor: 'var(--bg-hover)' }}
                             title={`Font colour: ${cueTypeFontColors[type] || '#ffffff'}`}
                           >
@@ -1228,7 +1228,7 @@ export function ConfigurationModal({
                           <button
                             type="button"
                             onClick={() => handleStartEdit(type)}
-                            className={`p-1 text-[var(--text-dim)] hover:text-[var(--text-mid)] hover:bg-[var(--bg-hover)] rounded transition-colors`}
+                            className={`p-1 text-(--text-dim) hover:text-(--text-mid) hover:bg-(--bg-hover) rounded transition-colors`}
                             title={`Rename ${type}`}
                           >
                             <Pencil className="w-3.5 h-3.5" />
@@ -1237,7 +1237,7 @@ export function ConfigurationModal({
                             <button
                               type="button"
                               onClick={() => onToggleCueTypeHidden(type)}
-                              className={`p-1 rounded transition-colors ${isHidden ? 'text-amber-400 hover:text-amber-300' : 'text-[var(--text-dim)] hover:text-[var(--text-mid)]'} hover:bg-[var(--bg-hover)]`}
+                              className={`p-1 rounded transition-colors ${isHidden ? 'text-amber-400 hover:text-amber-300' : 'text-(--text-dim) hover:text-(--text-mid)'} hover:bg-(--bg-hover)`}
                               title={isHidden ? `Show ${type} in dropdowns and cue sheet` : `Hide ${type} from dropdowns and cue sheet`}
                             >
                               {isHidden ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
@@ -1247,7 +1247,7 @@ export function ConfigurationModal({
                             <button
                               type="button"
                               onClick={() => onRemoveCueType(type)}
-                              className="p-1 text-[var(--text-dim)] hover:text-red-400 hover:bg-[var(--bg-hover)] rounded transition-colors"
+                              className="p-1 text-(--text-dim) hover:text-red-400 hover:bg-(--bg-hover) rounded transition-colors"
                               title={`Remove ${type}`}
                             >
                               <Trash2 className="w-4 h-4" />
@@ -1313,15 +1313,15 @@ export function ConfigurationModal({
                       };
 
                       return (
-                        <div className="mt-1 ml-4 mr-2 mb-1 p-3 bg-[var(--bg-card)]/60 border border-[var(--border-hi)]/40 rounded-md space-y-2">
+                        <div className="mt-1 ml-4 mr-2 mb-1 p-3 bg-(--bg-card)/60 border border-(--border-hi)/40 rounded-md space-y-2">
                           <div className="flex items-center justify-between">
-                            <span className="text-[10px] uppercase tracking-wider text-[var(--text-dim)]">
+                            <span className="text-[10px] uppercase tracking-wider text-(--text-dim)">
                               Fields &amp; order ({selectedCount}/{allCount})
                             </span>
                             <div className="flex items-center gap-2">
-                              <button type="button" onClick={selectAll} className="text-[10px] text-[var(--amber-hi)] hover:text-[var(--amber)]">All</button>
-                              <button type="button" onClick={selectNone} className="text-[10px] text-[var(--amber-hi)] hover:text-[var(--amber)]">None</button>
-                              <button type="button" onClick={resetDefaults} className="text-[10px] text-[var(--amber-hi)] hover:text-[var(--amber)]">Defaults</button>
+                              <button type="button" onClick={selectAll} className="text-[10px] text-(--amber-hi) hover:text-(--amber)">All</button>
+                              <button type="button" onClick={selectNone} className="text-[10px] text-(--amber-hi) hover:text-(--amber)">None</button>
+                              <button type="button" onClick={resetDefaults} className="text-[10px] text-(--amber-hi) hover:text-(--amber)">Defaults</button>
                             </div>
                           </div>
                           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleFieldDragEnd}>
@@ -1382,15 +1382,15 @@ export function ConfigurationModal({
             return (
               <div className="space-y-4">
                 {/* Add new custom field */}
-                <div className="p-3 bg-[var(--bg-card)]/60 border border-[var(--border-hi)]/30 rounded-md space-y-2">
-                  <span className="text-[10px] uppercase tracking-wider text-[var(--text-dim)]">Create Custom Field</span>
+                <div className="p-3 bg-(--bg-card)/60 border border-(--border-hi)/30 rounded-md space-y-2">
+                  <span className="text-[10px] uppercase tracking-wider text-(--text-dim)">Create Custom Field</span>
                   <div className="flex gap-2 flex-wrap">
                     <input
                       type="text"
                       value={newFieldLabel}
                       onChange={(e) => setNewFieldLabel(e.target.value)}
                       placeholder="Field label..."
-                      className="flex-1 min-w-[120px] bg-[var(--bg-panel)] text-[var(--text)] rounded px-2.5 py-1.5 text-xs border border-[var(--border-hi)] focus:border-[var(--amber)] focus:ring-1 focus:ring-[var(--border-focus)] outline-none placeholder-[var(--text-dim)]"
+                      className="flex-1 min-w-[120px] bg-(--bg-panel) text-(--text) rounded px-2.5 py-1.5 text-xs border border-(--border-hi) focus:border-(--amber) focus:ring-1 focus:ring-(--border-focus) outline-none placeholder-(--text-dim)"
                     />
                     <div className="relative">
                       <select
@@ -1400,25 +1400,25 @@ export function ConfigurationModal({
                           setNewFieldInputType(val);
                           if (val === 'checkbox') setNewFieldSizeHint('small');
                         }}
-                        className="bg-[var(--bg-panel)] border border-[var(--border-hi)] rounded px-2 py-1.5 text-xs text-[var(--text)] appearance-none pr-6 focus:border-[var(--amber)] focus:outline-none"
+                        className="bg-(--bg-panel) border border-(--border-hi) rounded px-2 py-1.5 text-xs text-(--text) appearance-none pr-6 focus:border-(--amber) focus:outline-none"
                       >
                         <option value="text">Text</option>
                         <option value="number">Number</option>
                         <option value="checkbox">Checkbox</option>
                       </select>
-                      <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-[var(--text-mid)] pointer-events-none" />
+                      <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-(--text-mid) pointer-events-none" />
                     </div>
                     {newFieldInputType === 'number' && (
                       <div className="relative">
                         <select
                           value={newFieldPrecision}
                           onChange={(e) => setNewFieldPrecision(e.target.value as 'integer' | 'decimal')}
-                          className="bg-[var(--bg-panel)] border border-[var(--border-hi)] rounded px-2 py-1.5 text-xs text-[var(--text)] appearance-none pr-6 focus:border-[var(--amber)] focus:outline-none"
+                          className="bg-(--bg-panel) border border-(--border-hi) rounded px-2 py-1.5 text-xs text-(--text) appearance-none pr-6 focus:border-(--amber) focus:outline-none"
                         >
                           <option value="integer">Integer</option>
                           <option value="decimal">Decimal</option>
                         </select>
-                        <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-[var(--text-mid)] pointer-events-none" />
+                        <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-(--text-mid) pointer-events-none" />
                       </div>
                     )}
                     {newFieldInputType !== 'checkbox' && (
@@ -1426,13 +1426,13 @@ export function ConfigurationModal({
                         <select
                           value={newFieldSizeHint}
                           onChange={(e) => setNewFieldSizeHint(e.target.value as 'small' | 'medium' | 'large')}
-                          className="bg-[var(--bg-panel)] border border-[var(--border-hi)] rounded px-2 py-1.5 text-xs text-[var(--text)] appearance-none pr-6 focus:border-[var(--amber)] focus:outline-none"
+                          className="bg-(--bg-panel) border border-(--border-hi) rounded px-2 py-1.5 text-xs text-(--text) appearance-none pr-6 focus:border-(--amber) focus:outline-none"
                         >
                           <option value="small">Small</option>
                           <option value="medium">Medium</option>
                           <option value="large">Large</option>
                         </select>
-                        <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-[var(--text-mid)] pointer-events-none" />
+                        <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-(--text-mid) pointer-events-none" />
                       </div>
                     )}
                     <button
@@ -1451,7 +1451,7 @@ export function ConfigurationModal({
                         setNewFieldSizeHint('small');
                       }}
                       disabled={!newFieldLabel.trim()}
-                      className="flex items-center gap-1 px-3 py-1.5 text-xs bg-[var(--amber)] text-white rounded hover:bg-[var(--amber)]/80 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      className="flex items-center gap-1 px-3 py-1.5 text-xs bg-(--amber) text-white rounded hover:bg-(--amber)/80 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       <Plus className="w-3 h-3" />
                       Add
@@ -1461,12 +1461,12 @@ export function ConfigurationModal({
 
                 {/* Active fields list */}
                 <div className="space-y-1">
-                  <span className="text-[10px] uppercase tracking-wider text-[var(--text-dim)]">Active Fields ({activeFields.length})</span>
+                  <span className="text-[10px] uppercase tracking-wider text-(--text-dim)">Active Fields ({activeFields.length})</span>
                   <div className="space-y-1 overflow-y-auto annotation-scroll" style={{ maxHeight: 'calc(85vh - 340px)' }}>
                     {activeFields.map((fd) => (
                       <div
                         key={fd.key}
-                        className="flex items-center justify-between px-3 py-1.5 bg-[var(--bg-panel-a50)] rounded border border-[var(--border-hi-a50)]"
+                        className="flex items-center justify-between px-3 py-1.5 bg-(--bg-panel-a50) rounded border border-(--border-hi-a50)"
                       >
                         <div className="flex items-center gap-2 flex-1 min-w-0">
                           {editingFieldKey === fd.key ? (
@@ -1489,19 +1489,19 @@ export function ConfigurationModal({
                                   }
                                 }}
                                 autoFocus
-                                className="flex-1 bg-[var(--bg-hover)] text-[var(--text)] rounded px-2 py-0.5 text-xs border border-[var(--amber)] focus:ring-1 focus:ring-[var(--border-focus)] outline-none"
+                                className="flex-1 bg-(--bg-hover) text-(--text) rounded px-2 py-0.5 text-xs border border-(--amber) focus:ring-1 focus:ring-(--border-focus) outline-none"
                               />
                               <div className="relative">
                                 <select
                                   value={editingFieldSizeHint}
                                   onChange={(e) => setEditingFieldSizeHint(e.target.value as 'small' | 'medium' | 'large')}
-                                  className="bg-[var(--bg-panel)] border border-[var(--border-hi)] rounded px-1.5 py-0.5 text-[10px] text-[var(--text)] appearance-none pr-5 focus:border-[var(--amber)] focus:outline-none"
+                                  className="bg-(--bg-panel) border border-(--border-hi) rounded px-1.5 py-0.5 text-[10px] text-(--text) appearance-none pr-5 focus:border-(--amber) focus:outline-none"
                                 >
                                   <option value="small">S</option>
                                   <option value="medium">M</option>
                                   <option value="large">L</option>
                                 </select>
-                                <ChevronDown className="absolute right-1 top-1/2 -translate-y-1/2 w-2.5 h-2.5 text-[var(--text-mid)] pointer-events-none" />
+                                <ChevronDown className="absolute right-1 top-1/2 -translate-y-1/2 w-2.5 h-2.5 text-(--text-mid) pointer-events-none" />
                               </div>
                               <button
                                 type="button"
@@ -1519,7 +1519,7 @@ export function ConfigurationModal({
                               <button
                                 type="button"
                                 onClick={() => setEditingFieldKey(null)}
-                                className="p-0.5 text-[var(--text-dim)] hover:text-[var(--text-mid)] rounded transition-colors"
+                                className="p-0.5 text-(--text-dim) hover:text-(--text-mid) rounded transition-colors"
                                 title="Cancel"
                               >
                                 <X className="w-3.5 h-3.5" />
@@ -1527,7 +1527,7 @@ export function ConfigurationModal({
                             </div>
                           ) : (
                             <>
-                              <span className="text-xs text-[var(--text)] font-medium truncate">{fd.label}</span>
+                              <span className="text-xs text-(--text) font-medium truncate">{fd.label}</span>
                               <span className={`text-[9px] px-1.5 py-0.5 rounded inline-flex items-center gap-0.5 ${tierColor(fd.tier as 1 | 2 | 3)}`}>
                                 {fd.tier === 1 ? <Lock className="w-2.5 h-2.5" /> : fd.tier === 3 ? <UserCircle className="w-2.5 h-2.5" /> : null}
                                 {tierLabel(fd.tier as 1 | 2 | 3)}
@@ -1539,14 +1539,14 @@ export function ConfigurationModal({
                                 </span>
                               )}
                               {fd.inputType === 'number' && (
-                                <span className="text-[9px] text-[var(--text-dim)] bg-[var(--bg-hover)] px-1 py-0.5 rounded">
+                                <span className="text-[9px] text-(--text-dim) bg-(--bg-hover) px-1 py-0.5 rounded">
                                   {fd.numberPrecision === 'decimal' ? '#.##' : '#'}
                                 </span>
                               )}
                               {fd.inputType === 'checkbox' && (
-                                <span className="text-[9px] text-[var(--text-dim)] bg-[var(--bg-hover)] px-1 py-0.5 rounded">☑</span>
+                                <span className="text-[9px] text-(--text-dim) bg-(--bg-hover) px-1 py-0.5 rounded">☑</span>
                               )}
-                              <span className="text-[9px] text-[var(--text-dim)]">
+                              <span className="text-[9px] text-(--text-dim)">
                                 {fd.sizeHint === 'large' ? 'L' : fd.sizeHint === 'medium' ? 'M' : 'S'}
                               </span>
                               {(hiddenFieldKeys ?? []).includes(fd.key) && (
@@ -1567,7 +1567,7 @@ export function ConfigurationModal({
                                 setEditingFieldLabel(fd.label);
                                 setEditingFieldSizeHint(fd.sizeHint);
                               }}
-                              className="p-0.5 text-[var(--text-dim)] hover:text-[var(--text-mid)] hover:bg-[var(--bg-hover)] rounded transition-colors"
+                              className="p-0.5 text-(--text-dim) hover:text-(--text-mid) hover:bg-(--bg-hover) rounded transition-colors"
                               title={`Edit ${fd.label}`}
                             >
                               <Pencil className="w-3 h-3" />
@@ -1576,7 +1576,7 @@ export function ConfigurationModal({
                               <button
                                 type="button"
                                 onClick={() => onToggleFieldHidden(fd.key)}
-                                className={`p-0.5 rounded transition-colors ${(hiddenFieldKeys ?? []).includes(fd.key) ? 'text-orange-400 hover:text-orange-300' : 'text-[var(--text-dim)] hover:text-[var(--text-mid)]'} hover:bg-[var(--bg-hover)]`}
+                                className={`p-0.5 rounded transition-colors ${(hiddenFieldKeys ?? []).includes(fd.key) ? 'text-orange-400 hover:text-orange-300' : 'text-(--text-dim) hover:text-(--text-mid)'} hover:bg-(--bg-hover)`}
                                 title={(hiddenFieldKeys ?? []).includes(fd.key) ? `Show ${fd.label}` : `Hide ${fd.label} from all cue types, columns, and exports`}
                               >
                                 {(hiddenFieldKeys ?? []).includes(fd.key) ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
@@ -1595,7 +1595,7 @@ export function ConfigurationModal({
                                   });
                                   if (ok) onArchiveField(fd.key);
                                 }}
-                                className="p-0.5 text-[var(--text-dim)] hover:text-red-400 hover:bg-[var(--bg-hover)] rounded transition-colors"
+                                className="p-0.5 text-(--text-dim) hover:text-red-400 hover:bg-(--bg-hover) rounded transition-colors"
                                 title={`Archive ${fd.label}`}
                               >
                                 <Archive className="w-3 h-3" />
@@ -1614,7 +1614,7 @@ export function ConfigurationModal({
                     <button
                       type="button"
                       onClick={() => setShowArchivedFields((v) => !v)}
-                      className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-[var(--text-dim)] hover:text-[var(--text-mid)]"
+                      className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-(--text-dim) hover:text-(--text-mid)"
                     >
                       {showArchivedFields ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
                       Archived ({archivedFields.length})
@@ -1624,10 +1624,10 @@ export function ConfigurationModal({
                         {archivedFields.map((fd) => (
                           <div
                             key={fd.key}
-                            className="flex items-center justify-between px-3 py-1.5 bg-[var(--bg-panel-a50)]/50 rounded border border-[var(--border-hi-a50)] opacity-60"
+                            className="flex items-center justify-between px-3 py-1.5 bg-(--bg-panel-a50)/50 rounded border border-(--border-hi-a50) opacity-60"
                           >
                             <div className="flex items-center gap-2 flex-1 min-w-0">
-                              <span className="text-xs text-[var(--text-mid)] line-through truncate">{fd.label}</span>
+                              <span className="text-xs text-(--text-mid) line-through truncate">{fd.label}</span>
                               <span className={`text-[9px] px-1.5 py-0.5 rounded ${tierColor(fd.tier as 1 | 2 | 3)}`}>
                                 {tierLabel(fd.tier as 1 | 2 | 3)}
                               </span>
@@ -1635,7 +1635,7 @@ export function ConfigurationModal({
                             <button
                               type="button"
                               onClick={() => onRestoreField(fd.key)}
-                              className="flex items-center gap-1 px-2 py-0.5 text-[10px] text-emerald-400 hover:text-emerald-300 hover:bg-[var(--bg-hover)] rounded transition-colors"
+                              className="flex items-center gap-1 px-2 py-0.5 text-[10px] text-emerald-400 hover:text-emerald-300 hover:bg-(--bg-hover) rounded transition-colors"
                               title={`Restore ${fd.label}`}
                             >
                               <RotateCcw className="w-3 h-3" />
@@ -1655,11 +1655,11 @@ export function ConfigurationModal({
             <div className="space-y-4">
               {/* Column view selector */}
               <div className="flex items-center gap-2">
-                <label className="text-xs text-[var(--text-mid)]">Viewing columns for:</label>
+                <label className="text-xs text-(--text-mid)">Viewing columns for:</label>
                 <select
                   value={columnView}
                   onChange={(e) => setColumnView(e.target.value)}
-                  className="bg-[var(--bg-panel)] text-[var(--text)] text-sm rounded px-2 py-1.5 border border-[var(--border-hi)] focus:border-[var(--amber)] focus:ring-1 focus:ring-[var(--border-focus)] outline-none cursor-pointer"
+                  className="bg-(--bg-panel) text-(--text) text-sm rounded px-2 py-1.5 border border-(--border-hi) focus:border-(--amber) focus:ring-1 focus:ring-(--border-focus) outline-none cursor-pointer"
                 >
                   <option value="default">Default (all types)</option>
                   {typesWithOverrides.map((t) => (
@@ -1681,7 +1681,7 @@ export function ConfigurationModal({
                           e.target.value = '';
                         }
                       }}
-                      className="bg-[var(--bg-panel)] text-[var(--text)] text-xs rounded px-2 py-1.5 border border-[var(--border-hi)] outline-none cursor-pointer"
+                      className="bg-(--bg-panel) text-(--text) text-xs rounded px-2 py-1.5 border border-(--border-hi) outline-none cursor-pointer"
                     >
                       <option value="" disabled>
                         + Add type override...
@@ -1702,7 +1702,7 @@ export function ConfigurationModal({
                       onRemoveCueTypeColumns(columnView);
                       setColumnView('default');
                     }}
-                    className="ml-auto flex items-center gap-1 px-2 py-1 text-xs text-red-400 hover:text-red-300 hover:bg-[var(--bg-panel)] rounded transition-colors"
+                    className="ml-auto flex items-center gap-1 px-2 py-1 text-xs text-red-400 hover:text-red-300 hover:bg-(--bg-panel) rounded transition-colors"
                   >
                     <Trash2 className="w-3 h-3" />
                     Remove override
@@ -1734,9 +1734,9 @@ export function ConfigurationModal({
           {activeTab === 'view' && (
             <div className="space-y-4">
               {/* Cue Sheet View selector */}
-              <div className="px-3 py-3 bg-[var(--bg-panel-a50)] rounded-md border border-[var(--border-hi-a50)]">
-                <span className="text-sm text-[var(--text)] font-medium">Cue Sheet View</span>
-                <p className="text-[10px] text-[var(--text-dim)] mt-0.5 mb-2">
+              <div className="px-3 py-3 bg-(--bg-panel-a50) rounded-md border border-(--border-hi-a50)">
+                <span className="text-sm text-(--text) font-medium">Cue Sheet View</span>
+                <p className="text-[10px] text-(--text-dim) mt-0.5 mb-2">
                   Choose between the classic card-based layout or the production cue sheet layout.
                 </p>
                 <div className="flex gap-2">
@@ -1745,8 +1745,8 @@ export function ConfigurationModal({
                     onClick={() => onSetCueSheetView('classic')}
                     className={`flex-1 px-3 py-2 rounded-md text-xs font-medium border transition-colors ${
                       cueSheetView === 'classic'
-                        ? 'border-[var(--amber)] bg-[var(--amber-dim)] text-[var(--amber)]'
-                        : 'border-[var(--border-hi-a50)] text-[var(--text-mid)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'
+                        ? 'border-(--amber) bg-(--amber-dim) text-(--amber)'
+                        : 'border-(--border-hi-a50) text-(--text-mid) hover:bg-(--bg-hover) hover:text-(--text)'
                     }`}
                   >
                     Classic
@@ -1756,8 +1756,8 @@ export function ConfigurationModal({
                     onClick={() => onSetCueSheetView('production')}
                     className={`flex-1 px-3 py-2 rounded-md text-xs font-medium border transition-colors ${
                       cueSheetView === 'production'
-                        ? 'border-[var(--amber)] bg-[var(--amber-dim)] text-[var(--amber)]'
-                        : 'border-[var(--border-hi-a50)] text-[var(--text-mid)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'
+                        ? 'border-(--amber) bg-(--amber-dim) text-(--amber)'
+                        : 'border-(--border-hi-a50) text-(--text-mid) hover:bg-(--bg-hover) hover:text-(--text)'
                     }`}
                   >
                     Production
@@ -1766,9 +1766,9 @@ export function ConfigurationModal({
               </div>
 
               {/* Display Mode selector */}
-              <div className="px-3 py-3 bg-[var(--bg-panel-a50)] rounded-md border border-[var(--border-hi-a50)]">
-                <span className="text-sm text-[var(--text)] font-medium">Display Mode</span>
-                <p className="text-[10px] text-[var(--text-dim)] mt-0.5 mb-2">
+              <div className="px-3 py-3 bg-(--bg-panel-a50) rounded-md border border-(--border-hi-a50)">
+                <span className="text-sm text-(--text) font-medium">Display Mode</span>
+                <p className="text-[10px] text-(--text-dim) mt-0.5 mb-2">
                   Controls the overall colour palette of the interface.
                 </p>
                 <div className="grid grid-cols-2 gap-1.5">
@@ -1779,92 +1779,92 @@ export function ConfigurationModal({
                       onClick={() => onSetTheme(mode)}
                       className={`px-3 py-2 rounded-md text-xs font-medium border transition-colors text-left ${
                         theme === mode
-                          ? 'border-[var(--amber)] bg-[var(--amber-dim)] text-[var(--amber)]'
-                          : 'border-[var(--border-hi-a50)] text-[var(--text-mid)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]'
+                          ? 'border-(--amber) bg-(--amber-dim) text-(--amber)'
+                          : 'border-(--border-hi-a50) text-(--text-mid) hover:bg-(--bg-hover) hover:text-(--text)'
                       }`}
                     >
                       <div>{THEME_LABELS[mode]}</div>
-                      <div className={`text-[9px] mt-0.5 ${theme === mode ? 'text-[var(--amber)]' : 'text-[var(--text-dim)]'}`} style={{ opacity: 0.8 }}>{THEME_DESCRIPTIONS[mode]}</div>
+                      <div className={`text-[9px] mt-0.5 ${theme === mode ? 'text-(--amber)' : 'text-(--text-dim)'}`} style={{ opacity: 0.8 }}>{THEME_DESCRIPTIONS[mode]}</div>
                     </button>
                   ))}
                 </div>
               </div>
 
               {/* Show short codes toggle */}
-              <label className="flex items-center gap-3 px-3 py-3 bg-[var(--bg-panel-a50)] rounded-md border border-[var(--border-hi-a50)] cursor-pointer select-none hover:bg-[var(--bg-panel)]">
+              <label className="flex items-center gap-3 px-3 py-3 bg-(--bg-panel-a50) rounded-md border border-(--border-hi-a50) cursor-pointer select-none hover:bg-(--bg-panel)">
                 <input
                   type="checkbox"
                   checked={showShortCodes}
                   onChange={() => onSetShowShortCodes(!showShortCodes)}
-                  className="w-4 h-4 rounded border-[var(--border-hi)] bg-[var(--bg-hover)] text-[var(--amber)] focus:ring-[var(--border-focus)] focus:ring-offset-0 cursor-pointer"
+                  className="w-4 h-4 rounded border-(--border-hi) bg-(--bg-hover) text-(--amber) focus:ring-(--border-focus) focus:ring-offset-0 cursor-pointer"
                 />
                 <div>
-                  <span className="text-sm text-[var(--text)] font-medium">Show Short Codes</span>
-                  <p className="text-[10px] text-[var(--text-dim)] mt-0.5">
+                  <span className="text-sm text-(--text) font-medium">Show Short Codes</span>
+                  <p className="text-[10px] text-(--text-dim) mt-0.5">
                     Display short codes instead of full cue type names in the cue sheet (if defined).
                   </p>
                 </div>
               </label>
 
               {/* Show past cues toggle */}
-              <label className="flex items-center gap-3 px-3 py-3 bg-[var(--bg-panel-a50)] rounded-md border border-[var(--border-hi-a50)] cursor-pointer select-none hover:bg-[var(--bg-panel)]">
+              <label className="flex items-center gap-3 px-3 py-3 bg-(--bg-panel-a50) rounded-md border border-(--border-hi-a50) cursor-pointer select-none hover:bg-(--bg-panel)">
                 <input
                   type="checkbox"
                   checked={showPastCues}
                   onChange={() => onSetShowPastCues(!showPastCues)}
-                  className="w-4 h-4 rounded border-[var(--border-hi)] bg-[var(--bg-hover)] text-[var(--amber)] focus:ring-[var(--border-focus)] focus:ring-offset-0 cursor-pointer"
+                  className="w-4 h-4 rounded border-(--border-hi) bg-(--bg-hover) text-(--amber) focus:ring-(--border-focus) focus:ring-offset-0 cursor-pointer"
                 />
                 <div>
-                  <span className="text-sm text-[var(--text)] font-medium">Show Past Cues</span>
-                  <p className="text-[10px] text-[var(--text-dim)] mt-0.5">
+                  <span className="text-sm text-(--text) font-medium">Show Past Cues</span>
+                  <p className="text-[10px] text-(--text-dim) mt-0.5">
                     Display cues that have already passed, greyed out above the current position.
                   </p>
                 </div>
               </label>
 
               {/* Show skipped cues toggle */}
-              <label className="flex items-center gap-3 px-3 py-3 bg-[var(--bg-panel-a50)] rounded-md border border-[var(--border-hi-a50)] cursor-pointer select-none hover:bg-[var(--bg-panel)]">
+              <label className="flex items-center gap-3 px-3 py-3 bg-(--bg-panel-a50) rounded-md border border-(--border-hi-a50) cursor-pointer select-none hover:bg-(--bg-panel)">
                 <input
                   type="checkbox"
                   checked={showSkippedCues}
                   onChange={() => onSetShowSkippedCues(!showSkippedCues)}
-                  className="w-4 h-4 rounded border-[var(--border-hi)] bg-[var(--bg-hover)] text-[var(--amber)] focus:ring-[var(--border-focus)] focus:ring-offset-0 cursor-pointer"
+                  className="w-4 h-4 rounded border-(--border-hi) bg-(--bg-hover) text-(--amber) focus:ring-(--border-focus) focus:ring-offset-0 cursor-pointer"
                 />
                 <div>
-                  <span className="text-sm text-[var(--text)] font-medium">Show Skipped Cues</span>
-                  <p className="text-[10px] text-[var(--text-dim)] mt-0.5">
+                  <span className="text-sm text-(--text) font-medium">Show Skipped Cues</span>
+                  <p className="text-[10px] text-(--text-dim) mt-0.5">
                     Show cues that fall between two linked cues. When hidden, skipped cues are removed from the cue sheet.
                   </p>
                 </div>
               </label>
 
               {/* Video timecode overlay toggle */}
-              <label className="flex items-center gap-3 px-3 py-3 bg-[var(--bg-panel-a50)] rounded-md border border-[var(--border-hi-a50)] cursor-pointer select-none hover:bg-[var(--bg-panel)]">
+              <label className="flex items-center gap-3 px-3 py-3 bg-(--bg-panel-a50) rounded-md border border-(--border-hi-a50) cursor-pointer select-none hover:bg-(--bg-panel)">
                 <input
                   type="checkbox"
                   checked={showVideoTimecode}
                   onChange={() => onSetShowVideoTimecode(!showVideoTimecode)}
-                  className="w-4 h-4 rounded border-[var(--border-hi)] bg-[var(--bg-hover)] text-[var(--amber)] focus:ring-[var(--border-focus)] focus:ring-offset-0 cursor-pointer"
+                  className="w-4 h-4 rounded border-(--border-hi) bg-(--bg-hover) text-(--amber) focus:ring-(--border-focus) focus:ring-offset-0 cursor-pointer"
                 />
                 <div>
-                  <span className="text-sm text-[var(--text)] font-medium">Video Timecode</span>
-                  <p className="text-[10px] text-[var(--text-dim)] mt-0.5">
+                  <span className="text-sm text-(--text) font-medium">Video Timecode</span>
+                  <p className="text-[10px] text-(--text-dim) mt-0.5">
                     Show a timecode overlay on the video. Drag it to reposition.
                   </p>
                 </div>
               </label>
 
               {/* Autoplay after Cue toggle */}
-              <label className="flex items-center gap-3 px-3 py-3 bg-[var(--bg-panel-a50)] rounded-md border border-[var(--border-hi-a50)] cursor-pointer select-none hover:bg-[var(--bg-panel)]">
+              <label className="flex items-center gap-3 px-3 py-3 bg-(--bg-panel-a50) rounded-md border border-(--border-hi-a50) cursor-pointer select-none hover:bg-(--bg-panel)">
                 <input
                   type="checkbox"
                   checked={autoplayAfterCue}
                   onChange={() => onSetAutoplayAfterCue(!autoplayAfterCue)}
-                  className="w-4 h-4 rounded border-[var(--border-hi)] bg-[var(--bg-hover)] text-[var(--amber)] focus:ring-[var(--border-focus)] focus:ring-offset-0 cursor-pointer"
+                  className="w-4 h-4 rounded border-(--border-hi) bg-(--bg-hover) text-(--amber) focus:ring-(--border-focus) focus:ring-offset-0 cursor-pointer"
                 />
                 <div>
-                  <span className="text-sm text-[var(--text)] font-medium">Autoplay after Cue</span>
-                  <p className="text-[10px] text-[var(--text-dim)] mt-0.5">
+                  <span className="text-sm text-(--text) font-medium">Autoplay after Cue</span>
+                  <p className="text-[10px] text-(--text-dim) mt-0.5">
                     Automatically resume video playback after saving or cancelling a new cue.
                   </p>
                 </div>
@@ -1973,15 +1973,15 @@ export function ConfigurationModal({
           {activeTab === 'templates' && (
             <div className="space-y-5">
               {/* Save current config as template */}
-              <div className="p-4 bg-[var(--bg-panel)]/30 border border-[var(--border-hi-a50)] rounded-lg space-y-3">
-                <h3 className="text-sm font-medium text-[var(--text)]">Save Current Configuration</h3>
+              <div className="p-4 bg-(--bg-panel)/30 border border-(--border-hi-a50) rounded-lg space-y-3">
+                <h3 className="text-sm font-medium text-(--text)">Save Current Configuration</h3>
                 <div className="flex items-center gap-2">
                   <input
                     type="text"
                     value={newTemplateName}
                     onChange={(e) => setNewTemplateName(e.target.value)}
                     placeholder="Template name"
-                    className="flex-1 bg-[var(--bg-panel)] border border-[var(--border-hi)] rounded-md px-3 py-2 text-sm text-[var(--text)] focus:border-[var(--amber)] focus:outline-none"
+                    className="flex-1 bg-(--bg-panel) border border-(--border-hi) rounded-md px-3 py-2 text-sm text-(--text) focus:border-(--amber) focus:outline-none"
                     onKeyDown={async (e) => {
                       if (e.key === 'Enter') {
                         const name = newTemplateName.trim();
@@ -2036,7 +2036,7 @@ export function ConfigurationModal({
                       await refreshTemplates();
                       setNewTemplateName('');
                     }}
-                    className="flex items-center gap-1.5 px-3 py-2 text-sm bg-[var(--amber)] text-white rounded-md hover:brightness-110 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                    className="flex items-center gap-1.5 px-3 py-2 text-sm bg-(--amber) text-white rounded-md hover:brightness-110 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
                   >
                     <Save className="w-3.5 h-3.5" />
                     Save
@@ -2049,7 +2049,7 @@ export function ConfigurationModal({
                 <button
                   type="button"
                   onClick={() => templateImportRef.current?.click()}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-[var(--bg-panel)] text-[var(--text-mid)] rounded-md hover:bg-[var(--bg-hover)] transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-(--bg-panel) text-(--text-mid) rounded-md hover:bg-(--bg-hover) transition-colors"
                 >
                   <FileUp className="w-3.5 h-3.5" />
                   Import Template
@@ -2066,7 +2066,7 @@ export function ConfigurationModal({
                     });
                     if (ok) onApplyTemplate(FACTORY_DEFAULT_TEMPLATE.data);
                   }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-[var(--bg-panel)] text-[var(--text-mid)] rounded-md hover:bg-[var(--bg-hover)] transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-(--bg-panel) text-(--text-mid) rounded-md hover:bg-(--bg-hover) transition-colors"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
                   Reset to Factory
@@ -2094,10 +2094,10 @@ export function ConfigurationModal({
               </div>
 
               {/* Saved templates list */}
-              <div className="p-4 bg-[var(--bg-panel)]/30 border border-[var(--border-hi-a50)] rounded-lg space-y-2">
-                <h3 className="text-sm font-medium text-[var(--text)]">Saved Templates</h3>
+              <div className="p-4 bg-(--bg-panel)/30 border border-(--border-hi-a50) rounded-lg space-y-2">
+                <h3 className="text-sm font-medium text-(--text)">Saved Templates</h3>
                 {savedTemplates.length === 0 ? (
-                  <p className="text-[11px] text-[var(--text-dim)] italic">No templates saved. Save your current configuration above to get started.</p>
+                  <p className="text-[11px] text-(--text-dim) italic">No templates saved. Save your current configuration above to get started.</p>
                 ) : (
                   <div className="space-y-1.5">
                     {savedTemplates
@@ -2110,7 +2110,7 @@ export function ConfigurationModal({
                         return (
                           <div
                             key={tpl.id}
-                            className="flex items-center gap-2 px-3 py-2 bg-[var(--bg-card)]/50 border border-[var(--border-hi)]/40 rounded-md"
+                            className="flex items-center gap-2 px-3 py-2 bg-(--bg-card)/50 border border-(--border-hi)/40 rounded-md"
                           >
                             {isEditingThis ? (
                               <div className="flex items-center gap-1.5 flex-1 min-w-0">
@@ -2127,7 +2127,7 @@ export function ConfigurationModal({
                                     if (e.key === 'Escape') setEditingTemplateId(null);
                                   }}
                                   autoFocus
-                                  className="flex-1 bg-[var(--bg-hover)] text-[var(--text)] rounded px-2 py-1 text-xs border border-[var(--amber)] focus:ring-1 focus:ring-[var(--border-focus)] outline-none"
+                                  className="flex-1 bg-(--bg-hover) text-(--text) rounded px-2 py-1 text-xs border border-(--amber) focus:ring-1 focus:ring-(--border-focus) outline-none"
                                 />
                                 <button
                                   type="button"
@@ -2143,7 +2143,7 @@ export function ConfigurationModal({
                                 <button
                                   type="button"
                                   onClick={() => setEditingTemplateId(null)}
-                                  className="p-1 text-[var(--text-dim)] hover:text-[var(--text-mid)] rounded"
+                                  className="p-1 text-(--text-dim) hover:text-(--text-mid) rounded"
                                 >
                                   <X className="w-3.5 h-3.5" />
                                 </button>
@@ -2151,8 +2151,8 @@ export function ConfigurationModal({
                             ) : (
                               <>
                                 <div className="flex-1 min-w-0">
-                                  <p className="text-xs text-[var(--text)] truncate">{tpl.name}</p>
-                                  <p className="text-[10px] text-[var(--text-dim)] truncate">
+                                  <p className="text-xs text-(--text) truncate">{tpl.name}</p>
+                                  <p className="text-[10px] text-(--text-dim) truncate">
                                     {tpl.data.cueTypes.length} types · Updated {relativeTimeAgo(tpl.updatedAt)}
                                   </p>
                                 </div>
@@ -2188,7 +2188,7 @@ export function ConfigurationModal({
                                         'success',
                                       );
                                     }}
-                                    className={`p-1 rounded transition-colors ${tpl.isDefault ? 'text-amber-400 hover:text-amber-300' : 'text-[var(--text-dim)] hover:text-amber-400'} hover:bg-[var(--bg-hover)]`}
+                                    className={`p-1 rounded transition-colors ${tpl.isDefault ? 'text-amber-400 hover:text-amber-300' : 'text-(--text-dim) hover:text-amber-400'} hover:bg-(--bg-hover)`}
                                     title={tpl.isDefault ? 'Remove as default template' : 'Set as default template'}
                                   >
                                     <Star className="w-3 h-3" fill={tpl.isDefault ? 'currentColor' : 'none'} />
@@ -2197,7 +2197,7 @@ export function ConfigurationModal({
                                   <button
                                     type="button"
                                     onClick={() => { setEditingTemplateId(tpl.id); setEditingTemplateName(tpl.name); }}
-                                    className="p-1 text-[var(--text-dim)] hover:text-[var(--text-mid)] hover:bg-[var(--bg-hover)] rounded transition-colors"
+                                    className="p-1 text-(--text-dim) hover:text-(--text-mid) hover:bg-(--bg-hover) rounded transition-colors"
                                     title="Rename"
                                   >
                                     <Pencil className="w-3 h-3" />
@@ -2206,7 +2206,7 @@ export function ConfigurationModal({
                                   <button
                                     type="button"
                                     onClick={() => exportTemplateToJSON(tpl)}
-                                    className="p-1 text-[var(--text-dim)] hover:text-[var(--text-mid)] hover:bg-[var(--bg-hover)] rounded transition-colors"
+                                    className="p-1 text-(--text-dim) hover:text-(--text-mid) hover:bg-(--bg-hover) rounded transition-colors"
                                     title="Export as .cuetation-template.json"
                                   >
                                     <Download className="w-3 h-3" />
@@ -2230,7 +2230,7 @@ export function ConfigurationModal({
                                       <button
                                         type="button"
                                         onClick={() => setDeletingTemplateId(null)}
-                                        className="text-[10px] text-[var(--text-mid)] hover:text-[var(--text-mid)] px-1"
+                                        className="text-[10px] text-(--text-mid) hover:text-(--text-mid) px-1"
                                       >
                                         No
                                       </button>
@@ -2239,7 +2239,7 @@ export function ConfigurationModal({
                                     <button
                                       type="button"
                                       onClick={() => setDeletingTemplateId(tpl.id)}
-                                      className="p-1 text-[var(--text-dim)] hover:text-red-400 hover:bg-[var(--bg-hover)] rounded transition-colors"
+                                      className="p-1 text-(--text-dim) hover:text-red-400 hover:bg-(--bg-hover) rounded transition-colors"
                                       title="Delete template"
                                     >
                                       <Trash2 className="w-3 h-3" />
@@ -2260,9 +2260,9 @@ export function ConfigurationModal({
           {activeTab === 'savefiles' && (
             <div className="space-y-5">
               {/* Backup interval setting */}
-              <div className="p-4 bg-[var(--bg-panel)]/30 border border-[var(--border-hi-a50)] rounded-lg space-y-2">
-                <h3 className="text-sm font-medium text-[var(--text)]">Cue Backup Interval</h3>
-                <p className="text-[10px] text-[var(--text-dim)]">
+              <div className="p-4 bg-(--bg-panel)/30 border border-(--border-hi-a50) rounded-lg space-y-2">
+                <h3 className="text-sm font-medium text-(--text)">Cue Backup Interval</h3>
+                <p className="text-[10px] text-(--text-dim)">
                   How often (in minutes) to create a rolling backup of your cues while you are actively working.
                 </p>
                 <div className="flex items-center gap-3">
@@ -2275,36 +2275,36 @@ export function ConfigurationModal({
                       const v = parseInt(e.target.value, 10);
                       if (!isNaN(v) && v >= 1) onSetCueBackupInterval(v);
                     }}
-                    className="w-20 bg-[var(--bg-panel)] text-[var(--text)] rounded px-3 py-1.5 text-sm border border-[var(--border-hi)] focus:border-[var(--amber)] focus:ring-1 focus:ring-[var(--border-focus)] outline-none"
+                    className="w-20 bg-(--bg-panel) text-(--text) rounded px-3 py-1.5 text-sm border border-(--border-hi) focus:border-(--amber) focus:ring-1 focus:ring-(--border-focus) outline-none"
                   />
-                  <span className="text-xs text-[var(--text-mid)]">minutes</span>
+                  <span className="text-xs text-(--text-mid)">minutes</span>
                 </div>
               </div>
 
               {/* Per-video recovery section */}
-              <div className="p-4 bg-[var(--bg-panel)]/30 border border-[var(--border-hi-a50)] rounded-lg space-y-3">
+              <div className="p-4 bg-(--bg-panel)/30 border border-(--border-hi-a50) rounded-lg space-y-3">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-medium text-[var(--text)]">Video File Backups</h3>
+                  <h3 className="text-sm font-medium text-(--text)">Video File Backups</h3>
                   <button
                     type="button"
                     onClick={() => setRecoveryTick((prev) => prev + 1)}
-                    className="text-xs px-2 py-1 rounded bg-[var(--bg-panel)] text-[var(--text-mid)] hover:bg-[var(--bg-hover)] transition-colors"
+                    className="text-xs px-2 py-1 rounded bg-(--bg-panel) text-(--text-mid) hover:bg-(--bg-hover) transition-colors"
                   >
                     Refresh
                   </button>
                 </div>
 
                 {videoFiles.length === 0 ? (
-                  <p className="text-[11px] text-[var(--text-dim)]">No video files with backups found.</p>
+                  <p className="text-[11px] text-(--text-dim)">No video files with backups found.</p>
                 ) : (
                   <>
                     {/* Video file dropdown */}
                     <div className="flex items-center gap-2 min-w-0">
-                      <label className="text-xs text-[var(--text-mid)] shrink-0">Select video:</label>
+                      <label className="text-xs text-(--text-mid) shrink-0">Select video:</label>
                       <select
                         value={effectiveSelectedKey}
                         onChange={(e) => { setSelectedVideoKey(e.target.value); setRecoveryTick((prev) => prev + 1); }}
-                        className="min-w-0 flex-1 bg-[var(--bg-panel)] text-[var(--text)] text-sm rounded px-2 py-1.5 border border-[var(--border-hi)] focus:border-[var(--amber)] focus:ring-1 focus:ring-[var(--border-focus)] outline-none cursor-pointer"
+                        className="min-w-0 flex-1 bg-(--bg-panel) text-(--text) text-sm rounded px-2 py-1.5 border border-(--border-hi) focus:border-(--amber) focus:ring-1 focus:ring-(--border-focus) outline-none cursor-pointer"
                       >
                         {videoFiles.map((vf) => {
                           const displayName = vf.fileName === 'no-video' ? 'No Video' : vf.fileName;
@@ -2325,24 +2325,24 @@ export function ConfigurationModal({
                       return (
                       <div className="space-y-2">
                         {selectedVideoBackups.length === 0 ? (
-                          <p className="text-[11px] text-[var(--text-dim)]">No backups for this video.</p>
+                          <p className="text-[11px] text-(--text-dim)">No backups for this video.</p>
                         ) : (
                           <div className="space-y-1.5">
                             {selectedVideoBackups.map((snapshot) => (
                               <div
                                 key={`video-backup-${snapshot.slot}`}
-                                className="flex items-center justify-between gap-3 px-3 py-2 rounded border border-[var(--border-hi-a50)] bg-[var(--bg-card)]/40"
+                                className="flex items-center justify-between gap-3 px-3 py-2 rounded border border-(--border-hi-a50) bg-(--bg-card)/40"
                               >
                                 <div className="min-w-0 flex-1">
                                   <div className="flex items-center gap-2">
-                                    <p className="text-xs text-[var(--text)] truncate">
+                                    <p className="text-xs text-(--text) truncate">
                                       {new Date(snapshot.savedAt).toLocaleString()}
                                     </p>
-                                    <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--bg-panel)] text-[var(--text-mid)]">
+                                    <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full bg-(--bg-panel) text-(--text-mid)">
                                       {relativeTimeAgo(snapshot.savedAt)}
                                     </span>
                                   </div>
-                                  <p className="text-[10px] text-[var(--text-dim)]">
+                                  <p className="text-[10px] text-(--text-dim)">
                                     {snapshot.itemCount ?? 0} cues · {snapshot.bytes} bytes
                                   </p>
                                 </div>
@@ -2364,7 +2364,7 @@ export function ConfigurationModal({
                                         /* ignore */
                                       }
                                     }}
-                                    className="text-xs px-2 py-1 rounded bg-[var(--bg-panel)] text-[var(--text-mid)] hover:bg-[var(--bg-hover)] transition-colors"
+                                    className="text-xs px-2 py-1 rounded bg-(--bg-panel) text-(--text-mid) hover:bg-(--bg-hover) transition-colors"
                                     title="Export this backup as CSV"
                                   >
                                     <Download className="w-3.5 h-3.5" />
@@ -2391,7 +2391,7 @@ export function ConfigurationModal({
                                         }
                                       }
                                     }}
-                                    className="text-xs px-2 py-1 rounded bg-[var(--amber)] text-white hover:bg-[var(--amber)] transition-colors"
+                                    className="text-xs px-2 py-1 rounded bg-(--amber) text-white hover:bg-(--amber) transition-colors"
                                   >
                                     Restore
                                   </button>
@@ -2431,27 +2431,27 @@ export function ConfigurationModal({
               </div>
 
               {/* Config backups section */}
-              <div className="p-4 bg-[var(--bg-panel)]/30 border border-[var(--border-hi-a50)] rounded-lg space-y-3">
-                <h3 className="text-sm font-medium text-[var(--text)]">Configuration Backups</h3>
+              <div className="p-4 bg-(--bg-panel)/30 border border-(--border-hi-a50) rounded-lg space-y-3">
+                <h3 className="text-sm font-medium text-(--text)">Configuration Backups</h3>
                 {configBackups.length === 0 ? (
-                  <p className="text-[11px] text-[var(--text-dim)]">No configuration backups yet.</p>
+                  <p className="text-[11px] text-(--text-dim)">No configuration backups yet.</p>
                 ) : (
                   <div className="space-y-1.5">
                     {configBackups.map((snapshot) => (
                       <div
                         key={`config-backup-${snapshot.slot}`}
-                        className="flex items-center justify-between gap-3 px-3 py-2 rounded border border-[var(--border-hi-a50)] bg-[var(--bg-card)]/40"
+                        className="flex items-center justify-between gap-3 px-3 py-2 rounded border border-(--border-hi-a50) bg-(--bg-card)/40"
                       >
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
-                            <p className="text-xs text-[var(--text)] truncate">
+                            <p className="text-xs text-(--text) truncate">
                               {new Date(snapshot.savedAt).toLocaleString()}
                             </p>
-                            <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--bg-panel)] text-[var(--text-mid)]">
+                            <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full bg-(--bg-panel) text-(--text-mid)">
                               {relativeTimeAgo(snapshot.savedAt)}
                             </span>
                           </div>
-                          <p className="text-[10px] text-[var(--text-dim)]">{snapshot.bytes} bytes</p>
+                          <p className="text-[10px] text-(--text-dim)">{snapshot.bytes} bytes</p>
                         </div>
                         <button
                           type="button"
@@ -2470,7 +2470,7 @@ export function ConfigurationModal({
                               }
                             }
                           }}
-                          className="shrink-0 text-xs px-2 py-1 rounded bg-[var(--amber)] text-white hover:bg-[var(--amber)] transition-colors"
+                          className="shrink-0 text-xs px-2 py-1 rounded bg-(--amber) text-white hover:bg-(--amber) transition-colors"
                         >
                           Restore
                         </button>
@@ -2486,7 +2486,7 @@ export function ConfigurationModal({
             <div className="space-y-6">
               {/* ── THIS PROJECT ── */}
               <div>
-                <p className="text-[11px] uppercase tracking-widest font-medium text-[var(--text-dim)] mb-4">
+                <p className="text-[11px] uppercase tracking-widest font-medium text-(--text-dim) mb-4">
                   This Project
                 </p>
                 <div className="space-y-3">
@@ -2494,8 +2494,8 @@ export function ConfigurationModal({
                   <div className="p-4 bg-red-900/20 border border-red-800/40 rounded-lg">
                     <div className="flex items-center justify-between gap-4">
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-[var(--text)]">Reset Configuration</p>
-                        <p className="text-[13px] font-light text-[var(--text-mid)] mt-0.5">
+                        <p className="text-sm font-medium text-(--text)">Reset Configuration</p>
+                        <p className="text-[13px] font-light text-(--text-mid) mt-0.5">
                           Revert cue types, fields, columns, and view settings to your default template. Cues are not affected.
                         </p>
                       </div>
@@ -2536,8 +2536,8 @@ export function ConfigurationModal({
                   <div className="p-4 bg-red-900/20 border border-red-800/40 rounded-lg">
                     <div className="flex items-center justify-between gap-4">
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-[var(--text)]">Clear All Cues</p>
-                        <p className="text-[13px] font-light text-[var(--text-mid)] mt-0.5">
+                        <p className="text-sm font-medium text-(--text)">Clear All Cues</p>
+                        <p className="text-[13px] font-light text-(--text-mid) mt-0.5">
                           Permanently delete all cues in this project. Configuration and project metadata are not affected.
                         </p>
                       </div>
@@ -2570,8 +2570,8 @@ export function ConfigurationModal({
                   <div className="p-4 bg-red-900/20 border border-red-800/40 rounded-lg">
                     <div className="flex items-center justify-between gap-4">
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-[var(--text)]">Delete Project</p>
-                        <p className="text-[13px] font-light text-[var(--text-mid)] mt-0.5">
+                        <p className="text-sm font-medium text-(--text)">Delete Project</p>
+                        <p className="text-[13px] font-light text-(--text-mid) mt-0.5">
                           Permanently delete this project and all its cues. You will be returned to the home screen.
                         </p>
                       </div>
@@ -2600,15 +2600,15 @@ export function ConfigurationModal({
               </div>
 
               {/* ── EVERYTHING ── */}
-              <div className="pt-2 mt-2 border-t border-[var(--border-hi)]">
-                <p className="text-[11px] uppercase tracking-widest font-medium text-[var(--text-dim)] mb-4">
+              <div className="pt-2 mt-2 border-t border-(--border-hi)">
+                <p className="text-[11px] uppercase tracking-widest font-medium text-(--text-dim) mb-4">
                   Everything
                 </p>
                 <div className="p-4 bg-red-950/40 border border-red-800/60 rounded-lg">
                   <div className="flex items-center justify-between gap-4">
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-[var(--text)]">Factory Reset</p>
-                      <p className="text-[13px] font-light text-[var(--text-mid)] mt-0.5">
+                      <p className="text-sm font-medium text-(--text)">Factory Reset</p>
+                      <p className="text-[13px] font-light text-(--text-mid) mt-0.5">
                         Delete all projects, cues, configuration, templates, and backups across the entire app. Returns to first-launch state.
                       </p>
                     </div>
