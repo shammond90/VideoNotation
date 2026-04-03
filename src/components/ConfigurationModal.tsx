@@ -562,6 +562,16 @@ function ProjectAdminTab({ liveConfig }: { liveConfig: AppConfig }) {
 
 // ── Hotkey input recorder ──
 
+/** System hotkeys that cannot be assigned to cue types (all modifier-based combos used by the app). */
+const RESERVED_HOTKEYS: Record<string, string> = {
+  'Ctrl+S': 'Save project',
+  'Ctrl+Enter': 'Save cue',
+  'Ctrl+ArrowLeft': 'Seek back 5s',
+  'Ctrl+ArrowRight': 'Seek forward 5s',
+  'Ctrl+,': 'Back 5 frames',
+  'Ctrl+.': 'Forward 5 frames',
+};
+
 /** Format a keyboard event into a modifier+key string like "Alt+L" or "Ctrl+1". */
 function formatHotkey(e: React.KeyboardEvent): string | null {
   // Must have at least one modifier
@@ -604,7 +614,14 @@ function HotkeyInput({
     const combo = formatHotkey(e);
     if (!combo) return;
 
-    // Check for duplicates
+    // Block system hotkeys
+    if (combo in RESERVED_HOTKEYS) {
+      setConflict(`System: ${RESERVED_HOTKEYS[combo]}`);
+      setTimeout(() => setConflict(''), 2000);
+      return;
+    }
+
+    // Check for duplicates across cue types
     const conflicting = Object.entries(allHotkeys).find(
       ([ct, hk]) => ct !== cueType && hk === combo
     );
