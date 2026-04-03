@@ -598,6 +598,18 @@ export function useConfiguration() {
     });
   }, []);
 
+  const setCueTypeHotkey = useCallback((cueType: string, hotkey: string) => {
+    setConfig((prev) => {
+      const updated = { ...prev.cueTypeHotkeys };
+      if (hotkey) {
+        updated[cueType] = hotkey;
+      } else {
+        delete updated[cueType];
+      }
+      return { ...prev, cueTypeHotkeys: updated };
+    });
+  }, []);
+
   return {
     config,
     configLoaded,
@@ -646,5 +658,6 @@ export function useConfiguration() {
     reorderCueTypes,
     toggleCueTypeHidden,
     toggleFieldHidden,
+    setCueTypeHotkey,
   };
 }

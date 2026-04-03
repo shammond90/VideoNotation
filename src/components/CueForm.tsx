@@ -289,7 +289,9 @@ export function CueForm({
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
 
   const firstInputRef = useRef<HTMLDivElement>(null);
+  const afterTypeRef = useRef<HTMLDivElement>(null);
   const isCreate = mode === 'create';
+  const hasPreselectedType = isCreate && !!initialValues?.type;
 
   // Determine which fields are visible for the current cue type
   const visibleFields = useMemo(() => {
@@ -405,15 +407,25 @@ export function CueForm({
     }
   }, [timestamp, isCreate]);
 
-  // Auto-focus type dropdown (only in create mode)
+  // Auto-focus: type dropdown normally, or first field after type when pre-selected
   useEffect(() => {
     if (!isCreate) return;
     const timer = setTimeout(() => {
-      const input = firstInputRef.current?.querySelector('input');
-      input?.focus();
+      if (hasPreselectedType) {
+        // Focus first input after the type dropdown
+        const input = afterTypeRef.current?.querySelector('input');
+        if (input) { input.focus(); return; }
+        // Fallback: focus first body field in the form
+        const form = firstInputRef.current?.closest('form');
+        const allInputs = form?.querySelectorAll<HTMLInputElement>('input:not([readonly]):not([type="color"]):not([type="checkbox"]), textarea');
+        if (allInputs && allInputs.length > 1) allInputs[1]?.focus();
+      } else {
+        const input = firstInputRef.current?.querySelector('input');
+        input?.focus();
+      }
     }, 50);
     return () => clearTimeout(timer);
-  }, [isCreate]);
+  }, [isCreate, hasPreselectedType]);
 
   const handleChange = (name: string, value: string) => {
     setFields((prev) => ({ ...prev, [name]: value }));
@@ -579,14 +591,18 @@ export function CueForm({
                 value={fields.type}
                 onChange={(val) => handleChange('type', val)}
                 placeholder="Cue Type"
-                autoFocus={isCreate}
+                autoFocus={isCreate && !hasPreselectedType}
               />
             </div>
             {showCueNumHere && (
+              <div ref={hasPreselectedType ? afterTypeRef : undefined}>
               <Field label={getFieldLabel('cueNumber', fieldDefs)} name="cueNumber" value={fields.cueNumber} onChange={handleChange} placeholder="e.g. 101" autoFocus={!isCreate} />
+              </div>
             )}
             {showOldCueNum && (
+              <div ref={hasPreselectedType && !showCueNumHere ? afterTypeRef : undefined}>
               <Field label={getFieldLabel('oldCueNumber', fieldDefs)} name="oldCueNumber" value={fields.oldCueNumber} onChange={handleChange} />
+              </div>
             )}
           </div>
         );

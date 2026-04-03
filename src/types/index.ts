@@ -317,6 +317,7 @@ export interface TemplateData {
   hiddenCueTypes?: string[];
   hiddenFieldKeys?: string[];
   videoBrightness?: number;
+  cueTypeHotkeys?: Record<string, string>;
 }
 
 /** A saved config template (stored in IndexedDB). */
@@ -362,6 +363,7 @@ export function extractTemplateData(config: AppConfig): TemplateData {
     hiddenCueTypes: [...(config.hiddenCueTypes ?? [])],
     hiddenFieldKeys: [...(config.hiddenFieldKeys ?? [])],
     videoBrightness: config.videoBrightness,
+    cueTypeHotkeys: { ...(config.cueTypeHotkeys ?? {}) },
   };
 }
 
@@ -391,6 +393,7 @@ export interface AppConfig {
   hiddenCueTypes: string[]; // cue types hidden from dropdowns, cue sheet, and exports
   hiddenFieldKeys: string[]; // field keys hidden from visible-fields, columns, and exports
   videoBrightness: number; // video brightness filter (0.2–1.8, default 1.0)
+  cueTypeHotkeys: Record<string, string>; // modifier+key hotkey per cue type (e.g. { "LIGHTS": "Alt+L" })
 }
 
 /**
@@ -499,6 +502,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   hiddenCueTypes: [],
   hiddenFieldKeys: [],
   videoBrightness: 1.0,
+  cueTypeHotkeys: {},
 };
 
 /** The factory-default template. Always available for "Reset to Factory". */
