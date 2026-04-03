@@ -122,6 +122,8 @@ interface ConfigurationModalProps {
   hiddenCueTypes?: string[];
   onToggleFieldHidden?: (fieldKey: string) => void;
   hiddenFieldKeys?: string[];
+  cueTypeHotkeys?: Record<string, string>;
+  onSetCueTypeHotkey?: (cueType: string, hotkey: string) => void;
   /** Toast notification handler — passed from parent so toasts use the shared stack. */
   addToast?: (message: string, type: Toast['type'], opts?: number | { duration?: number; details?: string }) => string;
   /** Current project name for Data tab confirmation messages. */
@@ -558,6 +560,103 @@ function ProjectAdminTab({ liveConfig }: { liveConfig: AppConfig }) {
   );
 }
 
+// ── Hotkey input recorder ──
+
+/** Format a keyboard event into a modifier+key string like "Alt+L" or "Ctrl+1". */
+function formatHotkey(e: React.KeyboardEvent): string | null {
+  // Must have at least one modifier
+  if (!e.altKey && !e.ctrlKey && !e.metaKey) return null;
+  // Ignore bare modifier key presses
+  if (['Alt', 'Control', 'Meta', 'Shift'].includes(e.key)) return null;
+
+  const parts: string[] = [];
+  if (e.ctrlKey || e.metaKey) parts.push('Ctrl');
+  if (e.altKey) parts.push('Alt');
+  if (e.shiftKey) parts.push('Shift');
+
+  // Normalize the key to a readable label
+  let key = e.key;
+  if (key === ' ') key = 'Space';
+  else if (key.length === 1) key = key.toUpperCase();
+
+  parts.push(key);
+  return parts.join('+');
+}
+
+function HotkeyInput({
+  value,
+  onChange,
+  allHotkeys,
+  cueType,
+}: {
+  value: string;
+  onChange: (hotkey: string) => void;
+  allHotkeys: Record<string, string>;
+  cueType: string;
+}) {
+  const [recording, setRecording] = useState(false);
+  const [conflict, setConflict] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const combo = formatHotkey(e);
+    if (!combo) return;
+
+    // Check for duplicates
+    const conflicting = Object.entries(allHotkeys).find(
+      ([ct, hk]) => ct !== cueType && hk === combo
+    );
+    if (conflicting) {
+      setConflict(conflicting[0]);
+      setTimeout(() => setConflict(''), 2000);
+      return;
+    }
+
+    onChange(combo);
+    setRecording(false);
+    inputRef.current?.blur();
+  };
+
+  return (
+    <div className="relative flex items-center">
+      <input
+        ref={inputRef}
+        type="text"
+        readOnly
+        value={recording ? '…' : value}
+        onFocus={() => { setRecording(true); setConflict(''); }}
+        onBlur={() => setRecording(false)}
+        onKeyDown={recording ? handleKeyDown : undefined}
+        placeholder="Key"
+        title={value ? `Hotkey: ${value} — click to change, right-click to clear` : 'Click to assign a hotkey'}
+        onContextMenu={(e) => { e.preventDefault(); if (value) onChange(''); }}
+        className={`w-16 h-6 text-center text-[10px] font-mono bg-[var(--bg-hover)] text-[var(--text)] rounded border cursor-pointer outline-none placeholder-[var(--text-dim)] ${
+          recording
+            ? 'border-[var(--amber)] ring-1 ring-[var(--border-focus)]'
+            : value
+              ? 'border-[var(--amber)]/50'
+              : 'border-[var(--border-hi)]'
+        }`}
+      />
+      {value && !recording && (
+        <button
+          type="button"
+          onClick={() => onChange('')}
+          className="absolute -right-1 -top-1 w-3 h-3 rounded-full bg-[var(--bg-hover)] border border-[var(--border-hi)] text-[var(--text-dim)] hover:text-red-400 flex items-center justify-center text-[8px] leading-none"
+          title="Clear hotkey"
+        >×</button>
+      )}
+      {conflict && (
+        <div className="absolute top-full left-0 mt-1 z-50 text-[9px] text-orange-400 bg-[var(--bg-panel)] border border-orange-500/30 rounded px-1.5 py-0.5 whitespace-nowrap shadow-lg">
+          Already used by {conflict}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main modal ──
 
 export function ConfigurationModal({
@@ -623,6 +722,8 @@ export function ConfigurationModal({
   hiddenCueTypes,
   onToggleFieldHidden,
   hiddenFieldKeys,
+  cueTypeHotkeys,
+  onSetCueTypeHotkey,
   addToast,
   projectName,
   annotationCount,
@@ -1084,6 +1185,15 @@ export function ConfigurationModal({
                             title="Short code (max 4 characters)"
                             className="w-10 h-6 text-center text-xs bg-[var(--bg-hover)] text-[var(--text)] rounded border border-[var(--border-hi)] focus:border-[var(--amber)] focus:ring-1 focus:ring-[var(--border-focus)] outline-none placeholder-[var(--text-dim)]"
                           />
+                          {/* Hotkey recorder */}
+                          {onSetCueTypeHotkey && (
+                            <HotkeyInput
+                              value={cueTypeHotkeys?.[type] ?? ''}
+                              onChange={(hotkey) => onSetCueTypeHotkey(type, hotkey)}
+                              allHotkeys={cueTypeHotkeys ?? {}}
+                              cueType={type}
+                            />
+                          )}
                           {/* Font colour picker (Production badge text) */}
                           <label
                             className="relative w-6 h-6 rounded cursor-pointer border border-[var(--border-hi)] shrink-0 overflow-hidden flex items-center justify-center"
@@ -1814,6 +1924,32 @@ export function ConfigurationModal({
                 >Ctrl+S</kbd>
                 <span style={{ fontSize: 12, color: 'var(--text-mid)', flex: 1, fontWeight: 300 }}>Save project (works everywhere)</span>
               </div>
+
+              {/* Quick Cue hotkeys (dynamic from cue type config) */}
+              {(() => {
+                const entries = Object.entries(cueTypeHotkeys ?? {}).filter(([, hk]) => hk);
+                if (entries.length === 0) return null;
+                return (
+                  <>
+                    <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: '.1em', textTransform: 'uppercase' as const, color: 'var(--text-dim)', marginBottom: 10, marginTop: 18 }}>Quick Cue</div>
+                    {entries.map(([ct, hk]) => (
+                      <div key={ct} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+                        <kbd
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: 10, fontWeight: 500, fontFamily: "'DM Mono', monospace",
+                            minWidth: 80, padding: '3px 9px', borderRadius: 4, whiteSpace: 'nowrap' as const,
+                            background: 'var(--bg-card)',
+                            color: cueTypeColors[ct] || 'var(--text-mid)',
+                            border: `1px solid ${cueTypeColors[ct] || 'var(--border-hi)'}`,
+                          }}
+                        >{hk}</kbd>
+                        <span style={{ fontSize: 12, color: 'var(--text-mid)', flex: 1, fontWeight: 300 }}>Open cue form as <strong style={{ color: cueTypeColors[ct] || 'var(--text)' }}>{ct}</strong></span>
+                      </div>
+                    ))}
+                  </>
+                );
+              })()}
             </div>
           )}
 

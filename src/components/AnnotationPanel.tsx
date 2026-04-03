@@ -62,6 +62,7 @@ interface AnnotationPanelProps {
   /* Create-overlay props (passed from App) */
   isCreating?: boolean;
   createTimestamp?: number;
+  preselectedCueType?: string | null;
   onCreateSave?: (cue: CueFields, overrideTimestamp?: number) => void;
   onCreateCancel?: () => void;
   createSaveRef?: MutableRefObject<(() => void) | null>;
@@ -307,6 +308,7 @@ export function AnnotationPanel({
   hiddenFieldKeys,
   isCreating,
   createTimestamp,
+  preselectedCueType,
   onCreateSave,
   onCreateCancel,
   createSaveRef,
@@ -1959,6 +1961,7 @@ export function AnnotationPanel({
           mode="create"
           title="New Cue"
           timestamp={createTimestamp}
+          preselectedCueType={preselectedCueType}
           allAnnotations={annotations}
           cueTypes={visibleCueTypes}
           cueTypeFields={filteredCueTypeFields}

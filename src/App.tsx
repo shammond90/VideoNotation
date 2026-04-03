@@ -63,6 +63,7 @@ export default function App({
   });
   const [isAnnotating, setIsAnnotating] = useState(false);
   const [annotateTimestamp, setAnnotateTimestamp] = useState(0);
+  const [preselectedCueType, setPreselectedCueType] = useState<string | null>(null);
   const [isNoVideoMode, setIsNoVideoMode] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
@@ -190,6 +191,7 @@ export default function App({
     reorderCueTypes,
     toggleCueTypeHidden,
     toggleFieldHidden,
+    setCueTypeHotkey,
   } = useConfiguration();
 
   const {
@@ -618,6 +620,7 @@ export default function App({
       addAnnotation(typeof overrideTimestamp === 'number' ? overrideTimestamp : annotateTimestamp, cue);
 
       setIsAnnotating(false);
+      setPreselectedCueType(null);
       addToast('Cue saved', 'success');
       // Resume playback after saving (if autoplay enabled)
       if (config.autoplayAfterCue) {
@@ -638,6 +641,7 @@ export default function App({
   // Cancel note — close form and resume playback
   const handleCancelNote = useCallback(() => {
     setIsAnnotating(false);
+    setPreselectedCueType(null);
     // Resume playback (if autoplay enabled)
     if (config.autoplayAfterCue) {
       if (isDualWindow) {
@@ -804,6 +808,28 @@ export default function App({
 
       const isInteractive = isTyping || target.tagName === 'BUTTON';
 
+      // Cue type hotkeys (modifier combos like Alt+L, Ctrl+1)
+      if ((e.altKey || e.ctrlKey || e.metaKey) && !['Alt', 'Control', 'Meta', 'Shift'].includes(e.key)) {
+        const parts: string[] = [];
+        if (e.ctrlKey || e.metaKey) parts.push('Ctrl');
+        if (e.altKey) parts.push('Alt');
+        if (e.shiftKey) parts.push('Shift');
+        let key = e.key;
+        if (key === ' ') key = 'Space';
+        else if (key.length === 1) key = key.toUpperCase();
+        parts.push(key);
+        const combo = parts.join('+');
+
+        const hotkeys = config.cueTypeHotkeys;
+        const matchedType = Object.entries(hotkeys).find(([, hk]) => hk === combo)?.[0];
+        if (matchedType) {
+          e.preventDefault();
+          setPreselectedCueType(matchedType);
+          handleEnterAnnotate();
+          return;
+        }
+      }
+
       if (e.code === 'Space' && !isInteractive) {
         e.preventDefault();
         handleTogglePlay();
@@ -812,6 +838,7 @@ export default function App({
 
       if (e.key === 'Enter' && !isInteractive) {
         e.preventDefault();
+        setPreselectedCueType(null);
         handleEnterAnnotate();
         return;
       }
@@ -909,7 +936,7 @@ export default function App({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleTogglePlay, handleEnterAnnotate, handleExplicitSave, playerActions, playerState.playbackRate, playerState.currentTime, addToast, isNoVideoMode, isConfigOpen, handleSeek, isDualWindow, broadcastSend]);
+  }, [handleTogglePlay, handleEnterAnnotate, handleExplicitSave, playerActions, playerState.playbackRate, playerState.currentTime, addToast, isNoVideoMode, isConfigOpen, handleSeek, isDualWindow, broadcastSend, config.cueTypeHotkeys]);
 
   // Cleanup video URL on unmount
   useEffect(() => {
@@ -1427,6 +1454,7 @@ export default function App({
               onReorderTieGroup={reorderInTieGroup}
               isCreating={isAnnotating}
               createTimestamp={annotateTimestamp}
+              preselectedCueType={preselectedCueType}
               onCreateSave={handleSaveCue}
               onCreateCancel={handleCancelNote}
               createSaveRef={cueFormSaveRef}
@@ -1567,6 +1595,8 @@ export default function App({
         hiddenCueTypes={config.hiddenCueTypes}
         onToggleFieldHidden={toggleFieldHidden}
         hiddenFieldKeys={config.hiddenFieldKeys}
+        cueTypeHotkeys={config.cueTypeHotkeys}
+        onSetCueTypeHotkey={setCueTypeHotkey}
         addToast={addToast}
         projectName={projectName}
         annotationCount={annotations.length}

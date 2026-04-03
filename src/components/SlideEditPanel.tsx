@@ -1,6 +1,7 @@
 import { useEffect, useRef, type MutableRefObject } from 'react';
 import { CueForm } from './CueForm';
 import type { Annotation, CueFields, FieldDefinition } from '../types';
+import { EMPTY_CUE_FIELDS } from '../types';
 
 interface SlideEditPanelProps {
   mode: 'create' | 'edit';
@@ -15,6 +16,7 @@ interface SlideEditPanelProps {
   onSave: (idOrCue: string | CueFields, cueOrTimestamp?: CueFields | number, newTimestamp?: number) => void;
   onClose: () => void;
   saveRef?: MutableRefObject<(() => void) | null>;
+  preselectedCueType?: string | null;
 }
 
 export function SlideEditPanel({
@@ -30,6 +32,7 @@ export function SlideEditPanel({
   onSave,
   onClose,
   saveRef,
+  preselectedCueType,
 }: SlideEditPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -120,6 +123,7 @@ export function SlideEditPanel({
               cueTypeFields={cueTypeFields}
               fieldDefinitions={fieldDefs}
               mandatoryFields={mandatoryFields}
+              initialValues={preselectedCueType ? { ...EMPTY_CUE_FIELDS, type: preselectedCueType } : undefined}
               onSave={(cue, overrideTimestamp) => {
                 onSave(cue as any, overrideTimestamp as any);
               }}
