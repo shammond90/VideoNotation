@@ -312,13 +312,11 @@ function ProjectCard({ project, onSelect, onEdit, onDelete }: {
         cursor: 'pointer',
         transition: 'all 0.2s',
         position: 'relative',
-        overflow: 'hidden',
       }}
       onMouseEnter={e => {
         const el = e.currentTarget as HTMLDivElement;
         el.style.borderColor = 'var(--border-hi)';
         el.style.background = 'var(--bg-hover)';
-        el.style.transform = 'translateY(-1px)';
         el.style.boxShadow = 'var(--shadow-md)';
         const bar = el.querySelector('.card-top-bar') as HTMLDivElement | null;
         if (bar) bar.style.opacity = '1';
@@ -329,7 +327,6 @@ function ProjectCard({ project, onSelect, onEdit, onDelete }: {
         const el = e.currentTarget as HTMLDivElement;
         el.style.borderColor = 'var(--border)';
         el.style.background = 'var(--bg-card)';
-        el.style.transform = '';
         el.style.boxShadow = '';
         const bar = el.querySelector('.card-top-bar') as HTMLDivElement | null;
         if (bar) bar.style.opacity = '0';
