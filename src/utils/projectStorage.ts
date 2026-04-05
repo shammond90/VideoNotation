@@ -1,7 +1,7 @@
 import { openDB } from 'idb';
 import type { Project, AppConfig, ColumnConfig, Annotation } from '../types/index';
 import { DEFAULT_CONFIG, DEFAULT_VISIBLE_COLUMNS } from '../types/index';
-import { loadAnnotations, saveAnnotations, saveConfig } from './storage';
+import { loadAnnotations, saveAnnotations, saveConfig, clearStorageFamily, getAnnotationStorageKey } from './storage';
 import { deleteVideoHandle } from './videoHandleStorage';
 import { loadXlsxExportTemplates, saveXlsxExportTemplates } from './configTemplates';
 import type { XlsxExportTemplate } from './configTemplates';
@@ -68,6 +68,9 @@ export async function createProject(
     video_path: null,
     video_filesize: null,
     video_duration: null,
+    version: 1,
+    local_base_version: 0,
+    has_local_changes: false,
   };
 
   const db = await getDB();
@@ -107,6 +110,8 @@ export async function saveProject(project: Project): Promise<void> {
 export async function deleteProject(projectId: string): Promise<void> {
   const db = await getDB();
   await db.delete(PROJECTS_STORE, projectId);
+  // Clean up stored annotation data (keyed by projectId)
+  await clearStorageFamily(getAnnotationStorageKey(projectId, 0)).catch(() => {});
   // Clean up any stored video handle
   await deleteVideoHandle(projectId).catch(() => {});
 }
@@ -154,6 +159,7 @@ export async function updateProjectVideo(
     project.video_duration = null;
   }
 
+  project.has_local_changes = true;
   await saveProject(project);
 }
 
@@ -163,6 +169,7 @@ export async function updateProjectVideo(
 export async function updateProjectMetadata(
   projectId: string,
   metadata: {
+    name?: string;
     production_name?: string;
     choreographer?: string;
     venue?: string;
@@ -174,6 +181,7 @@ export async function updateProjectMetadata(
   if (!project) throw new Error(`Project ${projectId} not found`);
 
   Object.assign(project, metadata);
+  project.has_local_changes = true;
   await saveProject(project);
 }
 
@@ -222,6 +230,7 @@ export async function updateProjectConfig(
   project.config = config;
   if (columns) project.columns = columns;
   if (exportTemplates) project.export_templates = exportTemplates;
+  project.has_local_changes = true;
   await saveProject(project);
 }
 
@@ -326,6 +335,9 @@ export function parseImportedProject(json: unknown): ImportedProjectData {
     config: (proj.config && typeof proj.config === 'object' ? proj.config : { ...DEFAULT_CONFIG }) as AppConfig,
     columns: (Array.isArray(proj.columns) ? proj.columns : [...DEFAULT_VISIBLE_COLUMNS]) as ColumnConfig[],
     export_templates: (Array.isArray(proj.export_templates) ? proj.export_templates : []) as Project['export_templates'],
+    version: typeof proj.version === 'number' ? proj.version : 1,
+    local_base_version: typeof proj.local_base_version === 'number' ? proj.local_base_version : 0,
+    has_local_changes: typeof proj.has_local_changes === 'boolean' ? proj.has_local_changes : false,
   };
 
   // Backward-compat: migrate theatreMode boolean → theme enum in imported config

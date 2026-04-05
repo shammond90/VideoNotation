@@ -1,26 +1,76 @@
-﻿import { useEffect } from 'react';
+﻿import { useEffect, useState, useRef, useCallback } from 'react';
+import { UserButton } from '@clerk/clerk-react';
+import { Cloud, CloudOff, Loader2, Check, RefreshCw, MoreVertical, Pencil, Trash2 } from 'lucide-react';
 import type { Project } from '../types/index';
 import { useProject } from '../hooks/useProject';
+import type { CloudSaveStatus } from '../hooks/useCloudSync';
+import { useConfirm } from '../hooks/useConfirm';
+import { ConfirmDialog } from './ConfirmDialog';
+import { EditProjectModal } from './EditProjectModal';
 
 interface HomeScreenProps {
   onProjectSelected: (projectId: string) => void;
   onCreateProject: () => void;
   onImportProject: () => void;
+  onEditProject?: (projectId: string, updates: {
+    name: string;
+    production_name?: string;
+    choreographer?: string;
+    venue?: string;
+    year?: string;
+    notes?: string;
+  }) => Promise<void>;
+  onDeleteProject?: (projectId: string) => Promise<void>;
+  isRestoring?: boolean;
+  cloudSaveStatus?: CloudSaveStatus;
 }
 
 /**
- * Home screen â€” project list matching the Cuetation design system.
+ * Home screen — project list matching the Cuetation design system.
  */
 export function HomeScreen({
   onProjectSelected,
   onCreateProject,
   onImportProject,
+  onEditProject,
+  onDeleteProject,
+  isRestoring = false,
+  cloudSaveStatus = 'idle',
 }: HomeScreenProps) {
   const { projects, isLoading, error, loadAllProjects } = useProject();
+  const { confirmState, showConfirm } = useConfirm();
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
 
+  // Reload projects on mount and after cloud restore finishes
   useEffect(() => {
     loadAllProjects();
-  }, [loadAllProjects]);
+  }, [loadAllProjects, isRestoring]);
+
+  const handleEdit = useCallback((project: Project) => {
+    setEditingProject(project);
+  }, []);
+
+  const handleEditSave = useCallback(async (projectId: string, updates: Parameters<NonNullable<typeof onEditProject>>[1]) => {
+    setEditingProject(null);
+    await onEditProject?.(projectId, updates);
+    loadAllProjects();
+  }, [onEditProject, loadAllProjects]);
+
+  const handleDelete = useCallback(async (project: Project) => {
+    const confirmed = await showConfirm({
+      title: 'Delete Project',
+      message: `This will permanently delete "${project.name}" and all its annotations from this device and the cloud.`,
+      detail: `Type the project name to confirm.`,
+      confirmLabel: 'Delete',
+      cancelLabel: 'Cancel',
+      variant: 'danger',
+      icon: 'trash',
+      requireText: project.name,
+    });
+    if (!confirmed) return;
+    await onDeleteProject?.(project.id);
+    loadAllProjects();
+  }, [showConfirm, onDeleteProject, loadAllProjects]);
 
   if (isLoading) {
     return (
@@ -43,15 +93,38 @@ export function HomeScreen({
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--bg)', color: 'var(--text)' }}>
-      {/* Header */}
-      <div className="flex items-flex-end justify-between" style={{ padding: '32px 40px 0' }}>
+      {/* Top bar — matches cue-sheet header */}
+      <header style={{
+        height: 44,
+        background: 'var(--bg)',
+        borderBottom: '1px solid var(--border)',
+        display: 'flex',
+        alignItems: 'center',
+        padding: '0 16px',
+        flexShrink: 0,
+      }}>
+        <div className="font-display" style={{
+          fontSize: 17,
+          color: 'var(--text)',
+          letterSpacing: '-0.01em',
+          display: 'flex',
+          alignItems: 'center',
+        }}>
+          Cue<em style={{ fontStyle: 'italic', color: 'var(--amber)' }}>tation</em>
+        </div>
+        <div style={{ flex: 1 }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <HomeCloudIndicator cloudSaveStatus={cloudSaveStatus} projects={projects} />
+          <UserButton afterSignOutUrl="/" />
+        </div>
+      </header>
+
+      {/* Page header */}
+      <div className="flex items-flex-end justify-between" style={{ padding: '24px 40px 0' }}>
         <div>
           <h1 className="font-display" style={{ fontSize: 28, fontWeight: 400, letterSpacing: '-0.02em', color: 'var(--text)' }}>
-            Cue<em style={{ fontStyle: 'italic', color: 'var(--amber)' }}>tation</em>
-          </h1>
-          <p className="font-mono" style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 3, letterSpacing: '0.06em' }}>
             Your productions
-          </p>
+          </h1>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -104,8 +177,11 @@ export function HomeScreen({
       <div style={{ height: 1, background: 'var(--border)', margin: '24px 40px 0' }} />
 
       {/* Sort bar */}
-      <div className="font-mono" style={{ padding: '14px 40px', fontSize: 12, color: 'var(--text-dim)' }}>
+      <div className="font-mono" style={{ padding: '14px 40px', fontSize: 12, color: 'var(--text-dim)', display: 'flex', alignItems: 'center', gap: 8 }}>
         {projects.length} project{projects.length !== 1 ? 's' : ''}
+        {isRestoring && (
+          <span style={{ color: 'var(--amber)', fontSize: 11 }}>· Restoring from cloud…</span>
+        )}
       </div>
 
       {/* Empty state */}
@@ -146,24 +222,88 @@ export function HomeScreen({
               key={project.id}
               project={project}
               onSelect={() => onProjectSelected(project.id)}
+              onEdit={() => handleEdit(project)}
+              onDelete={() => handleDelete(project)}
             />
           ))}
         </div>
       )}
+
+      {/* Edit project modal */}
+      {editingProject && (
+        <EditProjectModal
+          project={editingProject}
+          onSave={handleEditSave}
+          onCancel={() => setEditingProject(null)}
+        />
+      )}
+
+      {/* Delete confirmation dialog */}
+      <ConfirmDialog {...confirmState} />
     </div>
   );
 }
 
 /**
- * Individual project card.
+ * Individual project card with three-dot menu and right-click context menu.
  */
-function ProjectCard({ project, onSelect }: { project: Project; onSelect: () => void }) {
+function ProjectCard({ project, onSelect, onEdit, onDelete }: {
+  project: Project;
+  onSelect: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
   const lastModified = formatRelativeTime(project.updated_at);
   const prodLine = [project.production_name, project.venue, project.year].filter(Boolean).join(' \u00B7 ');
+
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const dotRef = useRef<HTMLButtonElement>(null);
+
+  // Close menu on outside click
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuOpen(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    document.addEventListener('keydown', handleEsc);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('keydown', handleEsc);
+    };
+  }, [menuOpen]);
+
+  const openMenuAtButton = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setMenuPos({ x: rect.right, y: rect.bottom + 4 });
+    setMenuOpen(true);
+  };
+
+  const openMenuAtCursor = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setMenuPos({ x: e.clientX, y: e.clientY });
+    setMenuOpen(true);
+  };
+
+  const handleMenuAction = (action: 'edit' | 'delete') => {
+    setMenuOpen(false);
+    if (action === 'edit') onEdit();
+    else onDelete();
+  };
 
   return (
     <div
       onClick={onSelect}
+      onContextMenu={openMenuAtCursor}
       style={{
         background: 'var(--bg-card)',
         border: '1px solid var(--border)',
@@ -172,25 +312,26 @@ function ProjectCard({ project, onSelect }: { project: Project; onSelect: () => 
         cursor: 'pointer',
         transition: 'all 0.2s',
         position: 'relative',
-        overflow: 'hidden',
       }}
       onMouseEnter={e => {
         const el = e.currentTarget as HTMLDivElement;
         el.style.borderColor = 'var(--border-hi)';
         el.style.background = 'var(--bg-hover)';
-        el.style.transform = 'translateY(-1px)';
         el.style.boxShadow = 'var(--shadow-md)';
         const bar = el.querySelector('.card-top-bar') as HTMLDivElement | null;
         if (bar) bar.style.opacity = '1';
+        const dot = el.querySelector('.card-dot-btn') as HTMLButtonElement | null;
+        if (dot) dot.style.opacity = '1';
       }}
       onMouseLeave={e => {
         const el = e.currentTarget as HTMLDivElement;
         el.style.borderColor = 'var(--border)';
         el.style.background = 'var(--bg-card)';
-        el.style.transform = '';
         el.style.boxShadow = '';
         const bar = el.querySelector('.card-top-bar') as HTMLDivElement | null;
         if (bar) bar.style.opacity = '0';
+        const dot = el.querySelector('.card-dot-btn') as HTMLButtonElement | null;
+        if (dot && !menuOpen) dot.style.opacity = '0';
       }}
     >
       {/* Amber top accent bar on hover */}
@@ -206,9 +347,95 @@ function ProjectCard({ project, onSelect }: { project: Project; onSelect: () => 
         }}
       />
 
+      {/* Three-dot menu button — visible on hover */}
+      <button
+        ref={dotRef}
+        className="card-dot-btn"
+        onClick={openMenuAtButton}
+        style={{
+          position: 'absolute',
+          top: 8, right: 8,
+          width: 26, height: 26,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'transparent',
+          border: 'none',
+          borderRadius: 'var(--r-sm)',
+          color: 'var(--text-mid)',
+          cursor: 'pointer',
+          opacity: menuOpen ? 1 : 0,
+          transition: 'opacity 0.15s, background 0.15s',
+          zIndex: 2,
+        }}
+        onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text)'; }}
+        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-mid)'; }}
+      >
+        <MoreVertical className="w-4 h-4" />
+      </button>
+
+      {/* Dropdown menu (portal-like via fixed position) */}
+      {menuOpen && menuPos && (
+        <div
+          ref={menuRef}
+          style={{
+            position: 'fixed',
+            top: menuPos.y,
+            left: menuPos.x,
+            transform: 'translateX(-100%)',
+            zIndex: 9999,
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border-hi)',
+            borderRadius: 'var(--r-md, 8px)',
+            boxShadow: 'var(--shadow-lg, 0 8px 24px rgba(0,0,0,0.3))',
+            padding: '4px 0',
+            minWidth: 140,
+          }}
+        >
+          <button
+            onClick={(e) => { e.stopPropagation(); handleMenuAction('edit'); }}
+            style={{
+              width: '100%',
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '8px 14px',
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--text)',
+              fontSize: 13,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              transition: 'background 0.1s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+          >
+            <Pencil className="w-3.5 h-3.5" style={{ color: 'var(--text-mid)' }} />
+            Edit
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); handleMenuAction('delete'); }}
+            style={{
+              width: '100%',
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '8px 14px',
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--red)',
+              fontSize: 13,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              transition: 'background 0.1s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            Delete
+          </button>
+        </div>
+      )}
+
       {/* Card header */}
       <div style={{ marginBottom: 12 }}>
-        <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--text)', letterSpacing: '-0.01em' }}>
+        <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--text)', letterSpacing: '-0.01em', paddingRight: 28 }}>
           {project.name}
         </div>
         {prodLine ? (
@@ -230,6 +457,7 @@ function ProjectCard({ project, onSelect }: { project: Project; onSelect: () => 
           <span className="font-mono" style={{ fontSize: 10, color: 'var(--text-dim)' }}>
             Modified <span style={{ color: 'var(--text-mid)' }}>{lastModified}</span>
           </span>
+          <SyncBadge project={project} />
         </div>
         <div className="font-mono" style={{ fontSize: 10, color: 'var(--text-dim)' }}>
           {project.video_filename ? (
@@ -243,8 +471,88 @@ function ProjectCard({ project, onSelect }: { project: Project; onSelect: () => 
   );
 }
 
+/**
+ * Sync state badge for a project card.
+ */
+function SyncBadge({ project }: { project: Project }) {
+  if (project.sync_deferred) {
+    return (
+      <span title="Sync deferred — conflict unresolved" style={{ display: 'flex', alignItems: 'center', gap: 3, color: 'var(--red)' }}>
+        <CloudOff className="w-3 h-3" />
+        <span className="font-mono" style={{ fontSize: 9 }}>Deferred</span>
+      </span>
+    );
+  }
+  if (project.local_base_version === 0) {
+    return (
+      <span title="Local only — not yet synced" style={{ display: 'flex', alignItems: 'center', gap: 3, color: 'var(--text-dim)' }}>
+        <span className="font-mono" style={{ fontSize: 9 }}>Local</span>
+      </span>
+    );
+  }
+  if (project.has_local_changes) {
+    return (
+      <span title="Local changes not yet synced" style={{ display: 'flex', alignItems: 'center', gap: 3, color: 'var(--amber)' }}>
+        <RefreshCw className="w-3 h-3" />
+        <span className="font-mono" style={{ fontSize: 9 }}>Unsynced</span>
+      </span>
+    );
+  }
+  return (
+    <span title="Synced with cloud" style={{ display: 'flex', alignItems: 'center', gap: 3, color: 'var(--green, #22c55e)' }}>
+      <Cloud className="w-3 h-3" />
+      <span className="font-mono" style={{ fontSize: 9 }}>Synced</span>
+    </span>
+  );
+}
+
 function truncate(str: string, max: number): string {
   return str.length > max ? str.slice(0, max - 1) + '\u2026' : str;
+}
+
+/**
+ * Global cloud indicator for the HomeScreen top bar.
+ * Green = all synced, Yellow = some projects have unsynced changes, Red = error or deferred.
+ */
+function HomeCloudIndicator({ cloudSaveStatus, projects }: { cloudSaveStatus: CloudSaveStatus; projects: Project[] }) {
+  const hasDeferred = projects.some(p => p.sync_deferred);
+  const hasUnsynced = projects.some(p => p.has_local_changes && !p.sync_deferred);
+
+  // Transient states override static badges
+  if (cloudSaveStatus === 'saving') {
+    return (
+      <div style={{ width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-dim)' }} title="Syncing…">
+        <Loader2 className="w-4 h-4 animate-spin" />
+      </div>
+    );
+  }
+  if (cloudSaveStatus === 'saved') {
+    return (
+      <div style={{ width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--green, #22c55e)' }} title="Saved to cloud">
+        <Check className="w-4 h-4" />
+      </div>
+    );
+  }
+  if (cloudSaveStatus === 'error' || hasDeferred) {
+    return (
+      <div style={{ width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--red)' }}
+        title={hasDeferred ? 'Sync blocked — unresolved conflict' : 'Cloud sync error'}>
+        <CloudOff className="w-4 h-4" />
+      </div>
+    );
+  }
+  if (hasUnsynced) {
+    return (
+      <div style={{ width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--yellow, #eab308)' }} title="Some projects have unsynced changes">
+        <Cloud className="w-4 h-4" />
+      </div>
+    );
+  }
+  return (
+    <div style={{ width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--green, #22c55e)' }} title="All projects synced">
+      <Cloud className="w-4 h-4" />
+    </div>
+  );
 }
 
 function formatRelativeTime(timestamp: number): string {

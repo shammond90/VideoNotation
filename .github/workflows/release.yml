@@ -50,7 +50,7 @@ jobs:
               MAJOR=$((MAJOR + 1))
               MINOR=0
               PATCH=0
-            elif echo "$COMMITS" | grep -qi "\[FEATURE\]\|^feat:"; then
+            elif echo "$COMMITS" | grep -qiE "\[FEATURE\]|feat(\(.+\))?:"; then
               # Minor version bump (feature)
               MINOR=$((MINOR + 1))
               PATCH=0
@@ -69,47 +69,35 @@ jobs:
         id: release_notes
         env:
           PREV_TAG: ${{ steps.previous_tag.outputs.tag }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [ -z "$PREV_TAG" ]; then
-            # No previous tag, show all commits
             NOTES=$(git log --pretty=format:"- %h: %s" | head -20)
           else
-            # Show commits since last tag
             NOTES=$(git log $PREV_TAG..HEAD --pretty=format:"- %h: %s")
           fi
           
-          # Categorize commits
-          FEATURES=$(echo "$NOTES" | grep -E "^\- [a-f0-9]+: \[FEATURE\]|feat:" || echo "")
-          BUGFIXES=$(echo "$NOTES" | grep -E "^\- [a-f0-9]+: \[BUGFIX\]|\[HOTFIX\]|fix:" || echo "")
-          CHORES=$(echo "$NOTES" | grep -E "^\- [a-f0-9]+: \[CHORE\]|chore:|docs:" || echo "")
+          FEATURES=$(echo "$NOTES" | grep -iE "\[FEATURE\]|feat(\(.+\))?:" || echo "")
+          BUGFIXES=$(echo "$NOTES" | grep -iE "\[BUGFIX\]|\[HOTFIX\]|fix(\(.+\))?:" || echo "")
+          CHORES=$(echo "$NOTES" | grep -iE "\[CHORE\]|chore(\(.+\))?:|docs(\(.+\))?:" || echo "")
+          OTHER=$(echo "$NOTES" | grep -viE "\[FEATURE\]|\[BUGFIX\]|\[HOTFIX\]|\[CHORE\]|feat(\(.+\))?:|fix(\(.+\))?:|chore(\(.+\))?:|docs(\(.+\))?:" || echo "")
           
-          RELEASE_NOTES="## Changes in v${{ steps.next_version.outputs.version }}"
-          
-          if [ ! -z "$FEATURES" ]; then
-            RELEASE_NOTES="$RELEASE_NOTES
-
-### ✨ Features
-$FEATURES"
-          fi
-          
-          if [ ! -z "$BUGFIXES" ]; then
-            RELEASE_NOTES="$RELEASE_NOTES
-
-### 🐛 Bug Fixes
-$BUGFIXES"
-          fi
-          
-          if [ ! -z "$CHORES" ]; then
-            RELEASE_NOTES="$RELEASE_NOTES
-
-### 🔧 Chores
-$CHORES"
-          fi
-          
-          echo "notes<<EOF" >> $GITHUB_OUTPUT
-          echo "$RELEASE_NOTES" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          {
+            echo "notes<<EOF"
+            echo "## Changes in v${{ steps.next_version.outputs.version }}"
+            if [ -n "$FEATURES" ]; then
+              printf "\n### ✨ Features\n%s\n" "$FEATURES"
+            fi
+            if [ -n "$BUGFIXES" ]; then
+              printf "\n### 🐛 Bug Fixes\n%s\n" "$BUGFIXES"
+            fi
+            if [ -n "$CHORES" ]; then
+              printf "\n### 🔧 Chores\n%s\n" "$CHORES"
+            fi
+            if [ -n "$OTHER" ]; then
+              printf "\n### 📦 Other\n%s\n" "$OTHER"
+            fi
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
 
       - name: Create Git Tag
         run: |
@@ -119,12 +107,9 @@ $CHORES"
           git push origin v${{ steps.next_version.outputs.version }}
 
       - name: Create GitHub Release
-        uses: actions/create-release@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: v${{ steps.next_version.outputs.version }}
-          release_name: Release v${{ steps.next_version.outputs.version }}
-          body: ${{ steps.release_notes.outputs.notes }}
-          draft: false
-          prerelease: false
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "v${{ steps.next_version.outputs.version }}" \
+            --title "Release v${{ steps.next_version.outputs.version }}" \
+            --notes "${{ steps.release_notes.outputs.notes }}"

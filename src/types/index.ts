@@ -235,6 +235,9 @@ export interface Annotation {
   flagNote: string;
   // F2.7 — Sort order within tie groups (cues sharing the same timecode)
   sort_order: number;
+  // Sync tracking
+  version: number;    // cloud version counter (server-incremented)
+  deleted: boolean;   // soft-delete flag (local)
 }
 
 export interface VideoMeta {
@@ -587,6 +590,13 @@ export interface Project {
   video_path: string | null;
   video_filesize: number | null;
   video_duration: number | null;
+
+  // Cloud sync tracking
+  last_synced_at?: number | null; // timestamp (ms) of last successful cloud sync
+  version: number;                // cloud version counter (server-incremented)
+  local_base_version: number;     // cloud version we last synced from
+  has_local_changes: boolean;     // dirty flag — true if local edits exist since last sync
+  sync_deferred?: boolean;        // true if user chose "resolve later" on a conflict
 
   // Configuration snapshot
   config_template_id?: string; // informational, not linked after creation

@@ -44,6 +44,7 @@ export interface UseProjectReturn {
     } | null
   ) => Promise<void>;
   updateMetadata: (metadata: {
+    name?: string;
     production_name?: string;
     choreographer?: string;
     venue?: string;

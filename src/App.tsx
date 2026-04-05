@@ -20,16 +20,23 @@ import { updateProjectConfig, exportProjectToJSON, loadProjects } from './utils/
 import { supportsFileSystemAccess, pickVideoWithHandle } from './utils/videoHandleStorage';
 import { VideoReconnectBanner } from './components/VideoReconnectBanner';
 import { GoToDialog } from './components/GoToDialog';
-import type { CueFields } from './types';
+import { useCloudSync } from './hooks/useCloudSync';
+import { UserButton } from '@clerk/clerk-react';
+import type { CueFields, AppConfig } from './types';
 import { RESERVED_CUE_TYPES } from './types';
-import { Film, Settings, X as XIcon, ExternalLink } from 'lucide-react';
+import { Film, Settings, X as XIcon, ExternalLink, Cloud, CloudOff, Loader2, Check, AlertCircle } from 'lucide-react';
 
 interface AppProps {
   projectId?: string;
   projectName?: string;
+  projectConfig?: AppConfig;
   initialVideoFile?: File;
   videoFilename?: string | null;
   videoFilesize?: number | null;
+  syncPaused?: boolean;
+  syncDeferred?: boolean;
+  onResolveSync?: () => void;
+  onPushConflict?: () => void;
   onGoHome?: () => void;
   onSwitchProject?: () => void;
   onVideoLoaded?: (file: File, duration: number) => void;
@@ -38,14 +45,21 @@ interface AppProps {
   onDeleteProject?: () => void;
   onDeleteAllProjects?: () => Promise<void>;
   onSave?: () => void;
+  onConfigTemplatesChanged?: () => void;
+  onXlsxTemplatesChanged?: () => void;
 }
 
 export default function App({
   projectId,
   projectName,
+  projectConfig,
   initialVideoFile,
   videoFilename: projectVideoFilename = null,
   videoFilesize: projectVideoFilesize = null,
+  syncPaused = false,
+  syncDeferred = false,
+  onResolveSync,
+  onPushConflict,
   onGoHome,
   onSwitchProject,
   onVideoLoaded,
@@ -54,6 +68,8 @@ export default function App({
   onDeleteProject,
   onDeleteAllProjects,
   onSave,
+  onConfigTemplatesChanged,
+  onXlsxTemplatesChanged,
 }: AppProps = {}) {
   const [videoFile, setVideoFile] = useState<File | null>(initialVideoFile || null);
   const [videoSrc, setVideoSrc] = useState<string>('');
@@ -192,7 +208,7 @@ export default function App({
     toggleCueTypeHidden,
     toggleFieldHidden,
     setCueTypeHotkey,
-  } = useConfiguration();
+  } = useConfiguration(projectConfig);
 
   const {
     annotations,
@@ -211,6 +227,12 @@ export default function App({
   } = useAnnotations(annotationScope.fileName, annotationScope.fileSize, playerState.duration);
   const annotationsRef = useRef(annotations);
   const { toasts, addToast, removeToast } = useToast();
+
+  const {
+    saveStatus: cloudSaveStatus,
+    cloudPushProject,
+    cloudPushAnnotationsImmediate,
+  } = useCloudSync();
 
   // ── Scrubber markers for scene/act grouping ──
   const scrubberMarkers = useMemo(() => {
@@ -264,7 +286,33 @@ export default function App({
     cuesDirtyRef.current = false;
   }, [annotationScope.fileName, annotationScope.fileSize]);
 
-  // Perform a cue backup: saves to backup ring + shows green toast
+  // ── Cloud sync helper: push project + annotations to cloud (called at save-time) ──
+  const pushToCloud = useCallback(async () => {
+    if (!projectId || syncPaused || syncDeferred) return;
+    const { loadProject, saveProject } = await import('./utils/projectStorage');
+    const project = await loadProject(projectId);
+    if (!project) return;
+
+    if (!project.has_local_changes) {
+      project.has_local_changes = true;
+      await saveProject(project);
+    }
+
+    // Pre-push version check happens inside cloudPushProject
+    const result = await cloudPushProject(project);
+    if (result === 'conflict') {
+      onPushConflict?.();
+      return; // Don't push annotations — conflict detected
+    }
+
+    // Push annotations only after successful project push
+    const videoKey = `${annotationScope.fileName || 'no-video'}:${annotationScope.fileSize || 0}`;
+    cloudPushAnnotationsImmediate(annotationsRef.current, projectId, videoKey);
+  }, [projectId, syncPaused, syncDeferred, annotationScope.fileName, annotationScope.fileSize, cloudPushProject, cloudPushAnnotationsImmediate, onPushConflict]);
+  const pushToCloudRef = useRef(pushToCloud);
+  pushToCloudRef.current = pushToCloud;
+
+  // Perform a cue backup: saves to backup ring + shows green toast + pushes to cloud
   const performCueBackup = useCallback(() => {
     if (!cuesDirtyRef.current) return;
     const currentFileName = annotationScope.fileName || 'no-video';
@@ -273,6 +321,8 @@ export default function App({
     cuesDirtyRef.current = false;
     setHasUnsavedChanges(false);
     addToast('The cues have been saved.', 'success', 3000);
+    // Push to cloud at save-time
+    pushToCloudRef.current();
   }, [annotationScope, addToast]);
 
   // Interval-based cue backup (configurable minutes)
@@ -1105,6 +1155,91 @@ export default function App({
           >
             ↓ Export
           </button>
+          {/* Cloud save indicator */}
+          {syncDeferred && onResolveSync ? (
+            <button
+              type="button"
+              onClick={onResolveSync}
+              style={{
+                height: 28,
+                padding: '0 10px',
+                background: 'transparent',
+                color: 'var(--amber)',
+                border: '1px solid var(--amber)',
+                borderRadius: 'var(--r-sm)',
+                fontSize: 11,
+                fontWeight: 600,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                transition: 'all 0.15s',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--amber)'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-inv)'; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--amber)'; }}
+              title="This project has an unresolved sync conflict. Click to resolve."
+            >
+              <CloudOff className="w-3.5 h-3.5" />
+              Resolve Sync
+            </button>
+          ) : (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                height: 28,
+                padding: '0 6px',
+                borderRadius: 'var(--r-sm)',
+              }}
+              title={
+                syncPaused ? 'Offline — no cloud connection' :
+                cloudSaveStatus === 'saving' ? 'Syncing to cloud…' :
+                cloudSaveStatus === 'saved' ? 'Synced to cloud' :
+                cloudSaveStatus === 'error' ? 'Sync failed' :
+                hasUnsavedChanges ? 'Local changes not yet synced' :
+                'Annotations match cloud'
+              }
+            >
+              <span style={{
+                fontSize: 11,
+                fontWeight: 500,
+                whiteSpace: 'nowrap',
+                color: syncPaused ? 'var(--red)'
+                  : cloudSaveStatus === 'error' ? 'var(--red)'
+                  : cloudSaveStatus === 'saving' ? 'var(--text-dim)'
+                  : cloudSaveStatus === 'saved' ? 'var(--green, #22c55e)'
+                  : hasUnsavedChanges ? 'var(--amber, #f59e0b)'
+                  : 'var(--green, #22c55e)',
+              }}>
+                {syncPaused ? 'Offline'
+                  : cloudSaveStatus === 'saving' ? 'Syncing...'
+                  : cloudSaveStatus === 'saved' ? 'Synced'
+                  : cloudSaveStatus === 'error' ? 'Sync Failed'
+                  : hasUnsavedChanges ? 'Out of Sync'
+                  : 'In Sync'}
+              </span>
+              <span style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: syncPaused ? 'var(--red)'
+                  : cloudSaveStatus === 'error' ? 'var(--red)'
+                  : cloudSaveStatus === 'saving' ? 'var(--text-dim)'
+                  : cloudSaveStatus === 'saved' ? 'var(--green, #22c55e)'
+                  : hasUnsavedChanges ? 'var(--amber, #f59e0b)'
+                  : 'var(--green, #22c55e)',
+              }}>
+                {syncPaused && <CloudOff className="w-4 h-4" />}
+                {!syncPaused && cloudSaveStatus === 'saving' && <Loader2 className="w-4 h-4 animate-spin" />}
+                {!syncPaused && cloudSaveStatus === 'saved' && <Check className="w-4 h-4" />}
+                {!syncPaused && cloudSaveStatus === 'error' && <span className="relative"><Cloud className="w-4 h-4" /><AlertCircle className="w-2.5 h-2.5 absolute -top-0.5 -right-0.5" /></span>}
+                {!syncPaused && cloudSaveStatus === 'idle' && !hasUnsavedChanges && <Cloud className="w-4 h-4" />}
+                {!syncPaused && cloudSaveStatus === 'idle' && hasUnsavedChanges && <Cloud className="w-4 h-4" />}
+              </span>
+            </div>
+          )}
+          {/* User menu */}
+          <UserButton afterSignOutUrl="/" />
         </div>
       </header>
 
@@ -1531,6 +1666,8 @@ export default function App({
           saveConfigBackup();
           isConfigOpenRef.current = false;
           setIsConfigOpen(false);
+          // Push project (including updated config) to cloud
+          pushToCloudRef.current();
         }}
         liveConfig={config}
         cueTypes={config.cueTypes}
@@ -1602,6 +1739,7 @@ export default function App({
         annotationCount={annotations.length}
         onGoHome={onGoHome}
         onDeleteAllProjects={onDeleteAllProjects}
+        onTemplatesChanged={onConfigTemplatesChanged}
       />
 
       {/* Export Dialog — CSV vs XLSX chooser */}
@@ -1627,6 +1765,7 @@ export default function App({
         hiddenCueTypes={config.hiddenCueTypes}
         hiddenFieldKeys={config.hiddenFieldKeys}
         addToast={addToast}
+        onTemplatesChanged={onXlsxTemplatesChanged}
       />
 
       {/* Hidden import input */}
