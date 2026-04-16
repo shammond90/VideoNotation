@@ -89,7 +89,16 @@ export function TermsOfService() {
           </p>
         </Section>
 
-        <Section title="9. Termination">
+        <Section title="9. Use at Your Own Risk">
+          <p>
+            Cuetation is a productivity tool designed to assist with cue sheet creation. You are 
+            responsible for how you use the Service and any decisions or actions taken based on
+            the information provided by the Service. We recommend regularly backing up your data and 
+            not relying solely on the Service for critical production needs without appropriate safeguards.
+          </p>
+        </Section>
+
+        <Section title="10. Termination">
           <p>
             We may suspend or terminate your access to the Service at any time for conduct that
             we determine violates these Terms or is harmful to other users, us, or third parties.
@@ -98,7 +107,7 @@ export function TermsOfService() {
           </p>
         </Section>
 
-        <Section title="10. Changes to These Terms">
+        <Section title="11. Changes to These Terms">
           <p>
             We may update these Terms from time to time. We will notify users of material
             changes by updating the "Last updated" date above. Continued use of the Service
@@ -106,18 +115,10 @@ export function TermsOfService() {
           </p>
         </Section>
 
-        <Section title="11. Governing Law">
-          <p>
-            These Terms shall be governed by and construed in accordance with the laws of
-            England and Wales. Any disputes arising from these Terms or the Service shall be
-            subject to the exclusive jurisdiction of the courts of England and Wales.
-          </p>
-        </Section>
-
         <Section title="12. Contact">
           <p>
             If you have questions about these Terms, please contact us at:{' '}
-            <strong>[your-email@example.com]</strong>
+            <strong>feedback@cuetation.com</strong>
           </p>
         </Section>
       </article>

@@ -99,7 +99,7 @@ export function PrivacyPolicy() {
         <Section title="10. Contact">
           <p>
             If you have questions about this Privacy Policy or your data, please contact us at:{' '}
-            <strong>[your-email@example.com]</strong>
+            <strong>feedback@cuetation.com</strong>
           </p>
         </Section>
       </article>
